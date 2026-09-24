@@ -1,89 +1,170 @@
-name: Build Android APK
+name: ClassNet & Class-Ink Master Unified Production Ecosystem Build
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    
+  # =========================================================
+  # JOB 1 : COMPILATION COMPLÈTE ECOSYSTÈME WINDOWS (DESKTOP)
+  # =========================================================
+  build-windows-ecosystem:
+    runs-on: windows-latest
+
     steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
+      - name: 📥 Cloner le dépôt
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
+      # 1. CONFIGURATION DES ENVIRONNEMENTS
+      - name: 🐍 Configurer Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '21' 
+      - name: 🟢 Configurer Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-    - name: Install Dependencies
-      run: npm install
+      - name: 🦀 Configurer la chaîne de compilation Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    # 🛠️ ETAPE 1 : Téléchargement des scripts CDN pour le mode hors-ligne
-    - name: Download External Dependencies
-      run: |
-        mkdir -p www/offline-assets
-        
-        wget -qO www/offline-assets/tailwindcss.js https://cdn.tailwindcss.com
-        wget -qO www/offline-assets/lucide.js https://unpkg.com/lucide@latest
-        wget -qO www/offline-assets/dexie.js https://unpkg.com/dexie/dist/dexie.js
-        wget -qO www/offline-assets/tesseract.min.js https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js
-        
-        find . -name "*.html" -exec sed -i 's|https://cdn.tailwindcss.com|./offline-assets/tailwindcss.js|g' {} +
-        find . -name "*.html" -exec sed -i 's|https://unpkg.com/lucide@latest|./offline-assets/lucide.js|g' {} +
-        find . -name "*.html" -exec sed -i 's|https://unpkg.com/dexie/dist/dexie.js|./offline-assets/dexie.js|g' {} +
-        find . -name "*.html" -exec sed -i 's|https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js|./offline-assets/tesseract.min.js|g' {} +
+      # 2. COMPILATION DU SERVEUR INTRANET (NUITKA)
+      - name: 📦 Installation des dépendances Python sans cache
+        run: |
+          python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+          python -m pip install --no-cache-dir --upgrade nuitka zstandard
+          python -m pip install --no-cache-dir -r intranet-server/requirements.txt
+        shell: powershell
 
-    # 🧠 ETAPE 2 : Téléchargement du modèle 135M (Version q4 pour performances mobiles optimales)
-    - name: Download Offline AI Model
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }} 
-      run: |
-        pip install huggingface_hub
-        python3 -c "
-        import os
-        from huggingface_hub import snapshot_download
-        
-        repo_id = 'onnx-community/SmolLM2-135M-Instruct-ONNX'
-        local_dir = 'www/models/SmolLM2-135M-Instruct'
-        
-        print('=== Début du téléchargement du modèle SmolLM2-135M (Filtre Quantifié) ===')
-        
-        # Correction ici : on cible '*q4*.onnx' (ou '*q8*.onnx' si tu veux du 8-bit lourd)
-        snapshot_download(
-            repo_id=repo_id,
-            local_dir=local_dir,
-            allow_patterns=['*int8*.onnx', '*.json', '*.txt'],
-            ignore_patterns=['*fp16*', '*uint8*', '*q4*'],
-            token=os.environ.get('HF_TOKEN')
-        )
-        
-        print('=== Téléchargement local terminé avec succès ! ===')
-        "
+      - name: ⚡ Compiler le serveur Intranet avec Nuitka
+        run: |
+          cd intranet-server
+          python -m nuitka --standalone `
+            --assume-yes-for-downloads `
+            --include-package=fastapi `
+            --include-package=uvicorn `
+            --include-package=pydantic `
+            --company-name="CRYPT Enterprise" `
+            --product-name="ClassNet Intranet Node" `
+            --file-version=1.0.0.0 `
+            --product-version=1.0.0.0 `
+            --output-dir="dist_nuitka" server_intranet.py
+        shell: powershell
 
-    - name: Add Android Platform
-      run: npx cap add android
+      # 3. COMPILATION PRIMENET / CLASSNET P (TAURI ADMIN)
+      - name: 📦 Installer les dépendances PrimeNet (ClassNet P)
+        run: |
+          cd classnet-p
+          npm install
+        shell: powershell
 
-    - name: Capacitor Sync
-      run: npx cap sync
-        
-    # 📦 ETAPE 3 : Compilation exclusive vers le format APK (Debug)
-    - name: Build APK with Gradle
-      run: |
-        cd android
-        chmod +x gradlew
-        ./gradlew assembleDebug
+      - name: 💻 Compiler PrimeNet / ClassNet P (Tauri Administration)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: classnet-p
 
-    # 💾 ETAPE 4 : Upload unique du fichier APK généré
-    - name: Upload App Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: delugalink-android-apk
-        path: ./android/app/build/outputs/apk/debug/app-debug.apk
+      # 4. COMPILATION CLASSNET APP / CLASS-INK APP (TAURI ENSEIGNANT)
+      - name: 📦 Installer les dépendances ClassNet App
+        run: |
+          cd classnet-app
+          npm install
+        shell: powershell
+
+      - name: 📱 Compiler ClassNet App (Tauri Enseignant/Élève)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: classnet-app
+
+      # 5. PACKAGING GLOBAL (INNO SETUP)
+      - name: 🛠️ Installer Inno Setup
+        run: |
+          choco install innosetup -y
+        shell: powershell
+
+      - name: 📦 Générer l'installateur Windows ClassNet (.exe)
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/classnet_setup.iss
+        shell: powershell
+
+      - name: 🚀 Publier l'installateur Windows Desktop Final (Brut)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClassNet-Suite-Setup-Windows.exe
+          path: installer/Output/ClassNet_Suite_Setup_v1.3.0.exe
+          compression-level: 0
+
+  # =========================================================
+  # JOB 2 : COMPILATION APPLICATION MOBILE ANDROID (CAPACITOR APK)
+  # =========================================================
+  build-android-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Récupération du code source
+        uses: actions/checkout@v4
+
+      - name: 🟢 Configuration de Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: ☕ Configuration du JDK Java 21 (Requis pour Capacitor / Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      # 1. PRÉPARATION ET CAPACITOR
+      - name: 🛠️ Installation et Configuration de Capacitor
+        run: |
+          cd classnet-app
+          if [ ! -f package.json ]; then
+            npm init -y
+          fi
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+
+      # 2. GARANTIE DU MODE 100% HORS-LIGNE
+      - name: 🌐 Téléchargement des dépendances CDN pour le mode hors-ligne
+        run: |
+          cd classnet-app/src
+          mkdir -p offline-assets
+          wget -qO offline-assets/tailwindcss.js https://cdn.tailwindcss.com || true
+          wget -qO offline-assets/lucide.js https://unpkg.com/lucide@latest || true
+          wget -qO offline-assets/dexie.js https://unpkg.com/dexie/dist/dexie.js || true
+          
+          find . -name "*.html" -exec sed -i 's|https://cdn.tailwindcss.com|./offline-assets/tailwindcss.js|g' {} +
+          find . -name "*.html" -exec sed -i 's|https://unpkg.com/lucide@latest|./offline-assets/lucide.js|g' {} +
+          find . -name "*.html" -exec sed -i 's|https://unpkg.com/dexie/dist/dexie.js|./offline-assets/dexie.js|g' {} +
+
+      # 3. SYNCHRONISATION ANDROID
+      - name: 📱 Initialiser et Synchroniser le projet Android
+        run: |
+          cd classnet-app
+          if [ ! -f capacitor.config.json ]; then
+            npx cap init "Class-Ink App" "com.crypt.classink.app" --web-dir src
+          fi
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      # 4. COMPILATION APK
+      - name: 📦 Compilation de l'APK Android avec Gradle
+        run: |
+          cd classnet-app/android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      # 5. UPLOAD ARTEFACT NON COMPRESSÉ
+      - name: 🚀 Mise à disposition du fichier APK (Brut)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Class-Ink-Enseignant.apk
+          path: ./classnet-app/android/app/build/outputs/apk/debug/app-debug.apk
+          compression-level: 0
