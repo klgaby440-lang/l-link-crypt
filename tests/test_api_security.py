@@ -1,5 +1,6 @@
 """Tests des autorisations, de l'anti-abus et des limites d'usage."""
 
+import pytest
 from fastapi import HTTPException
 
 from llink_api import security
@@ -82,6 +83,31 @@ def test_production_fails_closed_when_firestore_quota_store_is_unavailable(clien
     )
     assert response.status_code == 503
     assert "quotas" in response.json()["detail"]
+
+
+def test_staging_fails_closed_when_firestore_quota_store_is_unavailable(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "staging")
+    response = client.post(
+        "/api/chat",
+        json={"message": "Ping", "model": "gemini-1.5-flash"},
+    )
+    assert response.status_code == 503
+    assert "quotas" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("origin", ["capacitor://localhost", "https://localhost"])
+def test_capacitor_origins_are_allowed_for_preflight(client, origin):
+    response = client.options(
+        "/api/chat",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
 
 
 def test_firebase_id_token_verification_checks_revocation(monkeypatch):
