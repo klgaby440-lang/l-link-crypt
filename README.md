@@ -9,7 +9,7 @@ Llink is the CRYPT AI application.
 - `app/index.html`: canonical web application.
 - `capacitor/`: Capacitor 8 project and Android wrapper.
 - `docs/API_CONTRACTS.md`: HTTP contracts used by the current frontend.
-- `docs/API_SECURITY.md`: environment variables, quotas and access rules.
+- `docs/API_SECURITY.md`: environment variables, quotas and access rules.\n- `docs/DATA_LIFECYCLE.md`: current data-retention and deletion boundaries.
 - `docs/PHASE_1.md`, `docs/PHASE_2.md`: implementation notes and release boundaries.
 
 The Capacitor project uses `../app` as its web directory. There is no separate `www/index.html` copy.

@@ -82,3 +82,51 @@ def test_production_fails_closed_when_firestore_quota_store_is_unavailable(clien
     )
     assert response.status_code == 503
     assert "quotas" in response.json()["detail"]
+
+
+def test_firebase_id_token_verification_checks_revocation(monkeypatch):
+    monkeypatch.setattr(security.firebase_admin, "get_app", lambda: object())
+    seen = {}
+
+    def verify(token, check_revoked=False):
+        seen["token"] = token
+        seen["check_revoked"] = check_revoked
+        return {"uid": "verified-user"}
+
+    monkeypatch.setattr(security.firebase_auth, "verify_id_token", verify)
+    claims = security._decode_firebase_token("valid-firebase-token")
+
+    assert claims["uid"] == "verified-user"
+    assert seen == {"token": "valid-firebase-token", "check_revoked": True}
+
+
+def test_firebase_invalid_token_maps_to_401(monkeypatch):
+    monkeypatch.setattr(security.firebase_admin, "get_app", lambda: object())
+
+    def verify(_token, check_revoked=False):
+        raise security.firebase_auth.InvalidIdTokenError("invalid")
+
+    monkeypatch.setattr(security.firebase_auth, "verify_id_token", verify)
+    try:
+        security._decode_firebase_token("bad-token")
+    except HTTPException as exc:
+        assert exc.status_code == 401
+    else:
+        raise AssertionError("An invalid Firebase token must be rejected.")
+
+
+def test_request_body_limit_middleware_rejects_oversized_body(monkeypatch):
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+    from llink_api.middleware import RequestBodyLimitMiddleware
+
+    tiny_app = FastAPI()
+    tiny_app.add_middleware(RequestBodyLimitMiddleware, max_bytes=10)
+
+    @tiny_app.post("/echo")
+    async def echo():
+        return {"ok": True}
+
+    with TestClient(tiny_app) as tiny_client:
+        response = tiny_client.post("/echo", content=b"x" * 11)
+    assert response.status_code == 413

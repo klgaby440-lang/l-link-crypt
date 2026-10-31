@@ -14,7 +14,7 @@ from llink_api.providers.gemini import get_gemini_model
 from llink_api.providers.huggingface import resolve_huggingface_model, stream_huggingface
 from llink_api.schemas import ChatPayload
 from llink_api.security import get_optional_user
-from llink_api.services.ai_slots import release_ai_slot, reserve_ai_slot
+from llink_api.services.ai_slots import reserve_ai_slot
 from llink_api.services.security_limits import enforce_endpoint_quota
 from llink_api.services.training_data import record_exchange_if_consented
 

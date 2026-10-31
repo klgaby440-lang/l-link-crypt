@@ -58,7 +58,7 @@ Les valeurs sont surchargeables via les variables d'environnement décrites dans
 4. Ne pas activer une origine CORS générique `*`.
 5. Vérifier le vrai comportement de `request.client.host` derrière le proxy Render ; ne jamais accepter un `X-Forwarded-For` arbitraire sans configurer explicitement les proxys de confiance.
 
-## Limites restantes
+## Cycle de vie des données\n\nLa collecte d'amélioration reste désactivée par défaut et l'interface actuelle ne transmet aucun consentement. Les historiques cloud sont conservés dans Firestore ; la suppression cloud cohérente et la fermeture de compte relèvent de la Phase 4. Les anciennes entrées éventuelles de `global_datasets` ne sont pas supprimées automatiquement par cette PR et doivent faire l'objet d'une revue et d'une politique de conservation approuvée avant tout nouvel entraînement. Les journaux ne doivent contenir ni prompts, ni réponses, ni tokens, ni identifiants directs. Voir `docs/DATA_LIFECYCLE.md`.\n\n## Limites restantes
 
 - Le quota anonyme est fondé sur l'adresse réseau observée par ASGI ; il ne remplace pas un WAF/anti-bot distribué.
 - La concurrence IA est locale à chaque processus, tandis que les quotas Firestore sont distribués.

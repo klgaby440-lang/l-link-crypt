@@ -4,7 +4,6 @@ import asyncio
 import base64
 import binascii
 import logging
-import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
