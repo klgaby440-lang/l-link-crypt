@@ -1,12 +1,14 @@
-"""Schémas Pydantic des contrats HTTP."""
+"""Schémas Pydantic des contrats HTTP et limites d'entrée."""
 
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from llink_api.config import get_settings
+
 
 class VerifyPaymentRequest(BaseModel):
-    transactionId: str
+    transactionId: str = Field(min_length=1, max_length=180)
 
 
 class PaymentVerifyResponse(BaseModel):
@@ -14,7 +16,7 @@ class PaymentVerifyResponse(BaseModel):
 
 
 class OCRRequest(BaseModel):
-    imageBase64: str
+    imageBase64: str = Field(min_length=16, max_length=8_100_000)
 
 
 class OCRResponse(BaseModel):
@@ -26,11 +28,11 @@ class AudioResponse(BaseModel):
 
 
 class ChatPayload(BaseModel):
-    message: str
-    model: str
-    preferences: Optional[str] = None
-    mode: Optional[str] = "chat"
-    source: Optional[str] = "soko_master"
+    message: str = Field(min_length=1, max_length=get_settings().max_message_chars)
+    model: str = Field(min_length=1, max_length=100)
+    preferences: Optional[str] = Field(default=None, max_length=get_settings().max_preferences_chars)
+    mode: Optional[str] = Field(default="chat", max_length=32)
+    source: Optional[str] = Field(default="soko_master", max_length=100)
     # Aucun entraînement/jeu de données sans demande explicite.
     data_collection_consent: bool = False
 
@@ -47,10 +49,10 @@ class ChatSyncPayload(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: int | str | None = None
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=200)
     time: int | float | None = None
-    mode: str | None = None
-    messages: list[dict[str, Any]] = Field(default_factory=list)
+    mode: str | None = Field(default=None, max_length=32)
+    messages: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
 
 
 class HistorySyncResponse(BaseModel):

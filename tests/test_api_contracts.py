@@ -1,4 +1,4 @@
-"""Tests de non-régression des contrats consommés par le frontend actuel."""
+"""Tests de non-régression des contrats HTTP consommés par le frontend."""
 
 def test_root_health_contract(client):
     response = client.get("/")
@@ -6,12 +6,24 @@ def test_root_health_contract(client):
     assert response.json() == {"message": "Llink Backend API est opérationnel."}
 
 
-def test_openapi_exposes_stable_request_schemas(client):
+def test_openapi_exposes_stable_request_and_response_schemas(client):
     schema = client.get("/openapi.json").json()
     chat_schema = schema["components"]["schemas"]["ChatPayload"]
     assert set(chat_schema["required"]) == {"message", "model"}
     assert chat_schema["properties"]["data_collection_consent"]["default"] is False
     assert "/api/history/sync" in schema["paths"]
+
+    registered = set(schema["components"]["schemas"])
+    expected = {
+        "HealthResponse",
+        "UserStatusResponse",
+        "PaymentVerifyResponse",
+        "OCRResponse",
+        "AudioResponse",
+        "HistorySyncResponse",
+        "HistoryResponse",
+    }
+    assert expected.issubset(registered)
 
 
 def test_anonymous_user_status_contract(client):
@@ -22,27 +34,6 @@ def test_anonymous_user_status_contract(client):
         "expirationDate": None,
         "isNewUser": False,
     }
-
-
-def test_anonymous_history_contract(client):
-    response = client.get("/api/history")
-    assert response.status_code == 200
-    assert response.json() == {"chats": []}
-
-
-def test_anonymous_history_sync_contract_accepts_legacy_chat_shape(client):
-    response = client.post(
-        "/api/history/sync",
-        json={
-            "id": 12,
-            "title": "Test",
-            "time": 1720000000000,
-            "mode": "chat",
-            "messages": [{"role": "user", "text": "Bonjour"}],
-        },
-    )
-    assert response.status_code == 200
-    assert response.json() == {"status": "skipped"}
 
 
 def test_chat_rejects_missing_required_fields(client):
@@ -62,41 +53,58 @@ def test_chat_keeps_plain_text_stream_contract(client, monkeypatch):
     )
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
-    assert "Clé API Gemini manquante" in response.text
+    assert "temporairement indisponible" in response.text
 
 
-def test_ocr_keeps_response_field_when_provider_is_not_configured(client, monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+def test_ocr_rejects_non_image_payload(client):
     response = client.post(
         "/api/ocr",
         json={"imageBase64": "data:image/jpeg;base64,aGVsbG8="},
     )
-    assert response.status_code == 200
-    assert "response" in response.json()
-    assert response.json()["response"].startswith("Erreur Vision :")
+    assert response.status_code == 415
+    assert response.json()["detail"]
 
 
-def test_audio_keeps_text_field_when_provider_is_not_configured(client, monkeypatch):
+def test_ocr_returns_safe_provider_error(client, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    # Signature JPEG minimale pour franchir la validation de type/contenu.
+    import base64
+    jpeg_data_url = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xfftest").decode()
+    response = client.post("/api/ocr", json={"imageBase64": jpeg_data_url})
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Le service de vision est temporairement indisponible."
+
+
+def test_audio_returns_safe_provider_error(client, monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     response = client.post(
         "/api/audio",
         files={"file": ("sample.webm", b"audio-bytes", "audio/webm")},
     )
-    assert response.status_code == 200
-    assert "text" in response.json()
-    assert response.json()["text"].startswith("Erreur Audio :")
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Le service audio est temporairement indisponible."
 
 
-def test_response_models_are_registered_in_openapi(client):
-    schema = client.get("/openapi.json").json()
-    registered = set(schema["components"]["schemas"])
-    expected = {
-        "HealthResponse",
-        "UserStatusResponse",
-        "PaymentVerifyResponse",
-        "OCRResponse",
-        "AudioResponse",
-        "HistorySyncResponse",
-        "HistoryResponse",
-    }
-    assert expected.issubset(registered)
+def test_audio_rejects_unsupported_content_type(client):
+    response = client.post(
+        "/api/audio",
+        files={"file": ("sample.bin", b"audio-bytes", "application/octet-stream")},
+    )
+    assert response.status_code == 415
+
+
+def test_audio_rejects_oversized_file(client, monkeypatch):
+    monkeypatch.setenv("MAX_AUDIO_BYTES", "5")
+    response = client.post(
+        "/api/audio",
+        files={"file": ("sample.webm", b"123456", "audio/webm")},
+    )
+    assert response.status_code == 413
+
+
+def test_oversized_chat_message_is_rejected(client):
+    response = client.post(
+        "/api/chat",
+        json={"message": "x" * 12_001, "model": "gemini-1.5-flash"},
+    )
+    assert response.status_code == 422

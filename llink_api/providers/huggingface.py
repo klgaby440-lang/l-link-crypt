@@ -47,8 +47,10 @@ async def stream_huggingface(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
+    timeout = get_settings().provider_timeout_seconds
+    http_timeout = httpx.Timeout(timeout, connect=min(10.0, timeout), write=15.0, pool=5.0)
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=http_timeout) as client:
         async with client.stream(
             "POST",
             CHAT_COMPLETIONS_URL,
@@ -56,10 +58,8 @@ async def stream_huggingface(
             headers=headers,
         ) as response:
             if response.status_code != 200:
-                body = (await response.aread()).decode("utf-8", errors="replace")
-                raise RuntimeError(
-                    f"Erreur Hugging Face HTTP {response.status_code}: {body[:500]}"
-                )
+                # Ne pas répercuter le corps du fournisseur au client ou dans les logs.
+                raise RuntimeError(f"Fournisseur Hugging Face HTTP {response.status_code}")
 
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):

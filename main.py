@@ -1,26 +1,32 @@
-"""Entrée ASGI conservant la commande de démarrage historique : uvicorn main:app."""
+"""Entrée ASGI de Llink : la commande de démarrage reste uvicorn main:app."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from llink_api.api.routes import chat, health, history, media, users
 from llink_api.config import get_settings
+from llink_api.middleware import RequestBodyLimitMiddleware
 
 
 def create_app() -> FastAPI:
-    """Construit l'application FastAPI et enregistre les routes."""
+    """Construit l'application, ses routes et les protections HTTP communes."""
     settings = get_settings()
     application = FastAPI(
         title="Llink API Server - CRYPT ENGINE",
-        version="1.0.0",
+        version="1.1.0",
         description="API de Llink, le produit IA de CRYPT.",
+    )
+    application.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=settings.max_request_body_bytes,
     )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["Retry-After"],
     )
 
     application.include_router(health.router)
