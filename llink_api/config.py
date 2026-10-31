@@ -13,6 +13,8 @@ DEFAULT_CORS_ORIGINS = (
     "tauri://localhost",
     "http://tauri.localhost",
     "https://tauri.localhost",
+    "capacitor://localhost",
+    "https://localhost",
 )
 
 
