@@ -1093,6 +1093,19 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         db.version(2).stores({ chats: '++id, title, time, mode', msgs: '++id, chatId, role, text' });
         
         const SERVER_URL = "https://llink-usz9.onrender.com";
+
+        // Les ID tokens Firebase sont rafraîchis avant chaque appel cloud.
+        // Les routes publiques restent appelables sans en-tête Authorization.
+        async function llinkAuthHeaders(json = false) {
+            const headers = json ? {"Content-Type": "application/json"} : {};
+            const activeUser = window.auth && window.auth.currentUser;
+            if (activeUser) {
+                const token = await activeUser.getIdToken();
+                window.authToken = token;
+                headers.Authorization = `Bearer ${token}`;
+            }
+            return headers;
+        }
         let curChatId = null;
         window.isOnline = true; let currentMode = 'chat';
         window.isLoggedIn = false;
@@ -1137,7 +1150,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         window.checkSubscription = async () => {
             if(!window.isLoggedIn) return;
             try {
-                const res = await fetch(`${SERVER_URL}/api/user/status`, { headers: {"Authorization": `Bearer ${window.authToken}`} });
+                const res = await fetch(`${SERVER_URL}/api/user/status`, { headers: await llinkAuthHeaders() });
                 const data = await res.json();
                 
                 // GESTION DU MESSAGE DE BIENVENUE 3 JOURS
@@ -1193,7 +1206,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             document.getElementById('subscription-info').innerText = "Vérification en cours...";
             try {
                 const res = await fetch(`${SERVER_URL}/api/verify-payment`, {
-                    method: 'POST', headers: {"Content-Type":"application/json", "Authorization": `Bearer ${window.authToken}`},
+                    method: 'POST', headers: await llinkAuthHeaders(true),
                     body: JSON.stringify({ transactionId: txId, plan: window.selectedSubscriptionPlan, paymentMethod: window.selectedPaymentMethod, paymentProvider: window.selectedPaymentProvider })
                 });
                 const data = await res.json();
@@ -1204,7 +1217,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
 
         async function syncChatToServer(chat) {
             if(!window.isLoggedIn || localStorage.getItem('llink_sync') === '0') return;
-            try { await fetch(`${SERVER_URL}/api/history/sync`, { method: "POST", headers: {"Content-Type":"application/json", "Authorization": `Bearer ${window.authToken}`}, body: JSON.stringify(chat) }); } catch(e){}
+            try { await fetch(`${SERVER_URL}/api/history/sync`, { method: "POST", headers: await llinkAuthHeaders(true), body: JSON.stringify(chat) }); } catch(e){}
         }
 
         window.restoreHistory = async () => {
@@ -1677,7 +1690,12 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                         try {
                             const prefs = (window.llinkPrefsPayload ? window.llinkPrefsPayload() : (localStorage.getItem('llink_prefs') || ""));
                             const payload = { message: txt, mode: currentMode, model: document.getElementById('model-selector').value, level: (window.llThink?llThink.level():'velora'), effort: (window.llThink?llThink.effort():'normal'), preferences: prefs, source: 'llik_web' };
-                            const res = await fetch(`${SERVER_URL}/api/chat`, { method: 'POST', body: JSON.stringify(payload), headers: {"Content-Type":"application/json", "Authorization": window.authToken?`Bearer ${window.authToken}`:""} });
+                            const res = await fetch(`${SERVER_URL}/api/chat`, { method: 'POST', body: JSON.stringify(payload), headers: await llinkAuthHeaders(true) });
+                            if (!res.ok) {
+                                const errorData = await res.json().catch(() => ({}));
+                                throw new Error(errorData.detail || `Requête refusée (${res.status}).`);
+                            }
+                            if (!res.body) throw new Error("Le serveur n'a pas ouvert le flux de réponse.");
                             const reader = res.body.getReader();
                             const decoder = new TextDecoder('utf-8'); 
                             contentDiv.innerHTML = "";
@@ -1697,7 +1715,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                             // Application du Markdown définitif une fois le stream terminé
                             contentDiv.innerHTML = parseMarkdown(fullReply);
                             scrollToBottom();
-                        } catch(e) { fullReply = "❌ Erreur de connexion au serveur Render."; contentDiv.innerHTML = fullReply; }
+                        } catch(e) { fullReply = `❌ ${e.message || "Erreur de connexion au serveur."}`; contentDiv.innerHTML = parseMarkdown(fullReply); }
                     } else {
                         if(!window.isOfflineValid) { fullReply = "❌ Votre accès au mode Hors-Ligne est expiré. Veuillez vous connecter à Internet et vous abonner."; }
                         else if(window.generateOfflineText) { fullReply = await window.generateOfflineText(txt, loadId); }
@@ -1736,9 +1754,11 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             reader.onload = async () => {
                 renderMessage("Analyse d'image Cloud...", 'bot', 'ocr-load');
                 try {
-                    const res = await fetch(`${SERVER_URL}/api/ocr`, { method: 'POST', body: JSON.stringify({imageBase64: reader.result}), headers: {"Content-Type":"application/json"} });
-                    const data = await res.json(); document.getElementById('ocr-load').remove(); sendDirect("Analyse: " + data.response);
-                } catch(e) { document.getElementById('ocr-load').remove(); alert("Erreur OCR"); }
+                    const res = await fetch(`${SERVER_URL}/api/ocr`, { method: 'POST', body: JSON.stringify({imageBase64: reader.result}), headers: await llinkAuthHeaders(true) });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.detail || `OCR HTTP ${res.status}`);
+                    document.getElementById('ocr-load').remove(); sendDirect("Analyse: " + data.response);
+                } catch(e) { document.getElementById('ocr-load').remove(); alert(e.message || "Erreur OCR"); }
             }; e.target.value = '';
         };
 
@@ -1786,9 +1806,9 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                         try {
                             const form = new FormData();
                             form.append('file', blob, mimeType.includes('mp4') ? 'recording.mp4' : 'recording.webm');
-                            const res = await fetch(`${SERVER_URL}/api/audio`, { method:'POST', body:form });
-                            if (!res.ok) throw new Error(`Audio HTTP ${res.status}`);
-                            const data = await res.json();
+                            const res = await fetch(`${SERVER_URL}/api/audio`, { method:'POST', body:form, headers: await llinkAuthHeaders() });
+                            const data = await res.json().catch(() => ({}));
+                            if (!res.ok) throw new Error(data.detail || `Audio HTTP ${res.status}`);
                             if (data.text && data.text.trim()) {
                                 if (status) status.textContent = 'Message reconnu';
                                 await sendDirect(data.text.trim());
