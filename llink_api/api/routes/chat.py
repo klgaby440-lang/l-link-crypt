@@ -88,7 +88,7 @@ async def chat_endpoint(
     await enforce_endpoint_quota(
         request=request, user=user, db=db, scope="chat"
     )
-    await reserve_ai_slot()
+    release_slot = await reserve_ai_slot()
 
     user_text = payload.message
     selected_model = payload.model
@@ -122,12 +122,14 @@ async def chat_endpoint(
             except Exception:
                 logger.exception("Le fournisseur Gemini n'a pas terminé le flux.")
                 yield "❌ Le service IA est temporairement indisponible. Réessayez."
+            finally:
+                release_slot()
 
         return StreamingResponse(
             gemini_generator(),
             media_type="text/event-stream",
             headers=STREAM_HEADERS,
-            background=BackgroundTask(release_ai_slot),
+            background=BackgroundTask(release_slot),
         )
 
     hf_model = resolve_huggingface_model(selected_model)
@@ -172,10 +174,12 @@ async def chat_endpoint(
         except Exception:
             logger.exception("Les fournisseurs IA principal et de secours ont échoué.")
             yield "❌ Les services IA sont temporairement indisponibles. Réessayez."
+        finally:
+            release_slot()
 
     return StreamingResponse(
         huggingface_generator(),
         media_type="text/event-stream",
         headers=STREAM_HEADERS,
-        background=BackgroundTask(release_ai_slot),
+        background=BackgroundTask(release_slot),
     )

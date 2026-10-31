@@ -14,7 +14,7 @@ from llink_api.database import get_db
 from llink_api.providers.gemini import get_gemini_model
 from llink_api.schemas import AudioResponse, OCRRequest, OCRResponse
 from llink_api.security import get_optional_user
-from llink_api.services.ai_slots import reserve_ai_slot, release_ai_slot
+from llink_api.services.ai_slots import reserve_ai_slot
 from llink_api.services.security_limits import enforce_endpoint_quota
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ async def ocr_endpoint(
 ):
     await enforce_endpoint_quota(request=request, user=user, db=db, scope="ocr")
     image_bytes, mime_type = _decode_image_payload(req.imageBase64)
-    await reserve_ai_slot()
+    release_slot = await reserve_ai_slot()
     try:
         model = get_gemini_model()
         response = await asyncio.to_thread(
@@ -105,7 +105,7 @@ async def ocr_endpoint(
             detail="Le service de vision est temporairement indisponible.",
         ) from exc
     finally:
-        release_ai_slot()
+        release_slot()
 
 
 @router.post("/api/audio", response_model=AudioResponse)
@@ -130,7 +130,7 @@ async def audio_endpoint(
     if len(audio_bytes) > get_settings().max_audio_bytes:
         raise HTTPException(status_code=413, detail="Fichier audio trop volumineux.")
     
-    await reserve_ai_slot()
+    release_slot = await reserve_ai_slot()
     try:
         model = get_gemini_model()
         response = await asyncio.to_thread(
@@ -151,4 +151,4 @@ async def audio_endpoint(
             detail="Le service audio est temporairement indisponible.",
         ) from exc
     finally:
-        release_ai_slot()
+        release_slot()

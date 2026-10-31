@@ -2,6 +2,7 @@
 
 import asyncio
 import threading
+from collections.abc import Callable
 
 from fastapi import HTTPException
 
@@ -11,8 +12,8 @@ _settings = get_settings()
 _semaphore = threading.BoundedSemaphore(_settings.ai_max_concurrent)
 
 
-async def reserve_ai_slot() -> None:
-    """Réserve un emplacement IA ; échoue rapidement si la file est saturée."""
+async def reserve_ai_slot() -> Callable[[], None]:
+    """Réserve une place et retourne une libération idempotente."""
     acquired = await asyncio.to_thread(
         _semaphore.acquire,
         True,
@@ -25,10 +26,17 @@ async def reserve_ai_slot() -> None:
             headers={"Retry-After": "5"},
         )
 
+    release_lock = threading.Lock()
+    released = False
 
-def release_ai_slot() -> None:
-    """Libère l'emplacement réservé à la fin de la réponse HTTP."""
-    _semaphore.release()
+    def release_once() -> None:
+        nonlocal released
+        with release_lock:
+            if not released:
+                _semaphore.release()
+                released = True
+
+    return release_once
 
 
 def reset_ai_slots_for_tests() -> None:
