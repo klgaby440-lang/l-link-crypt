@@ -2,7 +2,7 @@
 
 **Branche :** `phase-2/security-quotas-cost-controls`  
 **Point de départ :** `main` après fusion et tests de la Phase 1  
-**État :** implémentation et tests CI ; validation de l'environnement Render/Firestore à effectuer avant mise en production.
+**État :** implémentation et tests CI ; vérification des compteurs Firestore sur le service Render existant à effectuer après intégration.
 
 ## Politique d'accès
 
@@ -32,9 +32,9 @@ Les quotas sont des plafonds de protection provisoires, identiques pour tous les
 | État utilisateur | 3 | 20 | 30 | 300 |
 | Vérification de paiement | — | — | 3 | 10 |
 
-Les compteurs de production résident dans la collection Firestore `api_rate_limits`. Chaque couple utilisateur/fonction possède un document stable, mis à jour dans une transaction atomique. Les identifiants de document sont hachés ; les IP brutes ne sont pas conservées. La réponse de dépassement est HTTP 429 avec `Retry-After`.
+Les compteurs de quotas résident dans la collection Firestore `api_rate_limits`. Chaque couple utilisateur/fonction possède un document stable, mis à jour dans une transaction atomique. Les identifiants de document sont hachés ; les IP brutes ne sont pas conservées. La réponse de dépassement est HTTP 429 avec `Retry-After`.
 
-En développement/tests uniquement, un compteur mémoire permet de travailler sans Firebase. En production, l'absence de Firestore bloque les fonctions à coût variable avec HTTP 503 : aucun accès IA n'est accordé sans compteur vérifiable.
+En développement et en tests uniquement, un compteur mémoire permet de travailler sans Firebase. En `staging` et `production`, l'absence de Firestore bloque les fonctions à coût variable avec HTTP 503 : aucun accès IA n'est accordé sans compteur vérifiable.
 
 ## Limites techniques
 
@@ -50,15 +50,19 @@ En développement/tests uniquement, un compteur mémoire permet de travailler sa
 
 Les valeurs sont surchargeables via les variables d'environnement décrites dans [API_SECURITY.md](API_SECURITY.md).
 
-## Mesures de configuration à appliquer sur Render
+## Mesures de configuration sur le service Render existant
 
 1. Définir explicitement `APP_ENV=production`.
 2. Maintenir `FIREBASE_CONFIG`, `GEMINI_API_KEY` et `HF_TOKEN` dans les variables secrètes Render.
 3. Vérifier que le compte de service Firebase Admin peut lire et écrire dans `api_rate_limits`, les collections utilisateur et l'historique.
-4. Ne pas activer une origine CORS générique `*`.
+4. Ne pas activer une origine CORS générique `*`. Les origines natives Capacitor 8 par défaut sont autorisées explicitement : `capacitor://localhost` et `https://localhost`.
 5. Vérifier le vrai comportement de `request.client.host` derrière le proxy Render ; ne jamais accepter un `X-Forwarded-For` arbitraire sans configurer explicitement les proxys de confiance.
 
-## Cycle de vie des données\n\nLa collecte d'amélioration reste désactivée par défaut et l'interface actuelle ne transmet aucun consentement. Les historiques cloud sont conservés dans Firestore ; la suppression cloud cohérente et la fermeture de compte relèvent de la Phase 4. Les anciennes entrées éventuelles de `global_datasets` ne sont pas supprimées automatiquement par cette PR et doivent faire l'objet d'une revue et d'une politique de conservation approuvée avant tout nouvel entraînement. Les journaux ne doivent contenir ni prompts, ni réponses, ni tokens, ni identifiants directs. Voir `docs/DATA_LIFECYCLE.md`.\n\n## Limites restantes
+## Cycle de vie des données
+
+La collecte d'amélioration reste désactivée par défaut et l'interface actuelle ne transmet aucun consentement. Les historiques cloud sont conservés dans Firestore ; la suppression cloud cohérente et la fermeture de compte relèvent de la Phase 4. Les anciennes entrées éventuelles de `global_datasets` ne sont pas supprimées automatiquement par cette PR et doivent faire l'objet d'une revue et d'une politique de conservation approuvée avant tout nouvel entraînement. Les journaux ne doivent contenir ni prompts, ni réponses, ni tokens, ni identifiants directs. Voir [DATA_LIFECYCLE.md](DATA_LIFECYCLE.md).
+
+## Limites restantes
 
 - Le quota anonyme est fondé sur l'adresse réseau observée par ASGI ; il ne remplace pas un WAF/anti-bot distribué.
 - La concurrence IA est locale à chaque processus, tandis que les quotas Firestore sont distribués.
@@ -68,4 +72,4 @@ Les valeurs sont surchargeables via les variables d'environnement décrites dans
 
 ## Validation
 
-Les tests automatisés couvrent la réponse 401 des routes privées, le refus d'un faux jeton, la limite anonyme, les limites de fichiers et les erreurs fournisseur. La Phase 2 ne sera considérée comme validée qu'après CI vert et recette en environnement Render/Firestore.
+Les tests automatisés couvrent la réponse 401 des routes privées, le refus d'un faux jeton, les quotas anonyme et les modes `staging`/`production` sans Firestore, les prévols CORS Capacitor, les limites de fichiers et les erreurs fournisseur. La Phase 2 ne sera considérée comme validée qu'après CI vert et recette des transactions Firestore sur le service Render existant.

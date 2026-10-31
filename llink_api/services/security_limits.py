@@ -165,7 +165,7 @@ async def enforce_endpoint_quota(
     db: Any | None,
     scope: str,
 ) -> None:
-    """Applique un quota durable et refuse de servir si le compteur de production tombe."""
+    """Applique un quota durable et refuse de servir si le compteur cloud tombe."""
     authenticated = user.get("uid") != "anonymous"
     policy = get_quota_policy(scope, authenticated)
     if authenticated:
@@ -180,10 +180,14 @@ async def enforce_endpoint_quota(
             allowed, retry_after = await asyncio.to_thread(
                 _consume_firestore, db, principal, scope, policy
             )
-        elif settings.environment != "production":
+        elif settings.environment in {"development", "test"}:
             allowed, retry_after = _consume_memory(principal, scope, policy)
         else:
-            logger.error("Firestore indisponible : quota cloud non vérifiable pour %s.", scope)
+            logger.error(
+                "Firestore indisponible : quota cloud non vérifiable en mode %s pour %s.",
+                settings.environment,
+                scope,
+            )
             raise HTTPException(
                 status_code=503,
                 detail="Service de protection des quotas indisponible. Réessayez.",
