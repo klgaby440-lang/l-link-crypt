@@ -48,8 +48,11 @@ def build_system_instruction(mode: str | None, preferences: str | None) -> str:
     return instruction
 
 
-async def _iterate_sync(iterator):
-    """Consomme un itérateur SDK synchrone sans bloquer la boucle asyncio."""
+async def _iterate_sync(iterable):
+    """Consomme un iterable SDK synchrone sans bloquer la boucle asyncio."""
+    # GenerateContentResponse est iterable, mais n'est pas lui-même un itérateur.
+    # Il faut appeler iter() avant next(), comme le ferait une boucle for.
+    iterator = iter(iterable)
     sentinel = object()
     while True:
         item = await asyncio.to_thread(next, iterator, sentinel)

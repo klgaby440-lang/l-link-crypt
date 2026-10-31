@@ -108,3 +108,21 @@ def test_oversized_chat_message_is_rejected(client):
         json={"message": "x" * 12_001, "model": "gemini-1.5-flash"},
     )
     assert response.status_code == 422
+
+
+
+def test_sync_stream_adapter_accepts_iterable_response_objects():
+    import asyncio
+
+    from llink_api.api.routes.chat import _iterate_sync
+
+    class GeminiLikeResponse:
+        """Réponse iterable dont l'objet n'est pas directement un itérateur."""
+
+        def __iter__(self):
+            return iter(["premier fragment", "deuxième fragment"])
+
+    async def collect():
+        return [fragment async for fragment in _iterate_sync(GeminiLikeResponse())]
+
+    assert asyncio.run(collect()) == ["premier fragment", "deuxième fragment"]
