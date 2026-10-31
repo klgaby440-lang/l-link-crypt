@@ -4,7 +4,7 @@
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `APP_ENV` | `development` hors Render ; `production` si `RENDER=true` | L'absence de Firestore est tolérée en développement uniquement |
+| `APP_ENV` | `development` hors Render ; `production` si `RENDER=true` | Le compteur mémoire est réservé à `development` et `test` ; `staging` et `production` exigent Firestore |
 | `FIREBASE_CONFIG` | — | JSON du compte de service Firebase Admin, secret côté serveur |
 | `CORS_ORIGINS` | Liste de domaines Llink autorisés | Liste CSV ; `*` est refusé |
 | `MAX_REQUEST_BODY_BYTES` | `13500000` | Taille totale maximale d'un corps HTTP |
@@ -15,6 +15,8 @@
 | `PROVIDER_TIMEOUT_SECONDS` | `60` | Timeout Gemini/Hugging Face |
 | `AI_MAX_CONCURRENT` | `4` | Requêtes IA simultanées par processus |
 | `AI_QUEUE_TIMEOUT_SECONDS` | `3` | Temps maximal d'attente pour une place IA |
+
+Les origines natives Capacitor autorisées par défaut sont `capacitor://localhost` (iOS) et `https://localhost` (Android avec le schéma Android par défaut de Capacitor 8). Elles restent des origines précises : aucun joker CORS n'est utilisé.
 
 ## Variables de quotas
 
@@ -45,9 +47,12 @@ Les valeurs doivent être des entiers strictement positifs.
 - Validation de schéma : HTTP 422.
 - Panne fournisseur : HTTP 502 avec message générique.
 - File IA saturée : HTTP 503.
+- Firestore indisponible pour les compteurs de quotas : HTTP 503 en `staging` et `production`. Le compteur mémoire n'est jamais utilisé dans ces environnements.
 
 ## Firestore
 
 Créer/autoriser la collection serveur `api_rate_limits`. Les écritures sont effectuées par Firebase Admin SDK côté serveur, dans une transaction. Les règles client Firestore ne doivent pas accorder aux clients un accès direct à cette collection.
 
 Les documents de quotas ne conservent pas l'UID ou l'adresse IP en clair. Ils utilisent un identifiant de document SHA-256 dérivé du principal et du nom de la fonction ; les compteurs de minute et de jour sont remplacés dans le même document à chaque nouvelle période.
+
+Le compteur mémoire mono-processus est réservé à `development` et `test`.
