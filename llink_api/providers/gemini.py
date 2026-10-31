@@ -1,4 +1,4 @@
-"""Adaptateur Gemini conservant le SDK et le modèle actuellement utilisés."""
+"""Adaptateur Gemini avec plafond de sortie et délai d'attente explicite."""
 
 import google.generativeai as genai
 
@@ -18,4 +18,5 @@ def get_gemini_model(system_instruction: str | None = None):
     return genai.GenerativeModel(
         model_name=MODEL_NAME,
         system_instruction=system_instruction,
+        generation_config={"max_output_tokens": 2048},
     )

@@ -1,20 +1,21 @@
-"""Route de chat et orchestration minimale des fournisseurs existants."""
+"""Route de chat avec quotas, file de concurrence et streaming borné."""
 
+import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from llink_api.config import get_settings
 from llink_api.database import get_db
 from llink_api.providers.gemini import get_gemini_model
-from llink_api.providers.huggingface import (
-    resolve_huggingface_model,
-    stream_huggingface,
-)
+from llink_api.providers.huggingface import resolve_huggingface_model, stream_huggingface
 from llink_api.schemas import ChatPayload
-from llink_api.security import verify_token
+from llink_api.security import get_optional_user
+from llink_api.services.ai_slots import release_ai_slot, reserve_ai_slot
+from llink_api.services.security_limits import enforce_endpoint_quota
 from llink_api.services.training_data import record_exchange_if_consented
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,16 @@ def build_system_instruction(mode: str | None, preferences: str | None) -> str:
     return instruction
 
 
+async def _iterate_sync(iterator):
+    """Consomme un itérateur SDK synchrone sans bloquer la boucle asyncio."""
+    sentinel = object()
+    while True:
+        item = await asyncio.to_thread(next, iterator, sentinel)
+        if item is sentinel:
+            break
+        yield item
+
+
 async def _record_if_requested(
     *,
     db: Any | None,
@@ -70,16 +81,22 @@ async def _record_if_requested(
 @router.post("/api/chat")
 async def chat_endpoint(
     payload: ChatPayload,
-    user: dict = Depends(verify_token),
+    request: Request,
+    user: dict = Depends(get_optional_user),
     db: Any | None = Depends(get_db),
 ):
+    await enforce_endpoint_quota(
+        request=request, user=user, db=db, scope="chat"
+    )
+    await reserve_ai_slot()
+
     user_text = payload.message
     selected_model = payload.model
-    mode = payload.mode
     uid = user.get("uid", "anonymous")
     request_source = payload.source or "llink_web"
     source_tag = f"anonymous_{request_source}" if uid == "anonymous" else request_source
-    system_instruction = build_system_instruction(mode, payload.preferences)
+    system_instruction = build_system_instruction(payload.mode, payload.preferences)
+    timeout = get_settings().provider_timeout_seconds
 
     if "gemini" in selected_model.lower():
 
@@ -87,26 +104,30 @@ async def chat_endpoint(
             full_reply = ""
             try:
                 model = get_gemini_model(system_instruction)
-                response = model.generate_content(user_text, stream=True)
-                for chunk in response:
-                    if getattr(chunk, "text", None):
-                        full_reply += chunk.text
-                        yield chunk.text
-                await _record_if_requested(
-                    db=db,
-                    payload=payload,
-                    user_uid=uid,
-                    source=source_tag,
-                    full_reply=full_reply,
+                response = await asyncio.to_thread(
+                    model.generate_content,
+                    user_text,
+                    stream=True,
+                    request_options={"timeout": timeout},
                 )
-            except Exception as exc:
-                logger.exception("Erreur pendant le streaming Gemini.")
-                yield f"❌ Erreur Gemini en cours de flux : {exc}"
+                async for chunk in _iterate_sync(response):
+                    fragment = getattr(chunk, "text", None)
+                    if fragment:
+                        full_reply += fragment
+                        yield fragment
+                await _record_if_requested(
+                    db=db, payload=payload, user_uid=uid,
+                    source=source_tag, full_reply=full_reply,
+                )
+            except Exception:
+                logger.exception("Le fournisseur Gemini n'a pas terminé le flux.")
+                yield "❌ Le service IA est temporairement indisponible. Réessayez."
 
         return StreamingResponse(
             gemini_generator(),
             media_type="text/event-stream",
             headers=STREAM_HEADERS,
+            background=BackgroundTask(release_ai_slot),
         )
 
     hf_model = resolve_huggingface_model(selected_model)
@@ -123,40 +144,38 @@ async def chat_endpoint(
                 yield fragment
 
             await _record_if_requested(
-                db=db,
-                payload=payload,
-                user_uid=uid,
-                source=source_tag,
-                full_reply=full_reply,
+                db=db, payload=payload, user_uid=uid,
+                source=source_tag, full_reply=full_reply,
             )
             return
-        except Exception as exc:
-            logger.warning("Hugging Face indisponible ; bascule vers Gemini : %s", exc)
+        except Exception:
+            logger.warning("Le fournisseur Hugging Face est indisponible ; tentative de secours Gemini.")
 
         full_reply = ""
         try:
             model = get_gemini_model(system_instruction)
-            backup_response = model.generate_content(user_text, stream=True)
-            for chunk in backup_response:
-                if getattr(chunk, "text", None):
-                    full_reply += chunk.text
-                    yield chunk.text
-            await _record_if_requested(
-                db=db,
-                payload=payload,
-                user_uid=uid,
-                source=source_tag,
-                full_reply=full_reply,
+            backup_response = await asyncio.to_thread(
+                model.generate_content,
+                user_text,
+                stream=True,
+                request_options={"timeout": timeout},
             )
-        except Exception as backup_error:
-            logger.exception("Échec du fournisseur principal et du secours Gemini.")
-            if not get_settings().gemini_api_key:
-                yield "❌ Tous les serveurs sont indisponibles (Token HF et Clé Gemini manquants)."
-            else:
-                yield f"❌ Échec total de la génération. Détails : {backup_error}"
+            async for chunk in _iterate_sync(backup_response):
+                fragment = getattr(chunk, "text", None)
+                if fragment:
+                    full_reply += fragment
+                    yield fragment
+            await _record_if_requested(
+                db=db, payload=payload, user_uid=uid,
+                source=source_tag, full_reply=full_reply,
+            )
+        except Exception:
+            logger.exception("Les fournisseurs IA principal et de secours ont échoué.")
+            yield "❌ Les services IA sont temporairement indisponibles. Réessayez."
 
     return StreamingResponse(
         huggingface_generator(),
         media_type="text/event-stream",
         headers=STREAM_HEADERS,
+        background=BackgroundTask(release_ai_slot),
     )

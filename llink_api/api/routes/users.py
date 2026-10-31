@@ -1,10 +1,10 @@
-"""Routes de compte et état d'abonnement."""
+"""Routes de compte, état d'abonnement et validation de paiement."""
 
 import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from llink_api.database import get_db
 from llink_api.schemas import (
@@ -12,7 +12,8 @@ from llink_api.schemas import (
     UserStatusResponse,
     VerifyPaymentRequest,
 )
-from llink_api.security import verify_token
+from llink_api.security import get_optional_user, require_authenticated_user
+from llink_api.services.security_limits import enforce_endpoint_quota
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,11 +21,15 @@ router = APIRouter()
 
 @router.get("/api/user/status", response_model=UserStatusResponse, response_model_exclude_unset=True)
 async def check_status(
-    user: dict = Depends(verify_token),
+    request: Request,
+    user: dict = Depends(get_optional_user),
     db: Any | None = Depends(get_db),
 ):
-    if user.get("uid") == "anonymous" or db is None:
+    await enforce_endpoint_quota(request=request, user=user, db=db, scope="user_status")
+    if user.get("uid") == "anonymous":
         return {"isValid": False, "expirationDate": None, "isNewUser": False}
+    if db is None:
+        raise HTTPException(status_code=503, detail="Service de compte temporairement indisponible.")
 
     uid = user["uid"]
     user_ref = db.collection("users").document(uid)
@@ -71,18 +76,17 @@ async def check_status(
 @router.post("/api/verify-payment", response_model=PaymentVerifyResponse)
 async def verify_payment(
     req: VerifyPaymentRequest,
-    user: dict = Depends(verify_token),
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
     db: Any | None = Depends(get_db),
 ):
-    if user.get("uid") == "anonymous" or db is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Connectez-vous avec Google pour vous abonner.",
-        )
+    await enforce_endpoint_quota(
+        request=request, user=user, db=db, scope="payment_verify"
+    )
+    if db is None:
+        raise HTTPException(status_code=503, detail="Service de paiement temporairement indisponible.")
 
-    # Important : l'ancien mécanisme accordait Pro à partir d'une référence
-    # fournie par le navigateur, sans preuve de paiement. Il est désactivé.
-    # Le contrat {success: bool} reste compatible ; l'intégration réelle attend
-    # une API Think qui vérifiera le statut côté serveur (phase 7).
+    # L'activation Pro reste désactivée tant que Think ne fournit pas une
+    # confirmation serveur vérifiable (phase 7). Aucune référence cliente ne suffit.
     logger.info("Demande de vérification de paiement reçue ; intégration Think en attente.")
     return {"success": False}
