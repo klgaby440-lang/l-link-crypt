@@ -1,88 +1,47 @@
-# Llink — contrats HTTP existants
+# Llink — contrats HTTP
 
-Ce document décrit le contrat conservé pendant la phase 1. Les réponses d'erreur textuelles historiques sont documentées afin que le frontend puisse continuer à les afficher ; elles ne constituent pas encore le format d'erreur cible.
+Les routes conservent les chemins et champs attendus par le frontend. Les règles d'accès, les limites et les codes HTTP sont détaillés dans [API_SECURITY.md](API_SECURITY.md).
 
 ## Disponibilité
 
 ### `GET /`
 
-Réponse :
-
-```json
-{"message": "Llink Backend API est opérationnel."}
-```
+Réponse : `{"message": "Llink Backend API est opérationnel."}`.
 
 ## Compte et abonnement
 
 ### `GET /api/user/status`
 
-En-tête : `Authorization: Bearer <Firebase ID token>`.
-
-Pour une session anonyme ou une base indisponible :
-
-```json
-{"isValid": false, "expirationDate": null, "isNewUser": false}
-```
-
-Pour un compte connu, la réponse contient `isValid`, `isTrial`, `expirationDate` (millisecondes Unix) et `isNewUser`.
+Authorization facultative. Sans connexion, la réponse est `{"isValid": false, "expirationDate": null, "isNewUser": false}`. Un jeton présent mais invalide retourne 401.
 
 ### `POST /api/verify-payment`
 
-Corps :
-
-```json
-{"transactionId": "reference"}
-```
-
-La route conserve le contrat `{"success": bool}`. L'ancienne activation Pro reposant uniquement sur une référence fournie par le navigateur a été désactivée. La route renvoie `{"success": false}` tant que la validation serveur via Think n'est pas intégrée. Une session non authentifiée reçoit HTTP 401.
+Corps : `{"transactionId": "reference"}`. Authentification obligatoire. Réponse conservée : `{"success": false}` tant que l'API Think ne permet pas une vérification indépendante côté serveur.
 
 ## Chat
 
 ### `POST /api/chat`
 
-Corps :
+Corps : `message` et `model` obligatoires ; `preferences`, `mode`, `source` et `data_collection_consent` facultatifs. Limite du message 12 000 caractères ; préférences 2 000 caractères.
 
-```json
-{
-  "message": "Bonjour",
-  "model": "gemini-1.5-flash",
-  "preferences": "réponses courtes",
-  "mode": "chat",
-  "source": "llink_web",
-  "data_collection_consent": false
-}
-```
-
-Champs obligatoires : `message`, `model`. Les autres champs sont facultatifs. `mode` vaut notamment `chat` ou `translate`. Le nouveau champ `data_collection_consent` vaut `false` par défaut et reste rétrocompatible avec les anciennes versions du frontend.
-
-Réponse : flux de fragments texte bruts avec le type MIME historique `text/event-stream`. Il ne s'agit pas d'un flux d'événements JSON contenant des objets `data:`.
-
-Les choix de modèle et le fallback restent ceux du serveur précédent ; leur centralisation dans un registre de capacités est réservée à la phase 3.
+Authorization facultative. Les sessions anonymes disposent d'un quota réduit ; un jeton invalide retourne 401. Réponse : streaming de fragments texte bruts au format historique `text/event-stream`.
 
 ## Médias
 
 ### `POST /api/ocr`
 
-Corps JSON : `{"imageBase64": "data:image/jpeg;base64,..."}`.
-
-Réponse : `{"response": "texte extrait ou message d'erreur"}`.
+Corps JSON : `{"imageBase64": "data:image/jpeg;base64,..."}`. Authorization facultative. Images JPEG, PNG ou WebP uniquement, 6 Mo décodés maximum. Réponse : `{"response": "..."}`. Erreurs : 400, 413, 415, 429, 502 ou 503.
 
 ### `POST /api/audio`
 
-Envoi multipart avec le champ fichier `file`.
-
-Réponse : `{"text": "transcription ou message d'erreur"}`.
+Envoi multipart avec le champ fichier `file`. Authorization facultative. WebM, MP4, MP3, WAV, OGG et AAC acceptés, 12 Mo maximum. Réponse : `{"text": "..."}`. Erreurs : 400, 413, 415, 429, 502 ou 503.
 
 ## Historique
 
 ### `POST /api/history/sync`
 
-Corps : objet conversation JSON. Avec un compte anonyme ou Firestore indisponible, la réponse est `{"status": "skipped"}`. En cas d'écriture, `{"status": "success"}`.
+Corps : objet conversation Dexie. Authentification obligatoire. Réponse : `{"status": "success"}` après écriture Firestore. Anonyme : 401.
 
 ### `GET /api/history`
 
-Réponse : `{"chats": [...]}`. Si Firestore est indisponible, une propriété `warning` peut être ajoutée.
-
-## Authentification — limite connue à traiter en phase 2
-
-Le comportement historique est conservé pour la compatibilité : un jeton absent ou invalide est traité comme une session anonyme. Cette tolérance ne doit pas être considérée comme une politique d'autorisation suffisante pour la production. La phase 2 remplacera ce comportement par une matrice d'accès explicite et des réponses 401/403 adaptées.
+Authentification obligatoire. Réponse : `{"chats": [...]}`. Anonyme : 401. Firestore indisponible : 503.
