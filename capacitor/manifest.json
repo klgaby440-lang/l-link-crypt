@@ -1,8 +1,0 @@
-{
-  "name": "Luga Link",
-  "short_name": "Llink",
-  "start_url": "index.html",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "icons": [{ "src": "logo.png", "sizes": "512x512", "type": "image/png" }]
-}

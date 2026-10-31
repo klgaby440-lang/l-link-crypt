@@ -1,170 +1,86 @@
-name: ClassNet & Class-Ink Master Unified Production Ecosystem Build
+name: Llink Android Build
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches:
+      - main
+      - 'phase-1/**'
+    paths:
+      - 'app/**'
+      - 'capacitor/**'
+      - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: llink-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # =========================================================
-  # JOB 1 : COMPILATION COMPLÈTE ECOSYSTÈME WINDOWS (DESKTOP)
-  # =========================================================
-  build-windows-ecosystem:
-    runs-on: windows-latest
-
-    steps:
-      - name: 📥 Cloner le dépôt
-        uses: actions/checkout@v4
-
-      # 1. CONFIGURATION DES ENVIRONNEMENTS
-      - name: 🐍 Configurer Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: 🟢 Configurer Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: 🦀 Configurer la chaîne de compilation Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      # 2. COMPILATION DU SERVEUR INTRANET (NUITKA)
-      - name: 📦 Installation des dépendances Python sans cache
-        run: |
-          python -m pip install --no-cache-dir --upgrade pip setuptools wheel
-          python -m pip install --no-cache-dir --upgrade nuitka zstandard
-          python -m pip install --no-cache-dir -r intranet-server/requirements.txt
-        shell: powershell
-
-      - name: ⚡ Compiler le serveur Intranet avec Nuitka
-        run: |
-          cd intranet-server
-          python -m nuitka --standalone `
-            --assume-yes-for-downloads `
-            --include-package=fastapi `
-            --include-package=uvicorn `
-            --include-package=pydantic `
-            --company-name="CRYPT Enterprise" `
-            --product-name="ClassNet Intranet Node" `
-            --file-version=1.0.0.0 `
-            --product-version=1.0.0.0 `
-            --output-dir="dist_nuitka" server_intranet.py
-        shell: powershell
-
-      # 3. COMPILATION PRIMENET / CLASSNET P (TAURI ADMIN)
-      - name: 📦 Installer les dépendances PrimeNet (ClassNet P)
-        run: |
-          cd classnet-p
-          npm install
-        shell: powershell
-
-      - name: 💻 Compiler PrimeNet / ClassNet P (Tauri Administration)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: classnet-p
-
-      # 4. COMPILATION CLASSNET APP / CLASS-INK APP (TAURI ENSEIGNANT)
-      - name: 📦 Installer les dépendances ClassNet App
-        run: |
-          cd classnet-app
-          npm install
-        shell: powershell
-
-      - name: 📱 Compiler ClassNet App (Tauri Enseignant/Élève)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: classnet-app
-
-      # 5. PACKAGING GLOBAL (INNO SETUP)
-      - name: 🛠️ Installer Inno Setup
-        run: |
-          choco install innosetup -y
-        shell: powershell
-
-      - name: 📦 Générer l'installateur Windows ClassNet (.exe)
-        run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/classnet_setup.iss
-        shell: powershell
-
-      - name: 🚀 Publier l'installateur Windows Desktop Final (Brut)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClassNet-Suite-Setup-Windows.exe
-          path: installer/Output/ClassNet_Suite_Setup_v1.3.0.exe
-          compression-level: 0
-
-  # =========================================================
-  # JOB 2 : COMPILATION APPLICATION MOBILE ANDROID (CAPACITOR APK)
-  # =========================================================
-  build-android-apk:
+  build-android:
+    name: Build Llink APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: 📥 Récupération du code source
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: 🟢 Configuration de Node.js 22
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: capacitor/package-lock.json
 
-      - name: ☕ Configuration du JDK Java 21 (Requis pour Capacitor / Android)
-        uses: actions/setup-java@v4
+      - name: Set up Java
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '21'
 
-      # 1. PRÉPARATION ET CAPACITOR
-      - name: 🛠️ Installation et Configuration de Capacitor
-        run: |
-          cd classnet-app
-          if [ ! -f package.json ]; then
-            npm init -y
-          fi
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
 
-      # 2. GARANTIE DU MODE 100% HORS-LIGNE
-      - name: 🌐 Téléchargement des dépendances CDN pour le mode hors-ligne
-        run: |
-          cd classnet-app/src
-          mkdir -p offline-assets
-          wget -qO offline-assets/tailwindcss.js https://cdn.tailwindcss.com || true
-          wget -qO offline-assets/lucide.js https://unpkg.com/lucide@latest || true
-          wget -qO offline-assets/dexie.js https://unpkg.com/dexie/dist/dexie.js || true
-          
-          find . -name "*.html" -exec sed -i 's|https://cdn.tailwindcss.com|./offline-assets/tailwindcss.js|g' {} +
-          find . -name "*.html" -exec sed -i 's|https://unpkg.com/lucide@latest|./offline-assets/lucide.js|g' {} +
-          find . -name "*.html" -exec sed -i 's|https://unpkg.com/dexie/dist/dexie.js|./offline-assets/dexie.js|g' {} +
+      - name: Install Android 16 SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      # 3. SYNCHRONISATION ANDROID
-      - name: 📱 Initialiser et Synchroniser le projet Android
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install Capacitor dependencies
+        working-directory: capacitor
+        run: npm ci
+
+      - name: Verify the selected web application
+        working-directory: capacitor
         run: |
-          cd classnet-app
-          if [ ! -f capacitor.config.json ]; then
-            npx cap init "Class-Ink App" "com.crypt.classink.app" --web-dir src
-          fi
+          test -f ../app/index.html
+          echo "Capacitor webDir points to ../app/index.html"
+
+      - name: Add Android platform when missing
+        working-directory: capacitor
+        run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
-          npx cap sync android
 
-      # 4. COMPILATION APK
-      - name: 📦 Compilation de l'APK Android avec Gradle
+      - name: Sync app/index.html into Android project
+        working-directory: capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: capacitor/android
         run: |
-          cd classnet-app/android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleDebug
 
-      # 5. UPLOAD ARTEFACT NON COMPRESSÉ
-      - name: 🚀 Mise à disposition du fichier APK (Brut)
-        uses: actions/upload-artifact@v4
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
         with:
-          name: Class-Ink-Enseignant.apk
-          path: ./classnet-app/android/app/build/outputs/apk/debug/app-debug.apk
-          compression-level: 0
+          name: Llink-Android-debug-${{ github.sha }}
+          path: capacitor/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

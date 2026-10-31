@@ -1,5 +1,5 @@
 {
   "appId": "com.lugalink.app",
   "appName": "Llink",
-  "webDir": "www"
+  "webDir": "../app"
 }

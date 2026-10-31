@@ -1,6 +1,24 @@
-www/models/ 
-android/ 
-node_modules/ 
-www/models/ 
-android/ 
-node_modules/ 
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Node / Capacitor
+node_modules/
+capacitor/node_modules/
+capacitor/android/
+capacitor/local.properties
+capacitor/.gradle/
+
+# Local model weights (do not commit large model files)
+app/models/
+
+# Build outputs
+dist/
+build/
