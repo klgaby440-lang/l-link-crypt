@@ -4899,8 +4899,8 @@ function tick(){
   var rec=(typeof isRecording!=='undefined')&&isRecording;
   var sp=!!(window.speechSynthesis&&window.speechSynthesis.speaking);
   el.classList.toggle('listening',rec);el.classList.toggle('speaking',sp);
-  $('llcall-state').textContent=sp?'Elia parle…':(rec?'Elia écoute…':'Connecté');
-  $('llcall-btn-mic').classList.toggle('on',rec);
+  $('llcall-state').textContent=window.llinkLiveStatus || (sp?'Elia parle…':(rec?'Elia écoute…':'Connecté'));
+  $('llcall-btn-mic').classList.toggle('on',!!window.llinkLiveMicOn || rec);
 }
 
 window.openLiveVideoCall=function(){
@@ -4952,6 +4952,293 @@ document.addEventListener('keydown',function(e){
 });
 })();
 </script>
+<script id="llink-live-session">
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const dialog=$('llcall'), video=$('llcall-video'), micButton=$('llcall-btn-mic');
+if(!dialog||!video||!micButton)return;
+
+let socket=null, liveReady=false, connecting=false, micOn=false;
+let micStream=null, captureContext=null, captureSource=null, captureProcessor=null, silentGain=null;
+let playbackContext=null, playbackCursor=0, playbackNodes=new Set(), cameraTimer=null;
+let userTranscript='', assistantTranscript='', closing=false;
+
+function status(message){
+  window.llinkLiveStatus=message||'';
+  const node=$('llcall-state');
+  if(node&&message)node.textContent=message;
+}
+function setMicUi(on){
+  micOn=!!on;
+  window.llinkLiveMicOn=micOn;
+  micButton.classList.toggle('on',micOn);
+  micButton.innerHTML='<i data-lucide="'+(micOn?'mic-off':'mic')+'"></i>';
+  if(window.lucide)window.lucide.createIcons();
+}
+function wsUrl(){
+  if(!window.SERVER_URL && typeof SERVER_URL==='undefined')throw new Error('Adresse du serveur Llink indisponible.');
+  const base=(typeof SERVER_URL!=='undefined'?SERVER_URL:window.SERVER_URL).replace(/^http/,'ws').replace(/\/+$/,'');
+  return base+'/ws/live';
+}
+function bytesToBase64(bytes){
+  let binary='',step=0x8000;
+  for(let i=0;i<bytes.length;i+=step){
+    binary+=String.fromCharCode.apply(null,bytes.subarray(i,Math.min(i+step,bytes.length)));
+  }
+  return btoa(binary);
+}
+function base64ToBytes(value){
+  const binary=atob(value),out=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);
+  return out;
+}
+function send(payload){
+  if(!socket||socket.readyState!==WebSocket.OPEN)return false;
+  if(socket.bufferedAmount>600000)return false;
+  socket.send(JSON.stringify(payload));
+  return true;
+}
+function stopPlayback(){
+  playbackNodes.forEach(node=>{try{node.stop();}catch(_){}try{node.disconnect();}catch(_){}});
+  playbackNodes.clear();
+  if(playbackContext)playbackCursor=playbackContext.currentTime;
+  dialog.classList.remove('speaking');
+}
+async function ensurePlayback(){
+  if(!playbackContext){
+    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+    if(!AudioContextClass)throw new Error('La lecture audio n’est pas disponible dans ce navigateur.');
+    playbackContext=new AudioContextClass({sampleRate:24000});
+  }
+  if(playbackContext.state==='suspended')await playbackContext.resume();
+}
+async function playPcm(base64,sampleRate){
+  await ensurePlayback();
+  const raw=base64ToBytes(base64);
+  const count=Math.floor(raw.byteLength/2);
+  if(!count)return;
+  const samples=new Int16Array(raw.buffer,raw.byteOffset,count);
+  const audioBuffer=playbackContext.createBuffer(1,count,sampleRate||24000);
+  const channel=audioBuffer.getChannelData(0);
+  for(let i=0;i<count;i++)channel[i]=samples[i]/32768;
+  const source=playbackContext.createBufferSource();
+  source.buffer=audioBuffer;
+  source.connect(playbackContext.destination);
+  const startAt=Math.max(playbackContext.currentTime+0.025,playbackCursor);
+  playbackCursor=startAt+audioBuffer.duration;
+  playbackNodes.add(source);
+  dialog.classList.add('speaking');
+  source.onended=()=>{
+    playbackNodes.delete(source);
+    try{source.disconnect();}catch(_){}
+    if(!playbackNodes.size)dialog.classList.remove('speaking');
+  };
+  source.start(startAt);
+}
+function flushTranscript(){
+  const userText=userTranscript.trim(),assistantText=assistantTranscript.trim();
+  userTranscript='';assistantTranscript='';
+  if(userText&&typeof window.renderMessage==='function')window.renderMessage(userText,'user');
+  if(assistantText&&typeof window.renderMessage==='function')window.renderMessage(assistantText,'bot');
+  if((userText||assistantText)&&typeof window.sendDirect==='function'){
+    // The live session owns the real turn. This local metadata is not submitted
+    // as a second chat request, to avoid duplicated billing and duplicate replies.
+  }
+}
+function handleServerMessage(message){
+  if(!message||typeof message!=='object')return;
+  if(message.type==='ready'){
+    liveReady=true;connecting=false;
+    status('Live en direct · '+(message.model||'Gemini Live'));
+    return;
+  }
+  if(message.type==='error'){
+    status(message.message||'Erreur du service Live.');
+    stopPlayback();
+    return;
+  }
+  if(message.type==='transcript'){
+    if(message.speaker==='user')userTranscript+=String(message.text||'');
+    else if(message.speaker==='assistant')assistantTranscript+=String(message.text||'');
+    if(message.speaker==='user')status('Tu parles…');
+    else status('Elia répond…');
+    return;
+  }
+  if(message.type==='audio'){
+    const rate=Number(message.sample_rate)||24000;
+    playPcm(message.data,rate).catch(error=>status(error.message||'Lecture audio impossible.'));
+    return;
+  }
+  if(message.type==='interrupted'){
+    stopPlayback();
+    status(micOn?'Je t’écoute…':'Live prêt');
+    return;
+  }
+  if(message.type==='turn_complete'){
+    flushTranscript();
+    status(micOn?'Je t’écoute…':'Live prêt');
+  }
+}
+function stopCameraFrames(){
+  if(cameraTimer){clearInterval(cameraTimer);cameraTimer=null;}
+}
+function startCameraFrames(){
+  stopCameraFrames();
+  const canvas=document.createElement('canvas');
+  canvas.width=320;canvas.height=240;
+  const context=canvas.getContext('2d',{alpha:false});
+  cameraTimer=setInterval(()=>{
+    if(!liveReady||!video||video.readyState<2||video.videoWidth===0||video.classList.contains('cam-off'))return;
+    try{
+      context.drawImage(video,0,0,canvas.width,canvas.height);
+      const encoded=canvas.toDataURL('image/jpeg',0.62).split(',',2)[1];
+      if(encoded)send({type:'video',data:encoded});
+    }catch(_){}
+  },1000);
+}
+function resamplePcm16(input,inputRate,outputRate){
+  const ratio=inputRate/outputRate;
+  const length=Math.floor(input.length/ratio);
+  const pcm=new Int16Array(length);
+  for(let i=0;i<length;i++){
+    const start=Math.floor(i*ratio),end=Math.min(input.length,Math.floor((i+1)*ratio));
+    let sum=0,count=0;
+    for(let j=start;j<end;j++){sum+=input[j];count++;}
+    let sample=count?sum/count:0;
+    sample=Math.max(-1,Math.min(1,sample));
+    pcm[i]=sample<0?sample*32768:sample*32767;
+  }
+  return pcm;
+}
+async function startMicrophone(){
+  if(micOn)return;
+  if(!liveReady){status('Connexion au service vocal en cours…');return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    status('Le microphone nécessite HTTPS et un navigateur compatible.');return;
+  }
+  try{
+    await ensurePlayback(); // Unlock output audio from the user gesture.
+    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+    const targetRate=16000;
+    micStream=await navigator.mediaDevices.getUserMedia({
+      audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},
+      video:false
+    });
+    captureContext=new AudioContextClass({sampleRate:targetRate});
+    if(captureContext.state==='suspended')await captureContext.resume();
+    captureSource=captureContext.createMediaStreamSource(micStream);
+    captureProcessor=captureContext.createScriptProcessor(4096,1,1);
+    silentGain=captureContext.createGain();
+    silentGain.gain.value=0;
+    captureProcessor.onaudioprocess=event=>{
+      if(!liveReady||!micOn||!socket||socket.readyState!==WebSocket.OPEN)return;
+      const input=event.inputBuffer.getChannelData(0);
+      const pcm=resamplePcm16(input,captureContext.sampleRate,targetRate);
+      if(!pcm.length)return;
+      send({type:'audio',data:bytesToBase64(new Uint8Array(pcm.buffer))});
+    };
+    captureSource.connect(captureProcessor);
+    captureProcessor.connect(silentGain);
+    silentGain.connect(captureContext.destination);
+    setMicUi(true);
+    status('Je t’écoute…');
+  }catch(error){
+    await stopMicrophone(false);
+    status(error&&error.name==='NotAllowedError'
+      ?'Autorise le microphone dans les réglages du navigateur.'
+      :(error.message||'Impossible de démarrer le microphone.'));
+  }
+}
+async function stopMicrophone(sendEnd=true){
+  if(sendEnd&&liveReady)send({type:'audio_end'});
+  setMicUi(false);
+  try{if(captureProcessor){captureProcessor.onaudioprocess=null;captureProcessor.disconnect();}}catch(_){}
+  try{if(captureSource)captureSource.disconnect();}catch(_){}
+  try{if(silentGain)silentGain.disconnect();}catch(_){}
+  if(micStream)micStream.getTracks().forEach(track=>track.stop());
+  micStream=null;captureSource=null;captureProcessor=null;silentGain=null;
+  if(captureContext){try{await captureContext.close();}catch(_){}captureContext=null;}
+  if(liveReady)status('Live prêt');
+}
+async function toggleMicrophone(){
+  if(micOn)await stopMicrophone(true);
+  else await startMicrophone();
+}
+async function connectLive(){
+  if(connecting||liveReady||socket)return;
+  const user=window.auth&&window.auth.currentUser;
+  if(!user){status('Connecte-toi pour utiliser la conversation Live.');return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    status('Live nécessite un contexte HTTPS et les permissions média.');
+  }
+  connecting=true;closing=false;status('Connexion à Gemini Live…');
+  try{
+    await ensurePlayback();
+    const token=await user.getIdToken(true);
+    socket=new WebSocket(wsUrl());
+    socket.onopen=()=>send({type:'auth',token});
+    socket.onmessage=event=>{
+      try{handleServerMessage(JSON.parse(event.data));}
+      catch(error){status('Réponse Live illisible.');}
+    };
+    socket.onerror=()=>status('Connexion Live impossible. Vérifie le serveur.');
+    socket.onclose=()=>{
+      liveReady=false;connecting=false;socket=null;
+      stopCameraFrames();stopPlayback();
+      if(!closing)status('Session Live interrompue. Raccroche puis réessaie.');
+    };
+    startCameraFrames();
+  }catch(error){
+    connecting=false;socket=null;
+    status(error.message||'Impossible de démarrer Live.');
+  }
+}
+async function disconnectLive(){
+  closing=true;
+  stopCameraFrames();
+  await stopMicrophone(false);
+  stopPlayback();
+  liveReady=false;connecting=false;
+  const active=socket;socket=null;
+  if(active&&active.readyState===WebSocket.OPEN){
+    try{active.send(JSON.stringify({type:'close'}));}catch(_){}
+    try{active.close(1000,'Appel terminé');}catch(_){}
+  }else if(active){
+    try{active.close();}catch(_){}
+  }
+  if(playbackContext){try{await playbackContext.close();}catch(_){}playbackContext=null;}
+  userTranscript='';assistantTranscript='';
+  status('');
+}
+const oldVoice=window.handleVoice;
+window.handleVoice=function(){
+  if(dialog.classList.contains('is-open'))return toggleMicrophone();
+  return oldVoice?oldVoice.apply(this,arguments):undefined;
+};
+const oldOpen=window.openLiveVideoCall;
+window.openLiveVideoCall=function(){
+  const result=oldOpen&&oldOpen.apply(this,arguments);
+  connectLive();
+  return result;
+};
+const oldClose=window.closeLiveVideoCall;
+window.closeLiveVideoCall=function(){
+  disconnectLive();
+  return oldClose&&oldClose.apply(this,arguments);
+};
+$('llcall-form').addEventListener('submit',event=>{
+  event.preventDefault();event.stopImmediatePropagation();
+  const input=$('llcall-input'),text=(input.value||'').trim();
+  if(!text)return;
+  if(!liveReady){status('La session vocale n’est pas encore connectée.');return;}
+  input.value='';
+  send({type:'text',text});
+  status('Message envoyé à Elia…');
+},true);
+})();
+</script>
+
 <script id="llink-call-looks">
 (function(){
 'use strict';
