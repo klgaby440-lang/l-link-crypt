@@ -341,7 +341,10 @@ def validate_media_signature(kind: str, mime_type: str, data: bytes) -> None:
             )
             or (
                 mime_type == "image/tiff"
-                and (data.startswith(b"II*\\x00") or data.startswith(b"MM\\x00*"))
+                and (
+                    data.startswith(bytes((0x49, 0x49, 0x2A, 0x00)))
+                    or data.startswith(bytes((0x4D, 0x4D, 0x00, 0x2A)))
+                )
             )
             or (
                 mime_type in {"image/heic", "image/heif"}
