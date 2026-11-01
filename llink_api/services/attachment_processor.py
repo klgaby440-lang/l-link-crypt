@@ -78,8 +78,7 @@ VIDEO_MIME_TYPES = {
     ".avi": "video/avi",
     ".wmv": "video/wmv",
     ".3gp": "video/3gpp",
-    ".mpeg": "video/mpeg",
-    ".mpg": "video/mpg",
+    ".flv": "video/x-flv",
 }
 
 OFFICE_TYPES = {
@@ -340,8 +339,23 @@ def validate_media_signature(kind: str, mime_type: str, data: bytes) -> None:
     elif mime_type == "application/pdf" and not data.startswith(b"%PDF-"):
         raise ValueError("Le fichier n'a pas une signature PDF valide.")
     elif kind == "video":
-        is_mp4_family = len(data) >= 8 and data[4:8] == b"ftyp"
-        is_webm = data.startswith(b"\x1a\x45\xdf\xa3")
-        is_avi = len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"AVI "
-        if not (is_mp4_family or is_webm or is_avi):
-            raise ValueError("Le contenu réel ne correspond pas à un format vidéo reconnu.")
+        is_mp4_family = (
+            mime_type in {"video/mp4", "video/quicktime", "video/3gpp"}
+            and len(data) >= 12
+            and data[4:8] == b"ftyp"
+        )
+        is_webm = mime_type == "video/webm" and data.startswith(b"\x1a\x45\xdf\xa3")
+        is_avi = (
+            mime_type == "video/avi"
+            and len(data) >= 12
+            and data.startswith(b"RIFF")
+            and data[8:12] == b"AVI "
+        )
+        is_mpeg = mime_type in {"video/mpeg", "video/mpg"} and data.startswith(b"\x00\x00\x01")
+        is_wmv = (
+            mime_type in {"video/wmv", "video/x-ms-wmv"}
+            and data.startswith(bytes.fromhex("3026b2758e66cf11a6d900aa0062ce6c"))
+        )
+        is_flv = mime_type == "video/x-flv" and data.startswith(b"FLV")
+        if not (is_mp4_family or is_webm or is_avi or is_mpeg or is_wmv or is_flv):
+            raise ValueError("Le contenu réel ne correspond pas au format vidéo annoncé.")
