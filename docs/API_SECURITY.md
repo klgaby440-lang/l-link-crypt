@@ -124,7 +124,7 @@ Les pièces jointes utilisent le scope `ATTACHMENT` : par défaut 2/minute et 10
 
 Le Live utilise le scope `LIVE` : authentification obligatoire, 1 démarrage par minute et 12 par jour par compte. Une session est limitée à 10 minutes et occupe un créneau IA pendant sa durée. La clé Gemini reste exclusivement côté serveur.
 
-Le coût Live est calculé à partir des compteurs de tokens par modalité renvoyés par Gemini. Au 1er novembre 2026, les prix standards consultés sont de 3 USD/M tokens audio en entrée, 0,75 USD/M texte en entrée, 1 USD/M image/vidéo, 12 USD/M audio en sortie et 4,50 USD/M texte en sortie. Google annonce un changement du tarif audio de sortie au 1er janvier 2027 ; mettre à jour `LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION` avant cette date. La réservation préalable est volontairement prudente et la régularisation dépend des métriques Live disponibles.
+Le coût Live est calculé à partir des compteurs de tokens par modalité renvoyés par Gemini. Au 1er novembre 2026, les prix standards consultés sont de 3 USD/M tokens audio en entrée, 0,75 USD/M texte en entrée, 1 USD/M image/vidéo, 12 USD/M audio en sortie et 4,50 USD/M texte en sortie. Google annonce un changement du tarif audio de sortie au 1er janvier 2027 ; le backend applique automatiquement le tarif 21,60 USD/M à partir de cette date, sauf si `LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION` est explicitement défini dans Render. La réservation préalable est volontairement prudente et la régularisation dépend des métriques Live disponibles.
 
 ## Quotas Phase 4
 
