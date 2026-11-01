@@ -246,6 +246,7 @@ def test_converts_bmp_gif_and_tiff_to_png_for_gemini():
     ]:
         buffer = io.BytesIO()
         Image.new("RGB", (3, 2), (40, 80, 120)).save(buffer, format=image_format)
+        validate_media_signature("image", mime_type, buffer.getvalue())
         converted_mime, converted = prepare_image_for_gemini(mime_type, buffer.getvalue())
         assert converted_mime == "image/png"
         assert converted.startswith(b"\x89PNG\r\n\x1a\n")
