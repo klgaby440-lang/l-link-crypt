@@ -285,6 +285,13 @@ async def live_websocket(websocket: WebSocket) -> None:
 
     await websocket.accept()
     release_slot = None
+    reservation = None
+    usage_state: dict[str, Any] = {"usage": None}
+    user_uid = "anonymous"
+    entitled_level = "velora"
+    session_started = False
+    final_status = "not_started"
+    db = get_db()
     try:
         try:
             first = await asyncio.wait_for(websocket.receive_json(), timeout=15)
@@ -311,7 +318,8 @@ async def live_websocket(websocket: WebSocket) -> None:
             await websocket.close(code=4401)
             return
 
-        if user.get("uid") == "anonymous":
+        user_uid = str(user.get("uid") or "anonymous")
+        if user_uid == "anonymous":
             await _safe_send(websocket, {"type": "error", "message": "Un compte connecté est requis pour Live."})
             await websocket.close(code=4401)
             return
@@ -324,24 +332,41 @@ async def live_websocket(websocket: WebSocket) -> None:
         await enforce_endpoint_quota(
             request=websocket,
             user=user,
-            db=get_db(),
+            db=db,
             scope="live",
         )
+        entitled_level = await asyncio.to_thread(resolve_entitled_level, user, db)
         release_slot = await reserve_ai_slot()
+        try:
+            # Conservative 10-minute ceiling; actual provider modality usage settles it.
+            reservation = await reserve_usage_budget(
+                db=db,
+                uid=user_uid,
+                level=entitled_level,
+                model=LIVE_USAGE_MODEL,
+                prompt=" " * 160_000,
+            )
+        except Exception:
+            release_slot()
+            release_slot = None
+            raise
 
         client = genai.Client(api_key=settings.gemini_api_key)
         config = build_live_config()
         async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
+            session_started = True
+            final_status = "completed"
             await websocket.send_json(
                 {"type": "ready", "model": LIVE_MODEL, "max_duration_seconds": LIVE_MAX_SECONDS}
             )
             sender = asyncio.create_task(_receive_client_events(websocket, session))
-            receiver = asyncio.create_task(_forward_model_events(websocket, session))
+            receiver = asyncio.create_task(_forward_model_events(websocket, session, usage_state))
             duration_guard = asyncio.create_task(asyncio.sleep(LIVE_MAX_SECONDS))
             tasks = {sender, receiver, duration_guard}
 
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             if duration_guard in done:
+                final_status = "duration_limit"
                 await _safe_send(
                     websocket,
                     {
@@ -349,6 +374,10 @@ async def live_websocket(websocket: WebSocket) -> None:
                         "message": "Cette session Live a atteint sa durée maximale de 10 minutes.",
                     },
                 )
+                try:
+                    await websocket.close(code=1000, reason="Durée maximale atteinte.")
+                except Exception:
+                    pass
             for task in pending:
                 task.cancel()
             if pending:
@@ -360,14 +389,16 @@ async def live_websocket(websocket: WebSocket) -> None:
                         raise exception
 
     except WebSocketDisconnect:
-        pass
+        final_status = "disconnected"
     except ValueError as exc:
+        final_status = "invalid_input"
         await _safe_send(websocket, {"type": "error", "message": str(exc)})
         try:
             await websocket.close(code=4400)
         except Exception:
             pass
-    except Exception as exc:
+    except Exception:
+        final_status = "provider_error"
         logger.exception("La session Gemini Live a échoué.")
         await _safe_send(
             websocket,
@@ -378,5 +409,22 @@ async def live_websocket(websocket: WebSocket) -> None:
         except Exception:
             pass
     finally:
+        if reservation is not None:
+            # If the provider never opened a session, release the reservation at zero cost.
+            final_usage = usage_state["usage"]
+            if not session_started:
+                final_usage = TokenUsage(0, 0, cost_microusd=0)
+            try:
+                await finalize_usage(
+                    db=db,
+                    uid=user_uid,
+                    reservation=reservation,
+                    level=entitled_level,
+                    model=LIVE_USAGE_MODEL,
+                    usage=final_usage,
+                    status=final_status,
+                )
+            except Exception:
+                logger.exception("Impossible de finaliser la consommation Gemini Live.")
         if release_slot is not None:
             release_slot()
