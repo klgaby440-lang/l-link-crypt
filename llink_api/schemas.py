@@ -30,6 +30,8 @@ class AudioResponse(BaseModel):
 class ChatPayload(BaseModel):
     message: str = Field(min_length=1, max_length=get_settings().max_message_chars)
     model: str = Field(min_length=1, max_length=100)
+    level: Optional[Literal["velora", "satori", "noetra", "auren", "omnis"]] = None
+    effort: Literal["normal", "extra", "ultime"] = "normal"
     preferences: Optional[str] = Field(default=None, max_length=get_settings().max_preferences_chars)
     mode: Optional[str] = Field(default="chat", max_length=32)
     source: Optional[str] = Field(default="soko_master", max_length=100)
@@ -62,6 +64,20 @@ class HistorySyncResponse(BaseModel):
 class HistoryResponse(BaseModel):
     chats: list[dict[str, Any]]
     warning: str | None = None
+
+
+class UsageResponse(BaseModel):
+    level: str
+    hour_started_at: int
+    reset_at: int
+    request_count: int
+    input_tokens: int
+    output_tokens: int
+    cached_input_tokens: int
+    estimated_cost_usd: float
+    reserved_cost_usd: float
+    hourly_budget_usd: float | None = None
+    remaining_budget_usd: float | None = None
 
 
 class HealthResponse(BaseModel):

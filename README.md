@@ -1,55 +1,50 @@
 # Llink — CRYPT
 
-Llink is the CRYPT AI application.
+Llink est l'application d'assistance IA de CRYPT.
 
-## Project layout
+## Structure du dépôt
 
-- `main.py`: stable FastAPI entry point (`uvicorn main:app`).
-- `llink_api/`: modular backend, routes, providers, services, schemas, database and security.
-- `app/index.html`: canonical web application.
-- `capacitor/`: Capacitor 8 project and Android wrapper.
-- `docs/API_CONTRACTS.md`: HTTP contracts used by the current frontend.
-- `docs/API_SECURITY.md`: environment variables, quotas and access rules.\n- `docs/DATA_LIFECYCLE.md`: current data-retention and deletion boundaries.
-- `docs/PHASE_1.md`, `docs/PHASE_2.md`: implementation notes and release boundaries.
+- \`main.py\` : point d'entrée FastAPI stable (\`uvicorn main:app\`).
+- \`llink_api/\` : backend modulaire, routes, fournisseurs, services, schémas et sécurité.
+- \`app/index.html\` : application web canonique.
+- \`capacitor/\` : projet Capacitor 8 et wrapper Android.
+- \`docs/API_CONTRACTS.md\` : contrats HTTP utilisés par le frontend.
+- \`docs/API_SECURITY.md\` : variables, quotas et règles d'accès.
+- \`docs/DATA_LIFECYCLE.md\` : limites actuelles de conservation et de suppression.
+- \`docs/PHASE_1.md\`, \`docs/PHASE_2.md\`, \`docs/PHASE_3.md\` : notes de réalisation et limites de livraison.
 
-The Capacitor project uses `../app` as its web directory. There is no separate `www/index.html` copy.
+Le projet Capacitor utilise \`../app\` comme répertoire web.
 
-## Android build
+## Build Android
 
-Requirements: Node.js 22+, Java 21, Android SDK.
+Prérequis : Node.js 22+, Java 21 et Android SDK.
 
-```bash
+\`\`\`bash
 cd capacitor
 npm ci
-# First-time setup only:
-npx cap add android
 npx cap sync android
 cd android
 ./gradlew assembleDebug
-```
-
-The GitHub Actions workflow `.github/workflows/android-build.yml` builds the Android debug APK and publishes it as a workflow artifact.
+\`\`\`
 
 ## Backend
 
-Install production dependencies:
-
-```bash
+\`\`\`bash
 python -m pip install -r requirements.txt
 uvicorn main:app --reload
-```
+\`\`\`
 
-Install test dependencies and run the suite:
+Tests :
 
-```bash
+\`\`\`bash
 python -m pip install -r requirements-dev.txt
-python -m pytest -q
-```
+APP_ENV=test python -m pytest -q
+\`\`\`
 
-### Production configuration
+## Configuration de production
 
-Configure `APP_ENV=production`, `FIREBASE_CONFIG`, `GEMINI_API_KEY`, `HF_TOKEN` and `CORS_ORIGINS` through Render environment variables. Llink fails closed for metered AI routes if Firestore cannot enforce the quota ledger.
+Configurer via les variables d'environnement Render : \`APP_ENV=production\`, \`FIREBASE_CONFIG\`, \`GEMINI_API_KEY\`, \`ZAI_API_KEY\`, \`MINIMAX_API_KEY\`, \`DEEPSEEK_API_KEY\`, \`HF_TOKEN\` et \`CORS_ORIGINS\`.
 
-Read [docs/API_SECURITY.md](docs/API_SECURITY.md) before deploying changes to the backend.
+Les plafonds monétaires horaires facultatifs utilisent \`LLINK_HOURLY_CREDIT_LIMITS_USD\`. Lire [API_SECURITY.md](docs/API_SECURITY.md) et [PHASE_3.md](docs/PHASE_3.md) avant tout changement de production.
 
-Never commit real `.env` files, API tokens, service-account JSON files, or private keys.
+Ne jamais committer de fichier \`.env\`, de token, de compte de service ou de clé privée.

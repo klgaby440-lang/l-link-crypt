@@ -1,6 +1,8 @@
 """Configuration centralisée du backend Llink."""
 
 from dataclasses import dataclass
+import json
+import math
 import os
 
 
@@ -31,12 +33,47 @@ def _int_env(name: str, default: int, minimum: int = 1) -> int:
     return parsed
 
 
+def _hourly_credit_limits() -> dict[str, float]:
+    raw = os.getenv("LLINK_HOURLY_CREDIT_LIMITS_USD", "").strip()
+    if not raw:
+        return {}
+    try:
+        values = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("LLINK_HOURLY_CREDIT_LIMITS_USD doit être un objet JSON valide.") from exc
+    if not isinstance(values, dict):
+        raise ValueError("LLINK_HOURLY_CREDIT_LIMITS_USD doit être un objet JSON.")
+    allowed = {"velora", "satori", "noetra", "auren", "omnis"}
+    limits: dict[str, float] = {}
+    for key, value in values.items():
+        level = str(key).strip().lower()
+        if level not in allowed:
+            raise ValueError(f"Niveau inconnu dans LLINK_HOURLY_CREDIT_LIMITS_USD : {key}.")
+        if isinstance(value, bool):
+            raise ValueError(f"Budget invalide pour {level}.")
+        try:
+            amount = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Budget invalide pour {level}.") from exc
+        if not math.isfinite(amount) or amount <= 0:
+            raise ValueError(f"Le budget de {level} doit être un montant USD positif.")
+        limits[level] = amount
+    return limits
+
+
 @dataclass(frozen=True)
 class Settings:
     firebase_config: str | None
     gemini_api_key: str
     huggingface_token: str
     resend_api_key: str
+    zai_api_key: str
+    minimax_api_key: str
+    deepseek_api_key: str
+    zai_base_url: str
+    minimax_base_url: str
+    deepseek_base_url: str
+    hourly_credit_limits_usd: dict[str, float]
     cors_origins: tuple[str, ...]
     enable_dataset_collection: bool
     environment: str
@@ -73,6 +110,13 @@ def get_settings() -> Settings:
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         huggingface_token=os.getenv("HF_TOKEN", ""),
         resend_api_key=os.getenv("RESEND_API_KEY", ""),
+        zai_api_key=os.getenv("ZAI_API_KEY", ""),
+        minimax_api_key=os.getenv("MINIMAX_API_KEY", ""),
+        deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", ""),
+        zai_base_url=os.getenv("ZAI_BASE_URL", "https://api.z.ai/api/paas/v4"),
+        minimax_base_url=os.getenv("MINIMAX_BASE_URL", "https://api.minimax.io/v1"),
+        deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+        hourly_credit_limits_usd=_hourly_credit_limits(),
         cors_origins=origins,
         enable_dataset_collection=os.getenv("ENABLE_DATASET_COLLECTION", "false").lower()
         in {"1", "true", "yes"},
