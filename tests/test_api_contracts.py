@@ -11,6 +11,9 @@ def test_openapi_exposes_stable_request_and_response_schemas(client):
     chat_schema = schema["components"]["schemas"]["ChatPayload"]
     assert set(chat_schema["required"]) == {"message", "model"}
     assert chat_schema["properties"]["data_collection_consent"]["default"] is False
+    assert "level" in chat_schema["properties"]
+    assert "effort" in chat_schema["properties"]
+    assert "/api/usage" in schema["paths"]
     assert "/api/history/sync" in schema["paths"]
 
     registered = set(schema["components"]["schemas"])
@@ -41,19 +44,20 @@ def test_chat_rejects_missing_required_fields(client):
     assert response.status_code == 422
 
 
-def test_chat_keeps_plain_text_stream_contract(client, monkeypatch):
+def test_chat_rejects_unconfigured_provider_before_opening_stream(client, monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("APP_ENV", "test")
     response = client.post(
         "/api/chat",
         json={
             "message": "Bonjour",
             "model": "gemini-1.5-flash",
+            "level": "velora",
             "mode": "chat",
         },
     )
-    assert response.status_code == 200
-    assert "text/event-stream" in response.headers["content-type"]
-    assert "temporairement indisponible" in response.text
+    assert response.status_code == 503
+    assert "gemini" in response.json()["detail"].lower()
 
 
 def test_ocr_rejects_non_image_payload(client):
@@ -126,3 +130,9 @@ def test_sync_stream_adapter_accepts_iterable_response_objects():
         return [fragment async for fragment in _iterate_sync(GeminiLikeResponse())]
 
     assert asyncio.run(collect()) == ["premier fragment", "deuxième fragment"]
+
+
+
+def test_usage_route_is_authenticated(client):
+    response = client.get("/api/usage")
+    assert response.status_code == 401

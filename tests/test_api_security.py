@@ -62,13 +62,14 @@ def test_invalid_authorization_scheme_is_rejected(client):
     assert response.status_code == 401
 
 
-def test_anonymous_chat_quota_returns_429(client, monkeypatch):
+def test_anonymous_chat_quota_is_enforced_before_provider_configuration(client, monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    payload = {"message": "Ping", "model": "gemini-1.5-flash"}
+    monkeypatch.setenv("APP_ENV", "test")
+    payload = {"message": "Ping", "model": "gemini-1.5-flash", "level": "velora"}
 
     for _ in range(3):
         response = client.post("/api/chat", json=payload)
-        assert response.status_code == 200
+        assert response.status_code == 503
 
     limited = client.post("/api/chat", json=payload)
     assert limited.status_code == 429

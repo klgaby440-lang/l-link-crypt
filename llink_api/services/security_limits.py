@@ -37,6 +37,7 @@ DEFAULT_POLICIES: dict[tuple[str, bool], QuotaPolicy] = {
     ("user_status", False): QuotaPolicy(3, 20),
     ("user_status", True): QuotaPolicy(30, 300),
     ("payment_verify", True): QuotaPolicy(3, 10),
+    ("usage_read", True): QuotaPolicy(30, 200),
 }
 
 _memory_lock = threading.Lock()
