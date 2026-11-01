@@ -26,7 +26,7 @@ Permettre de joindre plusieurs fichiers directement depuis le compositeur Llink,
 ## Sécurité et coût
 
 - Le nom de fichier est réduit à un nom simple ; les chemins envoyés par le client ne sont jamais conservés.
-- Les octets sont lus avec des limites, puis contrôlés avec des signatures pour images, PDF et formats vidéo identifiables. BMP, GIF et TIFF sont convertis en PNG ; HEIC/HEIF sont conservés pour Gemini.
+- Les octets sont lus avec des limites, puis contrôlés avec des signatures pour images, PDF et formats vidéo identifiables. BMP, GIF (première image) et TIFF sont convertis en PNG avec une limite de pixels ; HEIC/HEIF sont conservés pour Gemini.
 - Les archives Office sont plafonnées en nombre d'entrées et en taille décompressée ; aucun contenu Office n'est exécuté.
 - L'analyse multimodale est protégée par un quota spécifique et un créneau de concurrence.
 - L'appel Gemini d'analyse utilise la tarification du registre VELORA pour calculer la dépense réelle, mais l'impute au niveau de l'utilisateur qui a initié le chat. Le chat final garde sa propre mesure d'usage.
