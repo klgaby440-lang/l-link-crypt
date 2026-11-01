@@ -30,7 +30,7 @@ class AudioResponse(BaseModel):
 class ConversationTurn(BaseModel):
     """Un tour de conversation antérieur fourni par le client."""
     role: Literal["user", "assistant", "bot"]
-    text: str = Field(min_length=1, max_length=get_settings().max_message_chars)
+    text: str = Field(min_length=1, max_length=32_000)
 
 
 class ChatPayload(BaseModel):
