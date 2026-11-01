@@ -1091,6 +1091,8 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
     <script>
         const db = new Dexie("LlinkDB");
         db.version(2).stores({ chats: '++id, title, time, mode', msgs: '++id, chatId, role, text' });
+        // Version 3 indexe l'identifiant cloud stable utilisé pour fusionner l'historique distant.
+        db.version(3).stores({ chats: '++id, title, time, mode, syncId', msgs: '++id, chatId, role, text' });
         
         const SERVER_URL = "https://llink-usz9.onrender.com";
 
@@ -1215,20 +1217,84 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             } catch(e) { alert("Erreur réseau de validation."); }
         }
 
+        function createChatSyncId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+            return `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+
         async function syncChatToServer(chat) {
-            if(!window.isLoggedIn || localStorage.getItem('llink_sync') === '0') return;
-            try { await fetch(`${SERVER_URL}/api/history/sync`, { method: "POST", headers: await llinkAuthHeaders(true), body: JSON.stringify(chat) }); } catch(e){}
+            if(!window.isLoggedIn || localStorage.getItem('llink_sync') === '0' || !chat) return;
+            try {
+                if (!chat.syncId) {
+                    // Les anciennes conversations gardent leur clé Firestore historique.
+                    chat.syncId = chat.id != null ? String(chat.id) : createChatSyncId();
+                    if (chat.id != null) await db.chats.update(chat.id, { syncId: chat.syncId });
+                }
+                const response = await fetch(`${SERVER_URL}/api/history/sync`, {
+                    method: "POST",
+                    headers: await llinkAuthHeaders(true),
+                    body: JSON.stringify(chat)
+                });
+                if (!response.ok) throw new Error(`Synchronisation historique HTTP ${response.status}`);
+            } catch(e) {
+                console.warn("Synchronisation de l'historique Llink impossible :", e);
+            }
+        }
+
+        async function importRemoteChat(remoteChat) {
+            if (!remoteChat || typeof remoteChat !== 'object') return;
+            const syncId = String(remoteChat.syncId || remoteChat.cloud_id || remoteChat.id || '');
+            if (!syncId) return;
+
+            let localChat = await db.chats.where('syncId').equals(syncId).first();
+            if (!localChat && remoteChat.id != null) {
+                const legacyLocal = await db.chats.get(Number(remoteChat.id));
+                if (legacyLocal && !legacyLocal.syncId) localChat = legacyLocal;
+            }
+
+            const metadata = {
+                title: String(remoteChat.title || 'Discussion Llink').slice(0, 200),
+                time: Number(remoteChat.time) || Date.now(),
+                mode: String(remoteChat.mode || 'chat'),
+                syncId
+            };
+            let localChatId;
+            if (localChat) {
+                localChatId = localChat.id;
+                await db.chats.update(localChatId, metadata);
+            } else {
+                localChatId = await db.chats.add(metadata);
+            }
+
+            const localMessages = await db.msgs.where('chatId').equals(localChatId).toArray();
+            const known = new Set(localMessages.map(item => `${item.role}\\0${item.text}`));
+            const remoteMessages = Array.isArray(remoteChat.messages) ? remoteChat.messages : [];
+            remoteMessages.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+            for (const message of remoteMessages) {
+                const text = typeof message.text === 'string' ? message.text : '';
+                const role = message.role === 'assistant' || message.role === 'bot' ? 'bot' : 'user';
+                const signature = `${role}\\0${text}`;
+                if (text.trim() && !known.has(signature)) {
+                    await db.msgs.add({ chatId: localChatId, role, text });
+                    known.add(signature);
+                }
+            }
         }
 
         window.restoreHistory = async () => {
             try {
                 const user = window.auth ? window.auth.currentUser : null;
                 if (!user) return;
-                const userToken = await user.getIdToken();
-                const response = await fetch(`${SERVER_URL}/api/history`, { method: 'GET', headers: { 'Authorization': `Bearer ${userToken}`, 'Content-Type': 'application/json' } });
-                if (!response.ok) return;
+                const response = await fetch(`${SERVER_URL}/api/history`, {
+                    method: 'GET',
+                    headers: await llinkAuthHeaders()
+                });
+                if (!response.ok) throw new Error(`Historique HTTP ${response.status}`);
                 const data = await response.json();
-                if (!data.warning) console.log("Historique distant synchronisé.");
+                const remoteChats = Array.isArray(data.chats) ? data.chats : [];
+                for (const remoteChat of remoteChats) await importRemoteChat(remoteChat);
+                if (typeof window.loadHistory === 'function') await window.loadHistory();
+                if (!data.warning) console.log(`Historique Llink restauré : ${remoteChats.length} discussion(s).`);
             } catch (error) { console.error("Erreur historique:", error); }
         };
 
@@ -1610,7 +1676,13 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
 
         window.switchChat = async (id) => {
             curChatId = id;
+            const chat = await db.chats.get(id);
+            if (chat && chat.mode && currentMode !== chat.mode) {
+                currentMode = chat.mode;
+                if (typeof window.loadHistory === 'function') await window.loadHistory();
+            }
             const m = await db.msgs.where('chatId').equals(id).toArray();
+            m.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
             document.getElementById('chat-window').innerHTML = "";
             m.forEach(msg => renderMessage(msg.text, msg.role));
             if(window.innerWidth<768) toggleSidebar();
@@ -1656,27 +1728,48 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             lucide.createIcons(); scrollToBottom();
         }
 
+        async function getConversationContext(chatId) {
+            if (chatId == null) return [];
+            const stored = await db.msgs.where('chatId').equals(chatId).toArray();
+            stored.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+            return stored
+                .filter(item => (item.role === 'user' || item.role === 'bot' || item.role === 'assistant') && typeof item.text === 'string' && item.text.trim())
+                .slice(-20)
+                .map(item => ({
+                    role: item.role === 'user' ? 'user' : 'assistant',
+                    text: item.text
+                }));
+        }
+
         window.sendDirect = (txt) => { document.getElementById('user-msg').value = txt; sendFromInput(); };
         
         window.sendFromInput = async () => {
                     const input = document.getElementById('user-msg');
                     const txt = input.value;
                     if(!txt.trim()) return; input.value = ''; input.style.height = '3rem';
-                    if(!curChatId) { curChatId = await db.chats.add({title: txt.substring(0,20), time: Date.now(), mode: currentMode}); window.loadHistory(); }
-                    
+                    if(!curChatId) {
+                        curChatId = await db.chats.add({
+                            title: txt.substring(0,20),
+                            time: Date.now(),
+                            mode: currentMode,
+                            syncId: createChatSyncId()
+                        });
+                        window.loadHistory();
+                    }
+
+                    // Lire les échanges précédents AVANT d'ajouter le message courant.
+                    const conversationHistory = await getConversationContext(curChatId);
+
                     const emptyState = document.getElementById('empty-state');
                     if(emptyState) emptyState.remove();
-                    
+
+                    // Conserver aussi les échanges anonymes localement pour le contexte de la session.
+                    await db.msgs.add({chatId: curChatId, role: 'user', text: txt});
+
                     if(window.isLoggedIn) {
-                        await db.msgs.add({chatId: curChatId, role: 'user', text: txt});
-                        
-                        // Vérification du nombre de requêtes utilisateur
                         const userPromptsCount = await db.msgs.where('role').equals('user').count();
-                        
-                        // Si le compte est un multiple de 50 (50, 100, 150...), on lance l'export
                         if (localStorage.getItem('llink_auto_export') !== '0' && userPromptsCount > 0 && userPromptsCount % 50 === 0) {
                             window.exportDatasetJSON();
-                            // Une petite notification discrète ne fait pas de mal
                             setTimeout(() => alert(`🎉 Cap des ${userPromptsCount} prompts atteint ! Ton dataset JSON a été exporté automatiquement.`), 1000);
                         }
                     }
@@ -1689,7 +1782,16 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                     if(window.isOnline) {
                         try {
                             const prefs = (window.llinkPrefsPayload ? window.llinkPrefsPayload() : (localStorage.getItem('llink_prefs') || ""));
-                            const payload = { message: txt, mode: currentMode, model: document.getElementById('model-selector').value, level: (window.llThink?llThink.level():'velora'), effort: (window.llThink?llThink.effort():'normal'), preferences: prefs, source: 'llik_web' };
+                            const payload = {
+                                message: txt,
+                                history: conversationHistory,
+                                mode: currentMode,
+                                model: document.getElementById('model-selector').value,
+                                level: (window.llThink ? llThink.level() : 'velora'),
+                                effort: (window.llThink ? llThink.effort() : 'normal'),
+                                preferences: prefs,
+                                source: 'llik_web'
+                            };
                             const res = await fetch(`${SERVER_URL}/api/chat`, { method: 'POST', body: JSON.stringify(payload), headers: await llinkAuthHeaders(true) });
                             if (!res.ok) {
                                 const errorData = await res.json().catch(() => ({}));
@@ -1712,6 +1814,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                                 contentDiv.innerHTML = tempHtml + '<span class="animate-pulse inline-block w-2 h-4 bg-gray-500 ml-1"></span>'; 
                                 scrollToBottom(); 
                             }
+                            fullReply += decoder.decode();
                             // Application du Markdown définitif une fois le stream terminé
                             contentDiv.innerHTML = parseMarkdown(fullReply);
                             scrollToBottom();
@@ -1732,10 +1835,15 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                             window.speechSynthesis.speak(spokenReply);
                         } catch (e) { /* La synthèse vocale peut être indisponible selon le navigateur. */ }
                     }
-                    if(window.isLoggedIn) {
+                    if (fullReply.trim() && !fullReply.trim().startsWith('❌')) {
                         await db.msgs.add({chatId: curChatId, role: 'bot', text: fullReply});
-                        const fullChat = await db.chats.get(curChatId); fullChat.messages = await db.msgs.where('chatId').equals(curChatId).toArray();
-                        await syncChatToServer(fullChat);
+                    }
+                    if(window.isLoggedIn) {
+                        const fullChat = await db.chats.get(curChatId);
+                        if (fullChat) {
+                            fullChat.messages = (await db.msgs.where('chatId').equals(curChatId).toArray()).slice(-200);
+                            await syncChatToServer(fullChat);
+                        }
                     }
                 };
         // ================= MEDIA LOGIC =================
