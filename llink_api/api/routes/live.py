@@ -7,6 +7,7 @@ import base64
 import binascii
 import logging
 import os
+from datetime import date
 from decimal import Decimal, ROUND_CEILING
 from typing import Any
 
@@ -41,8 +42,17 @@ LIVE_INPUT_RATES = {
     "IMAGE": Decimal("1.00"),
     "VIDEO": Decimal("1.00"),
 }
+def default_live_audio_output_rate(on_date: date | None = None) -> Decimal:
+    """Tarif Google annoncé : 12 USD/M jusqu'au 31-12-2026, 21.60 USD/M ensuite."""
+    current_date = on_date or date.today()
+    return Decimal("21.60") if current_date >= date(2027, 1, 1) else Decimal("12.00")
+
+
 LIVE_OUTPUT_AUDIO_USD_PER_MILLION = Decimal(
-    os.getenv("LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION", "12.00")
+    os.getenv(
+        "LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION",
+        str(default_live_audio_output_rate()),
+    )
 )
 LIVE_OUTPUT_RATES = {
     "AUDIO": LIVE_OUTPUT_AUDIO_USD_PER_MILLION,
