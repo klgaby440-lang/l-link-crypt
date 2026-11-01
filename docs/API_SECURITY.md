@@ -52,6 +52,7 @@ Valeurs par défaut :
 | OCR | 1 | 5 | 5 | 40 |
 | Audio | 1 | 3 | 3 | 20 |
 | Pièces jointes | 2 | 10 | 5 | 30 |
+| Live vocal/vidéo | — | — | 1 | 12 |
 | Historique (lecture) | — | — | 30 | 200 |
 | Historique (écriture) | — | — | 30 | 500 |
 | État utilisateur | 3 | 20 | 30 | 300 |
@@ -120,6 +121,10 @@ Le compteur mémoire mono-processus est réservé à \`development\` et \`test\`
 ## Quotas Phase 5
 
 Les pièces jointes utilisent le scope `ATTACHMENT` : par défaut 2/minute et 10/jour pour les sessions anonymes, 5/minute et 30/jour pour les comptes. Les appels au chat qui suivent restent également soumis au quota CHAT.
+
+Le Live utilise le scope `LIVE` : authentification obligatoire, 1 démarrage par minute et 12 par jour par compte. Une session est limitée à 10 minutes et occupe un créneau IA pendant sa durée. La clé Gemini reste exclusivement côté serveur.
+
+Le coût Live est calculé à partir des compteurs de tokens par modalité renvoyés par Gemini. Au 1er novembre 2026, les prix Standard documentés sont de 3 USD/M tokens audio en entrée, 0,75 USD/M texte en entrée, 1 USD/M image/vidéo, 12 USD/M audio en sortie et 4,50 USD/M texte en sortie. Le taux de 21,60 USD/M correspond au tier Priority et n'est pas appliqué au compte Standard. Le taux audio sortie est surchargeable avec `LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION`.
 
 ## Quotas Phase 4
 

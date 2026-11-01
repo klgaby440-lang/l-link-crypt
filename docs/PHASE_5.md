@@ -45,3 +45,16 @@ Permettre de joindre plusieurs fichiers directement depuis le compositeur Llink,
 ## Validation
 
 Les tests couvrent la classification, l'extraction bureautique et texte, les signatures, les limites, l'accès et le passage du contexte aux routes de chat. Une recette avec les vraies clés Gemini et des fichiers représentatifs reste indispensable avant déploiement.
+
+
+## Voix Live et rendu Markdown — lot complémentaire
+
+- L'écran d'appel utilise désormais une vraie session Gemini Live en WebSocket, au lieu d'un enregistrement isolé puis transcription.
+- Audio entrant PCM16 16 kHz et audio de sortie PCM 24 kHz ; transcriptions d'entrée/sortie ; interruption de lecture lors d'une interruption utilisateur.
+- La caméra envoie des images JPEG à raison d'une image par seconde au maximum.
+- Authentification Firebase obligatoire, quota par compte, créneau IA, durée de session maximale de 10 minutes et compteur d'usage Live par modalité.
+- La clé Gemini est gardée sur le backend. Le navigateur n'obtient qu'un relais WebSocket authentifié.
+- Les tarifs audio Live sont configurables via `LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION` afin de suivre l'évolution annoncée des tarifs.
+- Le rendu Markdown est confié à Marked et assaini avec DOMPurify avant insertion dans la page.
+- Sur Vercel, `Cross-Origin-Opener-Policy: same-origin-allow-popups` permet de conserver le flux de popup OAuth Firebase.
+- La session Live demande une connexion Internet et un compte connecté. Les appels vocaux ne sont pas pris en charge hors ligne.

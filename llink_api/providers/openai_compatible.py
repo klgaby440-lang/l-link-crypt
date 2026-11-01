@@ -16,6 +16,8 @@ class TokenUsage:
     prompt_tokens: int
     completion_tokens: int
     cached_input_tokens: int = 0
+    # Optional provider-computed cost override for multimodal rates (e.g. Live audio/video).
+    cost_microusd: int | None = None
 
 
 @dataclass(frozen=True)

@@ -57,6 +57,22 @@ Les coûts sont calculés avec le tarif de référence du registre et les tokens
 
 La réponse n'expose aucun prompt, aucune réponse, aucune clé fournisseur et aucun raisonnement interne.
 
+## Session Live — Phase 5
+
+### `WS /ws/live`
+
+WebSocket temps réel entre le navigateur et Gemini Live, relayé par le backend.
+
+1. Le client ouvre le WebSocket puis transmet `{"type":"auth","token":"<Firebase ID token>"}`.
+2. Le serveur vérifie la signature, l'expiration et la révocation du jeton Firebase.
+3. Après contrôle de quota et réservation de crédits, le serveur ouvre une session `gemini-3.8-live`.
+4. Le client envoie des événements `audio` (PCM16 little-endian, 16 kHz, Base64), `video` (image JPEG Base64, au plus 1 image/s), `text` ou `audio_end`.
+5. Le serveur renvoie `ready`, `transcript`, `audio` (PCM 24 kHz), `interrupted`, `turn_complete` ou `error`.
+
+Authentification obligatoire. La clé Gemini n'est jamais exposée au navigateur. Origines contrôlées par `CORS_ORIGINS`. Durée maximale par session : 10 minutes. Une session utilise un créneau de concurrence IA. Les conversations textuelles et les transcriptions sont affichées dans l'appel ; elles ne sont pas envoyées une seconde fois au endpoint CHAT.
+
+Le quota initial est de 1 démarrage/minute et 12/jour par compte. Les métriques Live sont rapprochées du compteur d'usage, avec les détails tarifaires par modalité lorsque Gemini les fournit. Si ces détails manquent, le système conserve la réservation prudente.
+
 ## Médias
 
 ### \`POST /api/ocr\`
