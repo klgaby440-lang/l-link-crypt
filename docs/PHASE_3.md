@@ -26,7 +26,7 @@ Le frontend transmet déjà \`level\` et \`effort\`. Le schéma backend les acce
 
 Le champ historique \`model\` reste accepté. Si \`level\` est absent, les anciens alias sont traduits par le registre. Si \`level\` est présent, le modèle est résolu uniquement côté serveur.
 
-Les anciens endpoints et le streaming texte brut restent présents. Les champs \`reasoning_content\` et autres contenus de raisonnement internes ne sont jamais affichés à l'utilisateur.
+Les anciens endpoints et le streaming texte brut restent présents. Le frontend transmet les tours précédents dans le champ history ; le backend les normalise et les transmet aux fournisseurs Gemini et OpenAI-compatibles. L'historique est limité à 20 tours et 32 000 caractères pour contenir les coûts. Les champs \`reasoning_content\` et autres contenus de raisonnement internes ne sont jamais affichés à l'utilisateur.
 
 ## 3. Droits et abonnement
 

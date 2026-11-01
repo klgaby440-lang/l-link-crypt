@@ -13,6 +13,8 @@ def test_openapi_exposes_stable_request_and_response_schemas(client):
     assert chat_schema["properties"]["data_collection_consent"]["default"] is False
     assert "level" in chat_schema["properties"]
     assert "effort" in chat_schema["properties"]
+    assert "history" in chat_schema["properties"]
+    assert chat_schema["properties"]["history"]["items"]["$ref"].endswith("/ConversationTurn")
     assert "/api/usage" in schema["paths"]
     assert "/api/history/sync" in schema["paths"]
 

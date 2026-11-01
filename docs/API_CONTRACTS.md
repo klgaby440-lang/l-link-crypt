@@ -29,7 +29,7 @@ Corps :
 - \`effort\` facultatif : \`normal\`, \`extra\`, \`ultime\`.
 - \`preferences\`, \`mode\`, \`source\` et \`data_collection_consent\` facultatifs.
 
-Limite du message : 12 000 caractères ; préférences : 2 000 caractères.
+Limite du message : 12 000 caractères ; préférences : 2 000 caractères. Le champ history accepte jusqu'à 24 tours antérieurs, chacun avec role (user, assistant ou ancien bot) et text. Le backend ne transmet que les 20 tours les plus récents et limite l'historique à 32 000 caractères pour contenir les coûts ; le message courant reste séparé.
 
 Authorization facultative. Les sessions anonymes restent limitées à VELORA. Le serveur résout le niveau réel depuis Firestore et ne fait pas confiance au niveau envoyé par le navigateur. Un niveau supérieur au droit du compte retourne 403. Une configuration fournisseur manquante retourne 503 avant ouverture du flux.
 
@@ -71,8 +71,8 @@ Envoi multipart avec le champ fichier \`file\`. Authorization facultative. WebM,
 
 ### \`POST /api/history/sync\`
 
-Corps : objet conversation Dexie. Authentification obligatoire. Réponse : \`{"status": "success"}\` après écriture Firestore. Anonyme : 401.
+Corps : objet conversation Dexie avec un champ syncId stable et messages. Authentification obligatoire. La clé syncId identifie le document Firestore. Réponse : \`{"status": "success"}\` après écriture Firestore. Anonyme : 401.
 
 ### \`GET /api/history\`
 
-Authentification obligatoire. Réponse : \`{"chats": [...]}\`. Anonyme : 401. Firestore indisponible : 503.
+Authentification obligatoire. Réponse : \`{"chats": [...]}\`. Anonyme : 401. Firestore indisponible : 503. Chaque conversation retournée inclut cloud_id et syncId pour la réconciliation locale ; le frontend importe les conversations distantes dans IndexedDB lorsqu'elles ne sont pas déjà présentes.

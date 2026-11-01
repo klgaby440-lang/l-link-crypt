@@ -408,3 +408,53 @@ def test_gemini_adapter_converts_legacy_multimedia_parts():
     assert normalized[0] == "Transcris ceci"
     assert normalized[1].inline_data.mime_type == "audio/webm"
     assert normalized[1].inline_data.data == b"audio-bytes"
+
+
+
+def test_openai_chat_messages_include_previous_turns_in_order():
+    from llink_api.providers.openai_compatible import build_chat_messages
+
+    messages = build_chat_messages(
+        "Instruction système",
+        [
+            {"role": "user", "content": "Bonjour"},
+            {"role": "assistant", "content": "Salut !"},
+        ],
+        "Et ensuite ?",
+    )
+    assert messages == [
+        {"role": "system", "content": "Instruction système"},
+        {"role": "user", "content": "Bonjour"},
+        {"role": "assistant", "content": "Salut !"},
+        {"role": "user", "content": "Et ensuite ?"},
+    ]
+
+
+def test_gemini_chat_contents_map_assistant_to_model_role():
+    from llink_api.providers.gemini import build_gemini_contents
+
+    contents = build_gemini_contents(
+        [
+            {"role": "user", "content": "Bonjour"},
+            {"role": "assistant", "content": "Salut !"},
+        ],
+        "Et ensuite ?",
+    )
+    assert [item.role for item in contents] == ["user", "model", "user"]
+    assert [item.parts[0].text for item in contents] == ["Bonjour", "Salut !", "Et ensuite ?"]
+
+
+def test_chat_history_is_normalized_and_bounded():
+    from llink_api.api.routes.chat import (
+        MAX_HISTORY_CHARS,
+        normalize_conversation_history,
+    )
+    from llink_api.schemas import ConversationTurn
+
+    history = [
+        ConversationTurn(role="user", text="A" * MAX_HISTORY_CHARS),
+        ConversationTurn(role="bot", text="Réponse récente"),
+    ]
+    normalized = normalize_conversation_history(history)
+    assert normalized[-1] == {"role": "assistant", "content": "Réponse récente"}
+    assert sum(len(item["content"]) for item in normalized) <= MAX_HISTORY_CHARS
