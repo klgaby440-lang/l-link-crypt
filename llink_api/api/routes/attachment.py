@@ -161,7 +161,7 @@ async def chat_with_attachments(
         if total_bytes > settings.max_attachment_total_bytes:
             raise HTTPException(status_code=413, detail="La taille totale des pièces jointes est trop élevée.")
 
-        extension_info = classify_attachment(filename)
+        extension_info = classify_attachment(filename, upload.content_type)
         size_label = f"{len(data) / 1_000_000:.2f} Mo"
         summary = {"name": filename, "size": len(data), "kind": "file", "status": "received"}
 
