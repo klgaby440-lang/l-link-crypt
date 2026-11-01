@@ -87,7 +87,10 @@ def normalize_file_name(name: str) -> str:
 
 
 def normalize_folder(folder: str) -> str:
-    value = (folder or "").replace("\\", "/").strip("/")
+    raw = (folder or "").replace("\\", "/")
+    if raw.startswith("/") or re.match(r"^[A-Za-z]:", raw):
+        raise HTTPException(status_code=422, detail="Les chemins absolus sont interdits.")
+    value = raw.strip("/")
     if not value:
         return ""
     parts = value.split("/")
@@ -221,7 +224,7 @@ async def update_project(
     db = _require_firestore(db)
     await _quota(request, user, db, "work_write")
     project_id = _validate_id(project_id)
-    updates = payload.model_dump(exclude_unset=True)
+    updates = payload.model_dump(exclude_unset=True, exclude_none=True)
     if not updates:
         raise HTTPException(status_code=422, detail="Aucune modification fournie.")
     if "name" in updates and updates["name"] is not None:
