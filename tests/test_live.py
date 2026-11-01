@@ -55,8 +55,8 @@ def test_live_usage_calculates_cost_from_modality_breakdown():
     assert usage is not None
     assert usage.prompt_tokens == 100
     assert usage.completion_tokens == 50
-    # 80*3 + 20*0.75 + 40*12 + 10*4.5 = 757.5 micro-USD.
-    assert usage.cost_microusd == 758
+    # 80*3 + 20*0.75 + 40*12 + 10*4.5 = 780 micro-USD.
+    assert usage.cost_microusd == 780
 
 
 def test_live_usage_returns_none_without_provider_usage():
