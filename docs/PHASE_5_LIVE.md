@@ -2,7 +2,7 @@
 
 La conversation Live est relayée par `WS /ws/live` via FastAPI et le SDK officiel `google-genai`.
 
-- Modèle : `gemini-3.1-flash-live-preview`.
+- Modèle : `gemini-3.8-live`.
 - Audio entrant : PCM16 mono 16 kHz.
 - Audio sortant : PCM 24 kHz, lu en continu via Web Audio.
 - Vidéo : image JPEG à un maximum d'une image par seconde.
@@ -12,7 +12,7 @@ La conversation Live est relayée par `WS /ws/live` via FastAPI et le SDK offici
 - Durée d'une session : 10 minutes maximum.
 - Une réservation de budget est faite avant l'ouverture de la session ; les coûts sont régularisés avec `usage_metadata` et les compteurs de modalités de Gemini.
 
-Le prix de sortie audio Live est configurable par `LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION`. La valeur par défaut est 12 USD/M tokens au 1er novembre 2026. Google a annoncé une évolution au 1er janvier 2027 : actualiser la variable Render avant cette date.
+Le prix audio Live Standard est de 3 USD/M tokens en entrée et 12 USD/M en sortie selon le barème Google consulté le 1er novembre 2026. Le taux de sortie peut être remplacé par `LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION` si Google modifie le barème ou si le compte utilise un autre niveau de service. Ne pas utiliser le prix Priority de 21,60 USD/M pour le niveau Standard.
 
 Le rendu des messages est géré par Marked (GitHub Flavored Markdown) et filtré par DOMPurify. Les deux dépendances sont chargées depuis jsDelivr en version épinglée ; un rendu texte sécurisé de secours est disponible lorsque le CDN est inaccessible.
 
