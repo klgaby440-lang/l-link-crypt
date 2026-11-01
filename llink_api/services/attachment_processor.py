@@ -53,20 +53,28 @@ IMAGE_MIME_TYPES = {
     ".png": "image/png",
     ".webp": "image/webp",
     ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
     ".heic": "image/heic",
     ".heif": "image/heif",
 }
 
 AUDIO_MIME_TYPES = {
-    ".mp3": "audio/mpeg",
+    ".mp3": "audio/mp3",
     ".mpga": "audio/mpeg",
     ".wav": "audio/wav",
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
-    ".m4a": "audio/mp4",
-    ".mp4a": "audio/mp4",
+    ".m4a": "audio/m4a",
+    ".mp4a": "audio/m4a",
+    ".aiff": "audio/aiff",
+    ".opus": "audio/opus",
+    ".l16": "audio/l16",
+    ".alaw": "audio/alaw",
+    ".mulaw": "audio/mulaw",
     ".aac": "audio/aac",
-    ".pcm": "audio/pcm",
+    ".pcm": "audio/l16",
 }
 
 VIDEO_MIME_TYPES = {
@@ -328,6 +336,14 @@ def validate_media_signature(kind: str, mime_type: str, data: bytes) -> None:
             )
             or (mime_type == "image/bmp" and data.startswith(b"BM"))
             or (
+                mime_type == "image/gif"
+                and (data.startswith(b"GIF87a") or data.startswith(b"GIF89a"))
+            )
+            or (
+                mime_type == "image/tiff"
+                and (data.startswith(b"II*\\x00") or data.startswith(b"MM\\x00*"))
+            )
+            or (
                 mime_type in {"image/heic", "image/heif"}
                 and len(data) >= 12
                 and data[4:8] == b"ftyp"
@@ -359,3 +375,27 @@ def validate_media_signature(kind: str, mime_type: str, data: bytes) -> None:
         is_flv = mime_type == "video/x-flv" and data.startswith(b"FLV")
         if not (is_mp4_family or is_webm or is_avi or is_mpeg or is_wmv or is_flv):
             raise ValueError("Le contenu réel ne correspond pas au format vidéo annoncé.")
+
+
+
+def prepare_image_for_gemini(mime_type: str, data: bytes) -> tuple[str, bytes]:
+    """Convertit les formats d'image non natifs de Gemini vers PNG."""
+    if mime_type not in {"image/bmp", "image/gif", "image/tiff"}:
+        return mime_type, data
+
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as image:
+            if image.width * image.height > 40_000_000:
+                raise ValueError("L'image dépasse la limite de pixels autorisée.")
+            image.seek(0)
+            image.load()
+            output = io.BytesIO()
+            converted = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+            converted.save(output, format="PNG", optimize=True)
+            return "image/png", output.getvalue()
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("Impossible de convertir cette image vers un format compatible.") from exc
