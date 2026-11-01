@@ -114,11 +114,11 @@ async def stream_openai_compatible(
     api_key: str,
     model_id: str,
     system_instruction: str,
-    conversation_history: list[dict[str, str]],
     user_text: str,
     effort: str,
     max_output_tokens: int,
     timeout_seconds: int,
+    conversation_history: list[dict[str, str]] | None = None,
 ) -> AsyncIterator[ProviderEvent]:
     """Émet les fragments visibles et la consommation token fournie dans le flux SSE."""
     endpoint = base_url.rstrip("/") + "/chat/completions"
@@ -126,7 +126,7 @@ async def stream_openai_compatible(
         "model": model_id,
         "messages": build_chat_messages(
             system_instruction,
-            conversation_history,
+            conversation_history or [],
             user_text,
         ),
         "max_tokens": max_output_tokens,
