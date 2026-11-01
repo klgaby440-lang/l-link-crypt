@@ -354,7 +354,7 @@ async def live_websocket(websocket: WebSocket) -> None:
                 uid=user_uid,
                 level=entitled_level,
                 model=LIVE_USAGE_MODEL,
-                prompt=" " * 100_000,
+                prompt=" " * 380_000,
             )
         except Exception:
             release_slot()
