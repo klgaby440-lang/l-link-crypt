@@ -12,7 +12,7 @@ Permettre de joindre plusieurs fichiers directement depuis le compositeur Llink,
 - Jusqu'à 5 fichiers par message.
 - 10 Mo maximum par fichier et 25 Mo au total par message (valeurs configurables).
 - Taille HTTP par défaut : 27 Mo afin de laisser une marge au multipart.
-- PDF, JPEG, PNG, WebP, BMP, HEIC, HEIF, audio et vidéo (MP4, MOV, WebM, MPEG/MPG, AVI, WMV, FLV et 3GP) sont analysés par Gemini 3.5 Flash-Lite, puis leur synthèse est transmise au modèle sélectionné dans Llink.
+- PDF, JPEG, PNG, WebP, BMP, GIF, TIFF, HEIC, HEIF, audio et vidéo (MP4, MOV, WebM, MPEG/MPG, AVI, WMV, FLV et 3GP) sont analysés par Gemini 3.5 Flash-Lite, puis leur synthèse est transmise au modèle sélectionné dans Llink.
 - TXT, Markdown, CSV, JSON, XML, HTML, fichiers de code, DOCX, XLSX et PPTX sont extraits côté serveur et inclus dans le contexte.
 - Tout fichier sélectionné est reçu comme pièce jointe. Les formats binaires sans extracteur sont affichés avec leur nom et leur type, mais Llink indique clairement qu'il n'a pas pu en lire le contenu.
 
@@ -26,7 +26,7 @@ Permettre de joindre plusieurs fichiers directement depuis le compositeur Llink,
 ## Sécurité et coût
 
 - Le nom de fichier est réduit à un nom simple ; les chemins envoyés par le client ne sont jamais conservés.
-- Les octets sont lus avec des limites, puis contrôlés avec des signatures pour images, PDF et formats vidéo identifiables.
+- Les octets sont lus avec des limites, puis contrôlés avec des signatures pour images, PDF et formats vidéo identifiables. BMP, GIF et TIFF sont convertis en PNG ; HEIC/HEIF sont conservés pour Gemini.
 - Les archives Office sont plafonnées en nombre d'entrées et en taille décompressée ; aucun contenu Office n'est exécuté.
 - L'analyse multimodale est protégée par un quota spécifique et un créneau de concurrence.
 - L'appel Gemini d'analyse utilise la tarification du registre VELORA pour calculer la dépense réelle, mais l'impute au niveau de l'utilisateur qui a initié le chat. Le chat final garde sa propre mesure d'usage.
