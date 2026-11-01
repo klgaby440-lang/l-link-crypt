@@ -1972,12 +1972,12 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                             }
                             // Les URL d'aperçu sont libérées après avoir construit le formulaire ;
                             // FormData conserve les références aux objets File d'origine.
-                            clearSelectedAttachments();
                             const res = await fetch(endpoint, { method: 'POST', body, headers });
                             if (!res.ok) {
                                 const errorData = await res.json().catch(() => ({}));
                                 throw new Error(errorData.detail || `Requête refusée (${res.status}).`);
                             }
+                            if (files.length) clearSelectedAttachments();
                             if (!res.body) throw new Error("Le serveur n'a pas ouvert le flux de réponse.");
                             const reader = res.body.getReader();
                             const decoder = new TextDecoder('utf-8');
@@ -1986,7 +1986,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                                 const {value, done} = await reader.read();
                                 if(done) break;
                                 fullReply += decoder.decode(value, {stream:true});
-                                let tempHtml = fullReply.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\\n/g, '<br>');
+                                let tempHtml = fullReply.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
                                 contentDiv.innerHTML = tempHtml + '<span class="animate-pulse inline-block w-2 h-4 bg-gray-500 ml-1"></span>';
                                 scrollToBottom();
                             }
@@ -2042,10 +2042,10 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             if (type.startsWith('audio/')) return 'audio-lines';
             if (type.startsWith('video/')) return 'video';
             if (type.includes('pdf')) return 'file-text';
-            if (type.includes('spreadsheet') || /\\.(xlsx|xls|csv)$/i.test(file.name)) return 'file-spreadsheet';
-            if (type.includes('word') || /\\.(doc|docx|rtf)$/i.test(file.name)) return 'file-text';
-            if (type.includes('presentation') || /\\.(ppt|pptx)$/i.test(file.name)) return 'presentation';
-            if (type.startsWith('text/') || /\\.(py|js|ts|json|xml|md|html|css|sql)$/i.test(file.name)) return 'file-code';
+            if (type.includes('spreadsheet') || /\.(xlsx|xls|csv)$/i.test(file.name)) return 'file-spreadsheet';
+            if (type.includes('word') || /\.(doc|docx|rtf)$/i.test(file.name)) return 'file-text';
+            if (type.includes('presentation') || /\.(ppt|pptx)$/i.test(file.name)) return 'presentation';
+            if (type.startsWith('text/') || /\.(py|js|ts|json|xml|md|html|css|sql)$/i.test(file.name)) return 'file-code';
             return 'file';
         }
 
