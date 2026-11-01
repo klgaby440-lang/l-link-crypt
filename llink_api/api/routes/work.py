@@ -409,10 +409,6 @@ async def update_file(
         updates["folder"] = normalize_folder(payload.folder)
     if payload.language is not None:
         updates["language"] = payload.language
-    updates["path"] = file_path(
-        updates.get("folder", ""),
-        updates.get("name", ""),
-    )
 
     @google_firestore.transactional
     def apply_update(transaction):
@@ -423,6 +419,21 @@ async def update_file(
         current_version = int(current.get("version", 1))
         if current_version != payload.expected_version:
             return "conflict", current
+        next_name = updates.get("name", current.get("name", ""))
+        next_folder = updates.get("folder", current.get("folder", ""))
+        next_path = file_path(next_folder, next_name)
+        if next_path != current.get("path"):
+            collisions = list(
+                collection.where("path", "==", next_path).limit(2).stream()
+            )
+            if any(item.id != file_id for item in collisions):
+                return "duplicate", {"path": next_path}
+        committed_updates = {
+            **updates,
+            "name": next_name,
+            "folder": next_folder,
+            "path": next_path,
+        }
         old_version_ref = reference.collection("versions").document(str(current_version))
         transaction.set(
             old_version_ref,
@@ -433,13 +444,15 @@ async def update_file(
                 "size_bytes": int(current.get("size_bytes", 0)),
             },
         )
-        transaction.update(reference, updates)
-        return "ok", {**current, **updates}
+        transaction.update(reference, committed_updates)
+        return "ok", {**current, **committed_updates}
 
     try:
         status, result = await asyncio.to_thread(apply_update, db.transaction())
         if status == "missing":
             raise HTTPException(status_code=404, detail="Fichier Work introuvable.")
+        if status == "duplicate":
+            raise HTTPException(status_code=409, detail="Un fichier existe déjà à cet emplacement.")
         if status == "conflict":
             raise HTTPException(
                 status_code=409,
