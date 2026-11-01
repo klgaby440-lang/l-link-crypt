@@ -7,7 +7,6 @@ import base64
 import binascii
 import logging
 import os
-from datetime import date
 from decimal import Decimal, ROUND_CEILING
 from typing import Any
 
@@ -28,7 +27,7 @@ from llink_api.services.usage_meter import finalize_usage, reserve_usage_budget
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-LIVE_MODEL = "gemini-3.1-flash-live-preview"
+LIVE_MODEL = "gemini-3.8-live"
 LIVE_MAX_SECONDS = 600
 MAX_AUDIO_CHUNK_BYTES = 48_000
 MAX_VIDEO_FRAME_BYTES = 750_000
@@ -42,17 +41,11 @@ LIVE_INPUT_RATES = {
     "IMAGE": Decimal("1.00"),
     "VIDEO": Decimal("1.00"),
 }
-def default_live_audio_output_rate(on_date: date | None = None) -> Decimal:
-    """Tarif Google annoncé : 12 USD/M jusqu'au 31-12-2026, 21.60 USD/M ensuite."""
-    current_date = on_date or date.today()
-    return Decimal("21.60") if current_date >= date(2027, 1, 1) else Decimal("12.00")
-
-
+# Gemini 3.8 Live Standard output audio rate (Google pricing, 2026-11-01).
+# The official Standard tier remains $12 / million audio tokens; do not confuse it
+# with the higher Priority tier's $21.60 rate.
 LIVE_OUTPUT_AUDIO_USD_PER_MILLION = Decimal(
-    os.getenv(
-        "LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION",
-        str(default_live_audio_output_rate()),
-    )
+    os.getenv("LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION", "12.00")
 )
 LIVE_OUTPUT_RATES = {
     "AUDIO": LIVE_OUTPUT_AUDIO_USD_PER_MILLION,
@@ -63,7 +56,7 @@ LIVE_USAGE_MODEL = ModelDefinition(
     label="GEMINI LIVE",
     provider="gemini",
     model_id=LIVE_MODEL,
-    display_model="Gemini 3.1 Flash Live Preview",
+    display_model="Gemini 3.8 Live",
     input_usd_per_million=Decimal("3.00"),
     output_usd_per_million=LIVE_OUTPUT_AUDIO_USD_PER_MILLION,
     cached_input_usd_per_million=Decimal("0.30"),
