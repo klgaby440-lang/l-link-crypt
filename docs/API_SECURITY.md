@@ -19,7 +19,7 @@
 | `MAX_ATTACHMENT_BYTES` | `10000000` | Taille maximale d'un fichier joint |
 | `MAX_ATTACHMENT_TOTAL_BYTES` | `25000000` | Taille totale maximale des pièces jointes |
 | `MAX_ATTACHMENT_FILES` | `5` | Nombre maximal de fichiers par message |
-| \`MAX_IMAGE_BYTES\` | \`6000000\` | Taille image décodée maximale |
+| \`MAX_IMAGE_BYTES\` | \`6000000\` | Taille image décodée maximale pour l'ancien endpoint OCR |
 | \`MAX_AUDIO_BYTES\` | \`12000000\` | Taille audio maximale |
 | \`MAX_MESSAGE_CHARS\` | \`12000\` | Taille maximale d'un prompt utilisateur |
 | \`MAX_PREFERENCES_CHARS\` | \`2000\` | Taille maximale des préférences injectées |
