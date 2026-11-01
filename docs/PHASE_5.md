@@ -24,6 +24,7 @@ Permettre de joindre plusieurs fichiers directement depuis le compositeur Llink,
 - L'analyse multimodale est protégée par un quota spécifique et un créneau de concurrence.
 - L'appel Gemini d'analyse utilise la tarification du registre VELORA pour calculer la dépense réelle, mais l'impute au niveau de l'utilisateur qui a initié le chat. Le chat final garde sa propre mesure d'usage.
 - Le contexte extrait reste borné par la limite de message déjà appliquée par le chat.
+- Les contenus multimédias en ligne sont plafonnés à 18 Mo au total pour l'envoi inline à Gemini.
 
 ## Limites explicites du premier lot
 
