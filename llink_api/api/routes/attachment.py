@@ -7,7 +7,9 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
+from starlette.datastructures import UploadFile
 
 from llink_api.config import get_settings
 from llink_api.database import get_db
@@ -31,7 +33,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_ATTACHMENT_CONTEXT_CHARS = 10_500
-MAX_ATTACHMENT_ANALYSIS_OUTPUT_TOKENS = 2048
+MAX_GEMINI_INLINE_BYTES = 18_000_000
 
 
 def _form_bool(value: Any, default: bool = False) -> bool:
@@ -112,17 +114,20 @@ async def chat_with_attachments(
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=422, detail="Historique de conversation invalide.") from exc
 
-    payload = ChatPayload(
-        message=raw_message or "Analyse les fichiers joints et aide-moi à les exploiter.",
-        history=history,
-        model=model_alias,
-        level=level_value,
-        effort=effort,
-        preferences=preferences,
-        mode=mode,
-        source=source,
-        data_collection_consent=consent,
-    )
+    try:
+        payload = ChatPayload(
+            message=raw_message or "Analyse les fichiers joints et aide-moi à les exploiter.",
+            history=history,
+            model=model_alias,
+            level=level_value,
+            effort=effort,
+            preferences=preferences,
+            mode=mode,
+            source=source,
+            data_collection_consent=consent,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="Les paramètres du message sont invalides.") from exc
 
     try:
         selected_model = resolve_model(payload.level, payload.model)
@@ -207,6 +212,12 @@ async def chat_with_attachments(
         attachment_summaries.append(summary)
 
     if binary_parts:
+        binary_bytes = sum(len(part["data"]) for part in binary_parts)
+        if binary_bytes > MAX_GEMINI_INLINE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Les médias joints dépassent la limite d'analyse directe. Réduisez leur taille ou envoyez-les séparément.",
+            )
         analysis_text = (
             "Analyse les pièces jointes suivantes pour préparer le contexte du chat. "
             "Décris séparément chaque fichier par son nom, relève les informations utiles, "
@@ -222,17 +233,18 @@ async def chat_with_attachments(
             )
         )
         media_model = resolve_model("velora", "gemini-3.5-flash-lite")
-        reservation = await reserve_usage_budget(
-            db=db,
-            uid=uid,
-            level=selected_model.level,
-            model=media_model,
-            prompt=analysis_text,
-        )
         release_slot = await reserve_ai_slot()
+        reservation = None
         analysis_status = "completed"
         media_usage = None
         try:
+            reservation = await reserve_usage_budget(
+                db=db,
+                uid=uid,
+                level=selected_model.level,
+                model=media_model,
+                prompt=analysis_text,
+            )
             model = get_gemini_model(
                 system_instruction=(
                     "Tu es le moteur d'analyse multimodale de Llink. "
@@ -262,15 +274,16 @@ async def chat_with_attachments(
             ) from exc
         finally:
             try:
-                await finalize_usage(
-                    db=db,
-                    uid=uid,
-                    reservation=reservation,
-                    level=selected_model.level,
-                    model=media_model,
-                    usage=media_usage,
-                    status=analysis_status,
-                )
+                if reservation is not None:
+                    await finalize_usage(
+                        db=db,
+                        uid=uid,
+                        reservation=reservation,
+                        level=selected_model.level,
+                        model=media_model,
+                        usage=media_usage,
+                        status=analysis_status,
+                    )
             finally:
                 release_slot()
 
