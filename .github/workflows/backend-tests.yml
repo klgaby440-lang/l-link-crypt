@@ -12,6 +12,7 @@ on:
       - 'phase-6/**'
     paths:
       - 'main.py'
+      - 'app/**'
       - 'llink_api/**'
       - 'tests/**'
       - 'docs/**'
@@ -54,6 +55,9 @@ jobs:
 
       - name: Install test dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
+
+      - name: Check Work workspace JavaScript syntax
+        run: node --check app/workspace.js
 
       - name: Run API tests
         env:
