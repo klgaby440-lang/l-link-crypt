@@ -34,6 +34,8 @@ def _ceil_microusd(value: Decimal) -> int:
 
 def calculate_cost_microusd(model: ModelDefinition, usage: TokenUsage) -> int:
     """Coût fournisseur estimé en micro-dollars US, arrondi vers le haut."""
+    if usage.cost_microusd is not None:
+        return max(0, int(usage.cost_microusd))
     cached = min(usage.prompt_tokens, usage.cached_input_tokens)
     uncached = max(0, usage.prompt_tokens - cached)
     cost = (
