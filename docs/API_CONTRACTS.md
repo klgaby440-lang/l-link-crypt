@@ -67,6 +67,21 @@ Corps JSON : \`{"imageBase64": "data:image/jpeg;base64,..."}\`. Authorization fa
 
 Envoi multipart avec le champ fichier \`file\`. Authorization facultative. WebM, MP4, MP3, WAV, OGG et AAC acceptés, 12 Mo maximum. Réponse : \`{"text": "..."}\`. Erreurs : 400, 413, 415, 429, 502 ou 503.
 
+
+### \`POST /api/chat/attachments\`
+
+Envoi multipart avec un champ \`files\` répété (plusieurs fichiers) et les champs de chat \`message\`, \`history\` (JSON), \`model\`, \`level\`, \`effort\`, \`mode\`, \`preferences\` et \`source\`. La réponse réutilise le flux \`text/event-stream\` de \`POST /api/chat\`.
+
+- Jusqu'à 5 fichiers par message.
+- 10 Mo par fichier, 25 Mo au total ; valeurs configurables côté serveur.
+- PDF, images JPEG/PNG/WebP, audio et vidéo : analyse multimodale Gemini, puis synthèse transmise au modèle sélectionné dans Llink.
+- TXT, Markdown, CSV, JSON, XML, HTML, code, DOCX, XLSX et PPTX : extraction de texte côté serveur.
+- Les autres formats restent acceptés par le sélecteur et peuvent être joints ; tant qu'un extracteur n'existe pas, leur nom et leur type sont transmis au modèle avec une indication explicite que le contenu n'a pas été lu.
+- Les médias binaires combinés sont plafonnés à 18 Mo pour l'analyse inline Gemini.
+- La route applique un quota spécifique, le contrôle d'accès au niveau de chat, le budget de coût, et les limites de taille. Les appels de chat et de fournisseur restent suivis séparément.
+
+Les fichiers binaires ne sont pas ajoutés à Firestore. L'historique conserve les métadonnées de pièce jointe côté client, tandis que le contenu extrait est envoyé uniquement dans la requête IA initiée par l'utilisateur.
+
 ## Historique
 
 ### \`POST /api/history/sync\`
