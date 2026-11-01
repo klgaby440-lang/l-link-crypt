@@ -65,7 +65,7 @@ WebSocket temps réel entre le navigateur et Gemini Live, relayé par le backend
 
 1. Le client ouvre le WebSocket puis transmet `{"type":"auth","token":"<Firebase ID token>"}`.
 2. Le serveur vérifie la signature, l'expiration et la révocation du jeton Firebase.
-3. Après contrôle de quota et réservation de crédits, le serveur ouvre une session `gemini-3.1-flash-live-preview`.
+3. Après contrôle de quota et réservation de crédits, le serveur ouvre une session `gemini-3.8-live`.
 4. Le client envoie des événements `audio` (PCM16 little-endian, 16 kHz, Base64), `video` (image JPEG Base64, au plus 1 image/s), `text` ou `audio_end`.
 5. Le serveur renvoie `ready`, `transcript`, `audio` (PCM 24 kHz), `interrupted`, `turn_complete` ou `error`.
 
