@@ -50,6 +50,25 @@ class GeminiModelAdapter:
             http_options=types.HttpOptions(timeout=self.timeout_ms),
         )
 
+
+    @staticmethod
+    def _normalize_contents(contents: Any) -> Any:
+        """Convertit les parts multimédias au format de l'ancien adaptateur interne."""
+        if not isinstance(contents, list):
+            return contents
+        normalized = []
+        for item in contents:
+            if isinstance(item, dict) and "mime_type" in item and "data" in item:
+                normalized.append(
+                    types.Part.from_bytes(
+                        data=item["data"],
+                        mime_type=item["mime_type"],
+                    )
+                )
+            else:
+                normalized.append(item)
+        return normalized
+
     def generate_content(
         self,
         contents: Any,
@@ -60,6 +79,7 @@ class GeminiModelAdapter:
         """Génère une réponse normale ou retourne un itérateur synchrone de fragments."""
         # Le timeout est configuré sur HttpOptions du client google-genai.
         del request_options
+        contents = self._normalize_contents(contents)
         if stream:
             def generate_stream() -> Iterator[Any]:
                 with self._client() as client:

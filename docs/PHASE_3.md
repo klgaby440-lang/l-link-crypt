@@ -76,7 +76,7 @@ Le compte Firebase Admin doit avoir les droits de lecture/écriture sur \`users/
 - Les prix sont des références publiques et non un rapprochement de facture.
 - Les niveaux payants sont verrouillés tant que Think ne remplit pas \`subscriptionPlan\`.
 - Les plafonds horaires restent désactivés jusqu'à validation des montants par CRYPT.
-- Le SDK Gemini du backend reste l'adaptateur existant \`google-generativeai\`; sa migration vers \`google-genai\` est une tâche distincte à planifier.
+- Gemini utilise le SDK officiel `google-genai` ; les intensités `normal`, `extra` et `ultime` sont traduites en niveaux de réflexion Gemini `minimal`, `medium` et `high`. L'adaptateur convertit aussi les anciennes parts multimédias utilisées par OCR/audio.
 - Les tests automatisés simulent les fournisseurs et Firestore ; ils ne remplacent pas une requête de recette avec les clés réelles.
 - Ne pas déployer ou activer de clés en production avant revue de cette PR.
 

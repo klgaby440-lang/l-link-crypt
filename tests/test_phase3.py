@@ -390,7 +390,21 @@ def test_gemini_adapter_maps_effort_to_official_thinking_config(monkeypatch):
 
     assert response.text == "ok"
     assert captured["model"] == "gemini-3.5-flash-lite"
-    assert captured["config"].thinking_config.thinking_level == "high"
+    assert captured["config"].thinking_config.thinking_level.value == "HIGH"
     assert captured["config"].system_instruction == "System instruction"
     assert captured["config"].max_output_tokens == 2048
     assert captured["client_kwargs"]["http_options"].timeout == 21_000
+
+
+
+def test_gemini_adapter_converts_legacy_multimedia_parts():
+    from llink_api.providers.gemini import GeminiModelAdapter
+
+    normalized = GeminiModelAdapter._normalize_contents([
+        "Transcris ceci",
+        {"mime_type": "audio/webm", "data": b"audio-bytes"},
+    ])
+
+    assert normalized[0] == "Transcris ceci"
+    assert normalized[1].inline_data.mime_type == "audio/webm"
+    assert normalized[1].inline_data.data == b"audio-bytes"
