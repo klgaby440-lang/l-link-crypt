@@ -6,6 +6,7 @@ import asyncio
 import base64
 import binascii
 import logging
+from decimal import Decimal, ROUND_CEILING
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -14,9 +15,13 @@ from google.genai import types
 
 from llink_api.config import get_settings
 from llink_api.database import get_db
+from llink_api.providers.openai_compatible import TokenUsage
 from llink_api.security import _decode_firebase_token
 from llink_api.services.ai_slots import reserve_ai_slot
+from llink_api.services.entitlements import resolve_entitled_level
+from llink_api.services.model_registry import ModelDefinition
 from llink_api.services.security_limits import enforce_endpoint_quota
+from llink_api.services.usage_meter import finalize_usage, reserve_usage_budget
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,6 +31,30 @@ LIVE_MAX_SECONDS = 600
 MAX_AUDIO_CHUNK_BYTES = 48_000
 MAX_VIDEO_FRAME_BYTES = 750_000
 MAX_TEXT_CHARS = 8_000
+MAX_SESSION_TEXT_CHARS = 40_000
+
+# Gemini Live Standard rates on 2026-11-01, in USD per million modality tokens.
+LIVE_INPUT_RATES = {
+    "AUDIO": Decimal("3.00"),
+    "TEXT": Decimal("0.75"),
+    "IMAGE": Decimal("1.00"),
+    "VIDEO": Decimal("1.00"),
+}
+LIVE_OUTPUT_RATES = {
+    "AUDIO": Decimal("12.00"),
+    "TEXT": Decimal("4.50"),
+}
+LIVE_USAGE_MODEL = ModelDefinition(
+    level="velora",
+    label="GEMINI LIVE",
+    provider="gemini",
+    model_id=LIVE_MODEL,
+    display_model="Gemini 3.1 Flash Live Preview",
+    input_usd_per_million=Decimal("3.00"),
+    output_usd_per_million=Decimal("12.00"),
+    cached_input_usd_per_million=Decimal("0.30"),
+    max_output_tokens=20_000,
+)
 
 
 def build_live_config() -> dict[str, Any]:
@@ -74,7 +103,73 @@ def _decode_chunk(payload: Any, *, maximum: int, label: str) -> bytes:
     return result
 
 
+def _detail_counts(details: Any) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in details or []:
+        modality = getattr(item, "modality", "")
+        modality = getattr(modality, "name", modality)
+        modality = str(modality).upper().split(".")[-1]
+        try:
+            count = max(0, int(getattr(item, "token_count", 0) or 0))
+        except (TypeError, ValueError):
+            continue
+        if modality and count:
+            counts[modality] = counts.get(modality, 0) + count
+    return counts
+
+
+def live_token_usage(metadata: Any) -> TokenUsage | None:
+    """Convertit les compteurs par modalité Gemini Live en coût USD contrôlé."""
+    if metadata is None:
+        return None
+    prompt_tokens = getattr(metadata, "prompt_token_count", None)
+    completion_tokens = getattr(metadata, "response_token_count", None)
+    if completion_tokens is None:
+        completion_tokens = getattr(metadata, "candidates_token_count", None)
+    if prompt_tokens is None or completion_tokens is None:
+        return None
+    try:
+        prompt_tokens = max(0, int(prompt_tokens))
+        completion_tokens = max(0, int(completion_tokens))
+        cached_tokens = max(0, int(getattr(metadata, "cached_content_token_count", 0) or 0))
+    except (TypeError, ValueError):
+        return None
+
+    input_details = _detail_counts(getattr(metadata, "prompt_tokens_details", None))
+    output_details = _detail_counts(
+        getattr(metadata, "response_tokens_details", None)
+        or getattr(metadata, "candidates_tokens_details", None)
+    )
+    if input_details:
+        input_cost = sum(
+            Decimal(count) * LIVE_INPUT_RATES.get(modality, LIVE_INPUT_RATES["AUDIO"])
+            for modality, count in input_details.items()
+        )
+    else:
+        input_cost = Decimal(prompt_tokens) * LIVE_INPUT_RATES["AUDIO"]
+
+    if output_details:
+        output_cost = sum(
+            Decimal(count) * LIVE_OUTPUT_RATES.get(modality, LIVE_OUTPUT_RATES["AUDIO"])
+            for modality, count in output_details.items()
+        )
+    else:
+        output_cost = Decimal(completion_tokens) * LIVE_OUTPUT_RATES["AUDIO"]
+
+    cost_microusd = int(
+        ((input_cost + output_cost) / Decimal(1_000_000) * Decimal(1_000_000))
+        .to_integral_value(rounding=ROUND_CEILING)
+    )
+    return TokenUsage(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cached_input_tokens=min(prompt_tokens, cached_tokens),
+        cost_microusd=cost_microusd,
+    )
+
+
 async def _receive_client_events(websocket: WebSocket, session: Any) -> None:
+    session_text_chars = 0
     while True:
         event = await websocket.receive_json()
         if not isinstance(event, dict):
@@ -93,6 +188,8 @@ async def _receive_client_events(websocket: WebSocket, session: Any) -> None:
                     mime_type="audio/pcm;rate=16000",
                 )
             )
+        elif event_type == "audio_end":
+            await session.send_realtime_input(audio_stream_end=True)
         elif event_type == "video":
             frame = _decode_chunk(
                 event.get("data"),
@@ -106,6 +203,9 @@ async def _receive_client_events(websocket: WebSocket, session: Any) -> None:
             text = event.get("text")
             if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT_CHARS:
                 raise ValueError("Message texte Live vide ou trop long.")
+            session_text_chars += len(text)
+            if session_text_chars > MAX_SESSION_TEXT_CHARS:
+                raise ValueError("La limite de texte de cette session Live est atteinte.")
             await session.send_realtime_input(text=text.strip())
         elif event_type == "close":
             return
@@ -113,8 +213,15 @@ async def _receive_client_events(websocket: WebSocket, session: Any) -> None:
             raise ValueError("Type d'événement Live non pris en charge.")
 
 
-async def _forward_model_events(websocket: WebSocket, session: Any) -> None:
+async def _forward_model_events(
+    websocket: WebSocket,
+    session: Any,
+    usage_state: dict[str, Any],
+) -> None:
     async for response in session.receive():
+        current_usage = live_token_usage(getattr(response, "usage_metadata", None))
+        if current_usage is not None:
+            usage_state["usage"] = current_usage
         content = getattr(response, "server_content", None)
         if content is None:
             continue
