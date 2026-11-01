@@ -24,7 +24,14 @@ def make_zip(entries):
 
 def test_classifies_common_multimodal_and_office_files():
     assert classify_attachment("photo.PNG") == ("image", "image/png")
+    assert classify_attachment("photo.bmp") == ("image", "image/bmp")
+    assert classify_attachment("photo.heic") == ("image", "image/heic")
+    assert classify_attachment("photo.heif") == ("image", "image/heif")
     assert classify_attachment("scan.pdf") == ("document", "application/pdf")
+    assert classify_attachment("clip.webm", "video/webm") == ("video", "video/webm")
+    assert classify_attachment("voice.webm", "audio/webm") == ("audio", "audio/webm")
+    assert classify_attachment("clip.mpeg", "video/mpeg") == ("video", "video/mpeg")
+    assert classify_attachment("sound.mpeg", "audio/mpeg") == ("audio", "audio/mpeg")
     assert classify_attachment("voice.MP3") == ("audio", "audio/mpeg")
     assert classify_attachment("clip.mp4") == ("video", "video/mp4")
     assert classify_attachment("notes.txt") == ("text", "text/plain")
