@@ -134,3 +134,21 @@ Authentification obligatoire et confirmation JSON exacte : {"confirmation":"SUPP
 Le backend supprime récursivement l'arbre Firestore users/{uid}, les compteurs pseudonymisés correspondants de api_rate_limits, les anciens documents d'amélioration encore liés à l'UID, puis le compte Firebase Auth. Une erreur interrompt le parcours avec 503 ; les suppressions déjà effectuées ne sont pas recréées et une nouvelle tentative est possible tant que Firebase Auth existe encore.
 
 Le client efface ensuite l'historique et les préférences personnelles locales de cet appareil, puis termine la session.
+
+
+## Work — projets et fichiers privés
+
+Toutes les routes Work exigent une authentification Firebase vérifiée et appliquent un quota par utilisateur.
+
+- \`GET /api/work/projects\` : liste les projets privés.
+- \`POST /api/work/projects\` : crée un projet (\`name\`, \`description\`).
+- \`PATCH /api/work/projects/{project_id}\` et \`DELETE /api/work/projects/{project_id}\` : modifient ou suppriment un projet.
+- \`GET /api/work/files?project_id=...\` : liste les métadonnées des fichiers ; sans filtre, retourne les fichiers du compte.
+- \`POST /api/work/files\` : crée un fichier (\`name\`, \`folder\`, \`content\`, \`language\`, \`project_id\`).
+- \`GET /api/work/files/{file_id}\` : lit un fichier.
+- \`PUT /api/work/files/{file_id}\` : modifie un fichier avec \`content\` et \`expected_version\`. Une version obsolète produit HTTP 409.
+- \`DELETE /api/work/files/{file_id}\` : supprime un fichier et ses versions.
+- \`GET /api/work/files/{file_id}/versions\` : liste les versions.
+- \`POST /api/work/files/{file_id}/restore\` : restaure une version précédente.
+
+Les fichiers sont limités à 700 Ko de texte UTF-8, avec 500 fichiers et 100 projets maximum par utilisateur. Les versions précédentes sont conservées dans la sous-collection privée du fichier (20 versions au maximum).
