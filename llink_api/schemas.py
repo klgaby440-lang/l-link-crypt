@@ -48,6 +48,8 @@ class ChatPayload(BaseModel):
     preferences: Optional[str] = Field(default=None, max_length=get_settings().max_preferences_chars)
     mode: Optional[str] = Field(default="chat", max_length=32)
     source: Optional[str] = Field(default="soko_master", max_length=100)
+    source_language: Optional[str] = Field(default=None, min_length=2, max_length=16, pattern=r"^[A-Za-z0-9-]+$")
+    target_language: Optional[str] = Field(default=None, min_length=2, max_length=16, pattern=r"^[A-Za-z0-9-]+$")
     # Aucun entraînement/jeu de données sans demande explicite.
     data_collection_consent: bool = False
 
