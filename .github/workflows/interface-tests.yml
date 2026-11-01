@@ -1,0 +1,73 @@
+name: Llink Interface Tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'phase-6/**'
+    paths:
+      - 'app/**'
+      - 'tests/e2e/**'
+      - '.github/workflows/interface-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'tests/e2e/**'
+      - '.github/workflows/interface-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: llink-interface-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-tests:
+    name: Work UI — Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/e2e/package.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright test runner
+        working-directory: tests/e2e
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Install Chromium and Linux dependencies
+        working-directory: tests/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Llink Work browser tests
+        working-directory: tests/e2e
+        env:
+          CI: 'true'
+        run: npx playwright test
+
+      - name: Upload browser test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: llink-interface-test-results-${{ github.sha }}
+          path: |
+            tests/e2e/test-results/
+            tests/e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
