@@ -91,6 +91,22 @@ def _reasoning_parameters(provider: str, effort: str) -> dict[str, Any]:
     return {}
 
 
+def build_chat_messages(
+    system_instruction: str,
+    conversation_history: list[dict[str, str]],
+    user_text: str,
+) -> list[dict[str, str]]:
+    """Construit les messages fournisseur sans accepter de rôle système client."""
+    messages = [{"role": "system", "content": system_instruction}]
+    for item in conversation_history:
+        role = item.get("role")
+        content = item.get("content")
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_text})
+    return messages
+
+
 async def stream_openai_compatible(
     *,
     provider: str,
@@ -98,6 +114,7 @@ async def stream_openai_compatible(
     api_key: str,
     model_id: str,
     system_instruction: str,
+    conversation_history: list[dict[str, str]],
     user_text: str,
     effort: str,
     max_output_tokens: int,
@@ -107,10 +124,11 @@ async def stream_openai_compatible(
     endpoint = base_url.rstrip("/") + "/chat/completions"
     payload: dict[str, Any] = {
         "model": model_id,
-        "messages": [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": user_text},
-        ],
+        "messages": build_chat_messages(
+            system_instruction,
+            conversation_history,
+            user_text,
+        ),
         "max_tokens": max_output_tokens,
         "stream": True,
         "stream_options": {"include_usage": True},
