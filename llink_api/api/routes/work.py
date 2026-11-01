@@ -424,7 +424,7 @@ async def update_file(
         next_path = file_path(next_folder, next_name)
         if next_path != current.get("path"):
             collisions = list(
-                collection.where("path", "==", next_path).limit(2).stream()
+                transaction.get(collection.where("path", "==", next_path).limit(2))
             )
             if any(item.id != file_id for item in collisions):
                 return "duplicate", {"path": next_path}
@@ -462,7 +462,9 @@ async def update_file(
                 },
             )
         versions = reference.collection("versions")
-        old_versions = await asyncio.to_thread(lambda: list(versions.stream()))
+        old_versions = await asyncio.to_thread(
+            lambda: list(versions.order_by("version").stream())
+        )
         if len(old_versions) > MAX_FILE_VERSIONS:
             for snapshot in old_versions[:len(old_versions) - MAX_FILE_VERSIONS]:
                 await asyncio.to_thread(snapshot.reference.delete)
@@ -490,7 +492,7 @@ async def list_file_versions(
         if not current.exists:
             raise HTTPException(status_code=404, detail="Fichier Work introuvable.")
         snapshots = await asyncio.to_thread(
-            lambda: list(reference.collection("versions").stream())
+            lambda: list(reference.collection("versions").order_by("version").stream())
         )
         current_data = current.to_dict() or {}
         versions = [{
