@@ -5216,6 +5216,7 @@ async function connectLive(){
       liveReady=false;connecting=false;socket=null;
       if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null;}
       stopCameraFrames();stopPlayback();
+      if(micOn)stopMicrophone(false);
       if(!closing)status('Session Live interrompue. Raccroche puis réessaie.');
     };
     startCameraFrames();
