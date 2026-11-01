@@ -1074,6 +1074,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                     if (typeof window.checkSubscription === "function") await window.checkSubscription();
                     if (typeof window.restoreHistory === "function") await window.restoreHistory();
                     if (typeof window.loadHistory === "function") window.loadHistory();
+                    if (typeof window.refreshLlinkUsage === "function") await window.refreshLlinkUsage({ warn: true });
                 } catch (err) { console.error("Erreur post-connexion :", err); }
             } else {
                 window.isLoggedIn = false;
@@ -1848,6 +1849,10 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                         if (fullChat) {
                             fullChat.messages = (await db.msgs.where('chatId').equals(curChatId).toArray()).slice(-200);
                             await syncChatToServer(fullChat);
+                        }
+                        // Actualise le budget après règlement de la consommation fournisseur.
+                        if (typeof window.refreshLlinkUsage === "function") {
+                            window.refreshLlinkUsage({ warn: true });
                         }
                     }
                 };
@@ -3836,6 +3841,19 @@ html.dark #llset{--ls-bg:#111214;--ls-card:#26272b;--ls-text:#f6f7f9;--ls-mut:#a
 #llset .ls-banner.ok{background:rgba(34,197,94,.14);color:#16a34a}
 #llset .ls-banner.warn{background:rgba(245,158,11,.16);color:#d97706}
 #llset .ls-empty{text-align:center;color:var(--ls-mut);padding:40px 10px;font-size:13px}
+#llset .ls-credit-card{padding:16px;background:var(--ls-card);border:1px solid var(--ls-line);border-radius:20px;margin-bottom:12px}
+#llset .ls-credit-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+#llset .ls-credit-kicker{font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--ls-mut)}
+#llset .ls-credit-value{font-size:27px;font-weight:850;letter-spacing:-.04em;margin-top:4px}
+#llset .ls-credit-percent{font-size:13px;font-weight:750;border-radius:999px;padding:6px 9px;background:rgba(34,197,94,.13);color:#16a34a;white-space:nowrap}
+#llset .ls-credit-percent.warn{background:rgba(245,158,11,.16);color:#d97706}
+#llset .ls-credit-track{height:9px;border-radius:999px;overflow:hidden;background:var(--ls-ctl);margin-top:14px}
+#llset .ls-credit-fill{height:100%;border-radius:999px;background:#16a34a;transition:width .25s ease}
+#llset .ls-credit-fill.warn{background:#d97706}
+#llink-credit-alert{position:fixed;left:16px;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:6500;display:flex;align-items:flex-start;gap:12px;max-width:520px;margin:0 auto;padding:14px 16px;border-radius:18px;background:#78350f;color:#fff;border:1px solid rgba(255,255,255,.18);box-shadow:0 14px 40px rgba(0,0,0,.3);font-size:13px;line-height:1.45;animation:llCreditIn .2s ease-out}
+#llink-credit-alert b{display:block;font-size:14px;margin-bottom:2px}
+#llink-credit-alert button{margin-left:auto;flex:none;padding:2px 4px;background:transparent;color:#fff;border:0;font-size:18px;line-height:1}
+@keyframes llCreditIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 </style>
 <div id="llset" class="ls-overlay" role="dialog" aria-modal="true" aria-label="Paramètres" aria-hidden="true">
   <div class="ls-panel">
@@ -3886,6 +3904,104 @@ async function askPin(key,msg){
 function user(){try{return (window.auth&&window.auth.currentUser)||null;}catch(e){return null;}}
 function fmt(n){if(!n)return '0 Ko';var u=['o','Ko','Mo','Go'];var i=0;while(n>=1024&&i<3){n/=1024;i++;}return (i?n.toFixed(1):n)+' '+u[i];}
 function fill(id,rows){var el=$(id);if(!el)return;el.innerHTML=rows.map(function(r){return '<div class="ls-row ls-static"><span class="ls-label">'+esc(r[0])+'</span><span class="ls-val">'+esc(r[1])+'</span></div>';}).join('');}
+function usd(value){
+  var n=Number(value);
+  return Number.isFinite(n)?'$'+n.toFixed(n<0.01?4:3):'—';
+}
+function localClock(epoch){
+  var n=Number(epoch);
+  return Number.isFinite(n)?new Date(n*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—';
+}
+var creditAlertTimer=null;
+function showLowCreditAlert(usage,percent){
+  var active=user(),uid=(active&&active.uid)||'account';
+  var marker=String(uid)+':'+String(usage.hour_started_at);
+  try{
+    if(localStorage.getItem('llink_credit_alert_marker')===marker)return;
+    localStorage.setItem('llink_credit_alert_marker',marker);
+  }catch(e){}
+  var old=$('llink-credit-alert');if(old)old.remove();
+  var el=document.createElement('div');
+  el.id='llink-credit-alert';
+  el.setAttribute('role','alert');el.setAttribute('aria-live','assertive');
+  el.innerHTML='<span aria-hidden="true">⚠️</span><div><b>Crédits Llink bientôt épuisés</b>Il reste '+percent.toFixed(1)+' % du budget horaire, soit '+usd(usage.remaining_budget_usd)+'. Renouvellement à '+localClock(usage.reset_at)+'.</div><button type="button" aria-label="Fermer">×</button>';
+  el.querySelector('button').addEventListener('click',function(){el.remove();});
+  document.body.appendChild(el);
+  if(creditAlertTimer)window.clearTimeout(creditAlertTimer);
+  creditAlertTimer=window.setTimeout(function(){if(el.isConnected)el.remove();},9000);
+}
+async function renderUsagePanel(usage,error){
+  if(view!=='usage')return;
+  var box=$('ls-usage');if(!box)return;
+  var chats=0,messages=0;
+  try{if(typeof db!=='undefined'){chats=await db.chats.count();messages=await db.msgs.count();}}catch(e){}
+  var sub=(($('subscription-info')||{}).innerText||'').trim()||(window.isLoggedIn?'Compte connecté':'Non connecté');
+  var html='';
+  if(!window.isLoggedIn){
+    html+='<div class="ls-banner warn">Connecte-toi pour consulter ta consommation et ton budget de crédits.</div>';
+  }else if(error){
+    html+='<div class="ls-banner warn">'+esc(error)+'</div>';
+  }else if(!usage){
+    html+='<div class="ls-banner warn">Chargement des données de consommation…</div>';
+  }else{
+    var budget=usage.hourly_budget_usd===null?null:Number(usage.hourly_budget_usd);
+    var remaining=usage.remaining_budget_usd===null?null:Number(usage.remaining_budget_usd);
+    if(budget===null||!Number.isFinite(budget)||budget<=0||remaining===null||!Number.isFinite(remaining)){
+      html+='<div class="ls-banner warn">Le plafond horaire de crédits n’est pas configuré sur le serveur. La consommation est mesurée, mais aucun solde ni seuil d’alerte ne peut encore être calculé.</div>';
+      html+='<div class="ls-credit-card"><div class="ls-credit-kicker">Coût estimé cette heure</div><div class="ls-credit-value">'+usd(usage.estimated_cost_usd)+'</div><div class="ls-note">Niveau autorisé : '+esc(String(usage.level||'velora').toUpperCase())+'</div></div>';
+    }else{
+      var pct=Math.max(0,Math.min(100,(remaining/budget)*100));
+      var warn=pct<=10;
+      html+='<div class="ls-credit-card"><div class="ls-credit-top"><div><div class="ls-credit-kicker">Crédits horaires restants</div><div class="ls-credit-value">'+usd(remaining)+'</div><div class="ls-note">sur '+usd(budget)+' de budget API</div></div><span class="ls-credit-percent'+(warn?' warn':'')+'">'+pct.toFixed(1)+' %</span></div><div class="ls-credit-track" role="progressbar" aria-label="Pourcentage de crédits restants" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct.toFixed(1)+'"><div class="ls-credit-fill'+(warn?' warn':'')+'" style="width:'+pct.toFixed(1)+'%"></div></div><div class="ls-note">Renouvellement à '+localClock(usage.reset_at)+'.'+(warn?' Le seuil d’alerte de 10 % est atteint.':' Une alerte apparaîtra automatiquement à 10 % ou moins.')+'</div></div>';
+    }
+    html+='<div class="ls-card">';
+    [
+      ['Niveau autorisé',String(usage.level||'—').toUpperCase()],
+      ['Requêtes cette heure',String(usage.request_count||0)],
+      ['Tokens entrants',Number(usage.input_tokens||0).toLocaleString('fr-FR')],
+      ['Tokens sortants',Number(usage.output_tokens||0).toLocaleString('fr-FR')],
+      ['Coût estimé',usd(usage.estimated_cost_usd)],
+      ['Coût réservé',usd(usage.reserved_cost_usd)]
+    ].forEach(function(row){html+='<div class="ls-row ls-static"><span class="ls-label">'+esc(row[0])+'</span><span class="ls-val">'+esc(row[1])+'</span></div>';});
+    html+='</div>';
+  }
+  html+='<div class="ls-card" style="margin-top:12px">';
+  [
+    ['Discussions sur cet appareil',String(chats)],
+    ['Messages sur cet appareil',String(messages)],
+    ['Connexion',window.isOnline?'En ligne':'Hors ligne'],
+    ['Mode hors ligne',window.isOfflineValid?'Disponible':'Non disponible'],
+    ['Abonnement affiché',sub]
+  ].forEach(function(row){html+='<div class="ls-row ls-static"><span class="ls-label">'+esc(row[0])+'</span><span class="ls-val">'+esc(row[1])+'</span></div>';});
+  html+='</div>'+btn('refreshusage','Actualiser la consommation','refresh-cw','primary');
+  box.innerHTML=html;
+  if(window.lucide)window.lucide.createIcons();
+}
+window.refreshLlinkUsage=async function(options){
+  options=options||{};
+  var active=user();
+  if(!active){
+    if(options.render)await renderUsagePanel(null,null);
+    return null;
+  }
+  try{
+    var response=await fetch(SERVER_URL+'/api/usage',{method:'GET',headers:await llinkAuthHeaders(),cache:'no-store'});
+    var data=await response.json().catch(function(){return {};});
+    if(!response.ok)throw new Error(data.detail||('Lecture des crédits impossible (HTTP '+response.status+').'));
+    var budget=Number(data.hourly_budget_usd);
+    var remaining=Number(data.remaining_budget_usd);
+    if(options.warn!==false&&data.hourly_budget_usd!==null&&data.remaining_budget_usd!==null&&Number.isFinite(budget)&&budget>0&&Number.isFinite(remaining)){
+      var percent=Math.max(0,Math.min(100,(remaining/budget)*100));
+      if(percent<=10)showLowCreditAlert(data,percent);
+    }
+    if(options.render)await renderUsagePanel(data,null);
+    return data;
+  }catch(error){
+    console.warn('Impossible de récupérer la consommation Llink :',error);
+    if(options.render)await renderUsagePanel(null,error.message||'Consommation indisponible.');
+    return null;
+  }
+};
 
 /* Composants */
 function tog(key,label,desc,def){
@@ -3965,11 +4081,9 @@ var VIEWS={
       '<input class="ls-input" type="date" id="ls-dob" max="'+today+'">'+btn('checkage','Vérifier','badge-check','primary');
   }},
   usage:{title:'Utilisation et limites',html:function(){
-    return '<div class="ls-card" id="ls-usage"><div class="ls-row ls-static"><span class="ls-label">Chargement…</span></div></div>'+note("L'accès hors ligne dépend de ton abonnement ou de ta période d'essai.");
+    return '<div id="ls-usage"><div class="ls-banner">Chargement des crédits et de la consommation…</div></div>'+note("Les crédits affichés correspondent au budget horaire de coût API configuré par CRYPT, en USD. Ils ne représentent pas un solde prépayé. La consommation est estimée à partir des métriques fournisseurs.");
   },after:async function(){
-    var c=0,m=0;try{if(typeof db!=='undefined'){c=await db.chats.count();m=await db.msgs.count();}}catch(e){}
-    var sub=(($('subscription-info')||{}).innerText||'').trim()||(window.isLoggedIn?'—':'Non connecté');
-    if(view==='usage')fill('ls-usage',[['Discussions',c],['Messages',m],['Connexion',window.isOnline?'En ligne':'Hors ligne'],['Mode hors ligne',window.isOfflineValid?'Disponible':'Non disponible'],['Abonnement',sub]]);
+    await window.refreshLlinkUsage({warn:true,render:true});
   }},
   trusted:{title:'Contact de confiance',html:function(){
     return note("Enregistre une personne à joindre rapidement. Ces informations restent sur cet appareil.")+
@@ -4153,6 +4267,7 @@ var A={
       $('ls-bug-text').value='';
     }catch(e){}
   },
+  refreshusage:function(){window.refreshLlinkUsage({warn:false,render:true});},
   help:function(){window.open(HELP_URL,'_blank','noopener');}
 };
 
