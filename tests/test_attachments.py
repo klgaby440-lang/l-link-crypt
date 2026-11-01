@@ -205,3 +205,11 @@ def test_multipart_route_enforces_file_count_limit(client, monkeypatch):
         ],
     )
     assert response.status_code == 413
+
+
+def test_validates_bmp_and_heic_signatures():
+    validate_media_signature("image", "image/bmp", b"BMpayload")
+    validate_media_signature("image", "image/heic", b"\x00\x00\x00\x18ftypheic")
+    validate_media_signature("image", "image/heif", b"\x00\x00\x00\x18ftypmif1")
+    with pytest.raises(ValueError):
+        validate_media_signature("image", "image/heic", b"not heic")
