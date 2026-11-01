@@ -5036,14 +5036,40 @@ async function playPcm(base64,sampleRate){
   };
   source.start(startAt);
 }
+async function persistLiveTurn(role,text){
+  try{
+    if(typeof db==='undefined')return;
+    let chatId=(typeof curChatId!=='undefined')?curChatId:null;
+    if(!chatId){
+      chatId=await db.chats.add({
+        title:'Conversation Live',
+        time:Date.now(),
+        mode:'chat',
+        syncId:typeof createChatSyncId==='function'?createChatSyncId():('live-'+Date.now())
+      });
+      if(typeof curChatId!=='undefined')curChatId=chatId;
+      if(typeof window.loadHistory==='function')window.loadHistory();
+    }
+    await db.msgs.add({chatId:chatId,role:role,text:text});
+    if(window.isLoggedIn&&typeof window.syncChatToServer==='function'){
+      const chat=await db.chats.get(chatId);
+      if(chat){
+        chat.messages=(await db.msgs.where('chatId').equals(chatId).toArray()).slice(-200);
+        await window.syncChatToServer(chat);
+      }
+    }
+  }catch(error){console.warn('Historique Live non synchronisé:',error);}
+}
 function flushTranscript(){
   const userText=userTranscript.trim(),assistantText=assistantTranscript.trim();
   userTranscript='';assistantTranscript='';
-  if(userText&&typeof window.renderMessage==='function')window.renderMessage(userText,'user');
-  if(assistantText&&typeof window.renderMessage==='function')window.renderMessage(assistantText,'bot');
-  if((userText||assistantText)&&typeof window.sendDirect==='function'){
-    // The live session owns the real turn. This local metadata is not submitted
-    // as a second chat request, to avoid duplicated billing and duplicate replies.
+  if(userText&&typeof window.renderMessage==='function'){
+    window.renderMessage(userText,'user');
+    persistLiveTurn('user',userText);
+  }
+  if(assistantText&&typeof window.renderMessage==='function'){
+    window.renderMessage(assistantText,'bot');
+    persistLiveTurn('bot',assistantText);
   }
 }
 function handleServerMessage(message){
@@ -5089,7 +5115,7 @@ function startCameraFrames(){
   canvas.width=320;canvas.height=240;
   const context=canvas.getContext('2d',{alpha:false});
   cameraTimer=setInterval(()=>{
-    if(!liveReady||!video||video.readyState<2||video.videoWidth===0||video.classList.contains('cam-off'))return;
+    if(!liveReady||!video||!video.srcObject||video.readyState<2||video.videoWidth===0||$('llcall-tile-me').classList.contains('cam-off'))return;
     try{
       context.drawImage(video,0,0,canvas.width,canvas.height);
       const encoded=canvas.toDataURL('image/jpeg',0.62).split(',',2)[1];
