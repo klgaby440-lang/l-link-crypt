@@ -473,3 +473,11 @@ def test_translate_instruction_supports_auto_source_detection():
     instruction = build_system_instruction("translate", None, "auto", "en")
     assert "Détecte automatiquement" in instruction
     assert "anglais" in instruction
+
+
+def test_work_instruction_requires_truthful_tool_and_file_claims():
+    instruction = build_system_instruction("work", None)
+    assert "Llink Work" in instruction
+    assert "Ne prétends jamais" in instruction
+    assert "fichier complet" in instruction
+    assert "sources" in instruction
