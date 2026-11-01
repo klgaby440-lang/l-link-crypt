@@ -16,6 +16,13 @@ Permettre de joindre plusieurs fichiers directement depuis le compositeur Llink,
 - TXT, Markdown, CSV, JSON, XML, HTML, fichiers de code, DOCX, XLSX et PPTX sont extraits côté serveur et inclus dans le contexte.
 - Tout fichier sélectionné est reçu comme pièce jointe. Les formats binaires sans extracteur sont affichés avec leur nom et leur type, mais Llink indique clairement qu'il n'a pas pu en lire le contenu.
 
+## Traduction
+
+- Le mode `translate` transmet les codes de langue source et cible choisis dans l'interface.
+- Les codes sont validés côté backend puis intégrés à l'instruction système du traducteur.
+- La traduction conserve autant que possible le sens, le ton, les liens et la mise en forme ; le mode de traduction s'applique également au contenu extrait des pièces jointes.
+- La sélection d'une source `auto` permet la détection de la langue d'origine.
+
 ## Sécurité et coût
 
 - Le nom de fichier est réduit à un nom simple ; les chemins envoyés par le client ne sont jamais conservés.
