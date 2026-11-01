@@ -27,7 +27,7 @@ Corps :
 - \`message\` et \`model\` obligatoires ; \`model\` est conservé pour compatibilité.
 - \`level\` facultatif : \`velora\`, \`satori\`, \`noetra\`, \`auren\`, \`omnis\`.
 - \`effort\` facultatif : \`normal\`, \`extra\`, \`ultime\`.
-- \`preferences\`, \`mode\`, \`source\` et \`data_collection_consent\` facultatifs.
+- \`preferences\`, \`mode\`, \`source\`, \`source_language\`, \`target_language\` et \`data_collection_consent\` facultatifs. En mode \`translate\`, les champs de langue sont des codes ISO/BCP 47 transmis au backend ; le serveur construit l'instruction de traduction dans la paire demandée.
 
 Limite du message : 12 000 caractères ; préférences : 2 000 caractères. Le champ history accepte jusqu'à 24 tours antérieurs, chacun avec role (user, assistant ou ancien bot) et text. Le backend ne transmet que les 20 tours les plus récents et limite l'historique à 32 000 caractères pour contenir les coûts ; le message courant reste séparé.
 
