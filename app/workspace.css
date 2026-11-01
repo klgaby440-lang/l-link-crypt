@@ -187,3 +187,8 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
   .work-chat-messages{padding:12px 10px}
   .work-chat-compose{padding:8px}
 }
+
+.work-project-row{display:flex;align-items:center;gap:5px}
+.work-project-row .work-project-select{min-width:0;flex:1}
+.work-project-row .work-icon-button{width:34px;min-width:34px;height:34px;padding:0}
+.work-dialog-input{box-sizing:border-box}
