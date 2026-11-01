@@ -4961,7 +4961,7 @@ if(!dialog||!video||!micButton)return;
 
 let socket=null, liveReady=false, connecting=false, micOn=false;
 let micStream=null, captureContext=null, captureSource=null, captureProcessor=null, silentGain=null;
-let playbackContext=null, playbackCursor=0, playbackNodes=new Set(), cameraTimer=null;
+let playbackContext=null, playbackCursor=0, playbackNodes=new Set(), cameraTimer=null, heartbeatTimer=null;
 let userTranscript='', assistantTranscript='', closing=false;
 
 function status(message){
@@ -5077,8 +5077,11 @@ function handleServerMessage(message){
   if(message.type==='ready'){
     liveReady=true;connecting=false;
     status('Live en direct · '+(message.model||'Gemini Live'));
+    if(heartbeatTimer)clearInterval(heartbeatTimer);
+    heartbeatTimer=setInterval(()=>send({type:'ping'}),20000);
     return;
   }
+  if(message.type==='pong')return;
   if(message.type==='error'){
     status(message.message||'Erreur du service Live.');
     stopPlayback();
@@ -5211,6 +5214,7 @@ async function connectLive(){
     socket.onerror=()=>status('Connexion Live impossible. Vérifie le serveur.');
     socket.onclose=()=>{
       liveReady=false;connecting=false;socket=null;
+      if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null;}
       stopCameraFrames();stopPlayback();
       if(!closing)status('Session Live interrompue. Raccroche puis réessaie.');
     };
@@ -5223,6 +5227,7 @@ async function connectLive(){
 async function disconnectLive(){
   closing=true;
   stopCameraFrames();
+  if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null;}
   await stopMicrophone(false);
   stopPlayback();
   liveReady=false;connecting=false;
