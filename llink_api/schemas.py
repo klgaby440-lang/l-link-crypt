@@ -27,8 +27,16 @@ class AudioResponse(BaseModel):
     text: str
 
 
+class ConversationTurn(BaseModel):
+    """Un tour de conversation antérieur fourni par le client."""
+    role: Literal["user", "assistant", "bot"]
+    text: str = Field(min_length=1, max_length=32_000)
+
+
 class ChatPayload(BaseModel):
     message: str = Field(min_length=1, max_length=get_settings().max_message_chars)
+    # Jusqu'à 24 tours reçus ; le backend applique aussi un budget global de caractères.
+    history: list[ConversationTurn] = Field(default_factory=list, max_length=24)
     model: str = Field(min_length=1, max_length=100)
     level: Optional[Literal["velora", "satori", "noetra", "auren", "omnis"]] = None
     effort: Literal["normal", "extra", "ultime"] = "normal"
@@ -51,6 +59,7 @@ class ChatSyncPayload(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: int | str | None = None
+    syncId: str | None = Field(default=None, max_length=120)
     title: str | None = Field(default=None, max_length=200)
     time: int | float | None = None
     mode: str | None = Field(default=None, max_length=32)

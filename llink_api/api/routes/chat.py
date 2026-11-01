@@ -10,7 +10,7 @@ from starlette.background import BackgroundTask
 
 from llink_api.config import get_settings
 from llink_api.database import get_db
-from llink_api.providers.gemini import get_gemini_model
+from llink_api.providers.gemini import build_gemini_contents, get_gemini_model
 from llink_api.providers.openai_compatible import (
     ProviderEvent,
     TokenUsage,
@@ -37,6 +37,39 @@ STREAM_HEADERS = {
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
 }
+MAX_HISTORY_MESSAGES = 20
+MAX_HISTORY_CHARS = 32_000
+
+
+def normalize_conversation_history(history: list[Any]) -> list[dict[str, str]]:
+    """Nettoie l'historique client et borne le contexte transmis aux fournisseurs."""
+    normalized: list[dict[str, str]] = []
+    for turn in history[-MAX_HISTORY_MESSAGES:]:
+        role = getattr(turn, "role", None)
+        content = getattr(turn, "text", "")
+        if role not in {"user", "assistant", "bot"} or not isinstance(content, str):
+            continue
+        content = content.strip()
+        if not content:
+            continue
+        normalized.append({
+            "role": "assistant" if role in {"assistant", "bot"} else "user",
+            "content": content,
+        })
+
+    # Préserver en priorité les échanges les plus récents pour contrôler le coût.
+    kept: list[dict[str, str]] = []
+    remaining = MAX_HISTORY_CHARS
+    for turn in reversed(normalized):
+        if remaining <= 0:
+            break
+        content = turn["content"]
+        if len(content) > remaining:
+            content = content[-remaining:]
+        kept.append({"role": turn["role"], "content": content})
+        remaining -= len(content)
+    kept.reverse()
+    return kept
 
 
 def build_system_instruction(mode: str | None, preferences: str | None) -> str:
@@ -152,6 +185,13 @@ async def chat_endpoint(
         )
 
     system_instruction = build_system_instruction(payload.mode, payload.preferences)
+    conversation_history = normalize_conversation_history(payload.history)
+    history_for_estimate = "\n".join(
+        f"{turn['role']}: {turn['content']}" for turn in conversation_history
+    )
+    prompt_for_estimate = "\n".join(
+        part for part in (system_instruction, history_for_estimate, payload.message) if part
+    )
     timeout = get_settings().provider_timeout_seconds
 
     release_slot = await reserve_ai_slot()
@@ -161,7 +201,7 @@ async def chat_endpoint(
             uid=uid,
             level=model.level,
             model=model,
-            prompt=system_instruction + "\n" + payload.message,
+            prompt=prompt_for_estimate,
         )
     except Exception:
         release_slot()
@@ -204,9 +244,13 @@ async def chat_endpoint(
                     model_name=model.model_id,
                     effort=payload.effort,
                 )
+                gemini_contents = build_gemini_contents(
+                    conversation_history,
+                    payload.message,
+                )
                 response = await asyncio.to_thread(
                     gemini_model.generate_content,
-                    payload.message,
+                    gemini_contents,
                     stream=True,
                     request_options={"timeout": timeout},
                 )
@@ -228,6 +272,7 @@ async def chat_endpoint(
                     api_key=api_key,
                     model_id=model.model_id,
                     system_instruction=system_instruction,
+                    conversation_history=conversation_history,
                     user_text=payload.message,
                     effort=payload.effort,
                     max_output_tokens=model.max_output_tokens,

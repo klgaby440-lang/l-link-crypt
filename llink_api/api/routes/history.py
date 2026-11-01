@@ -28,8 +28,10 @@ async def sync_history(
         raise HTTPException(status_code=503, detail="Stockage de l'historique temporairement indisponible.")
 
     chat_data = chat.model_dump(exclude_none=True)
+    sync_id = chat.syncId or str(chat_data.get("id", "temp"))
+    chat_data["syncId"] = sync_id
     db.collection("users").document(user["uid"]).collection("chats").document(
-        str(chat_data.get("id", "temp"))
+        sync_id
     ).set(chat_data)
     return {"status": "success"}
 
@@ -50,7 +52,13 @@ async def get_history(
         documents = (
             db.collection("users").document(user["uid"]).collection("chats").stream()
         )
-        return {"chats": [document.to_dict() for document in documents]}
+        chats = []
+        for document in documents:
+            chat_data = document.to_dict() or {}
+            chat_data.setdefault("syncId", document.id)
+            chat_data["cloud_id"] = document.id
+            chats.append(chat_data)
+        return {"chats": chats}
     except Exception as exc:
         logger.exception("Erreur lors de la restauration de l'historique.")
         raise HTTPException(

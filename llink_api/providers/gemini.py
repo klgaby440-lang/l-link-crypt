@@ -17,6 +17,32 @@ EFFORT_TO_THINKING_LEVEL = {
 }
 
 
+def build_gemini_contents(
+    conversation_history: list[dict[str, str]],
+    user_text: str,
+) -> list[types.Content]:
+    """Convertit l'historique de Llink en tours Gemini user/model."""
+    contents: list[types.Content] = []
+    for item in conversation_history:
+        role = item.get("role")
+        content = item.get("content")
+        if role not in {"user", "assistant"} or not isinstance(content, str) or not content.strip():
+            continue
+        contents.append(
+            types.Content(
+                role="model" if role == "assistant" else "user",
+                parts=[types.Part.from_text(text=content)],
+            )
+        )
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=user_text)],
+        )
+    )
+    return contents
+
+
 class GeminiModelAdapter:
     """Expose l'ancienne interface interne tout en utilisant le SDK google-genai."""
 
