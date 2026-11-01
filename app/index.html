@@ -17,8 +17,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/marked@18.1.2/lib/marked.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" onerror="(function(){var s=document.createElement(\'script\');s.src=\'https://cdn.jsdelivr.net/npm/marked@18.1.2/lib/marked.umd.js\';document.head.appendChild(s);})()"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js"></script>
+    <link rel="stylesheet" href="./workspace.css">
     
     <script>
         tailwind.config = {
@@ -1137,6 +1138,15 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         db.version(3).stores({ chats: '++id, title, time, mode, syncId', msgs: '++id, chatId, role, text' });
         // Tombstones : une suppression hors ligne reste en attente jusqu'au prochain accès cloud.
         db.version(4).stores({ chats: '++id, title, time, mode, syncId, ownerUid', msgs: '++id, chatId, role, text', deletedChats: '[uid+syncId], uid, syncId, deletedAt' });
+        // Version 5 : espace Work local-first, projets, fichiers et historique des versions.
+        db.version(5).stores({
+            chats: '++id, title, time, mode, syncId, ownerUid',
+            msgs: '++id, chatId, role, text',
+            deletedChats: '[uid+syncId], uid, syncId, deletedAt',
+            workProjects: '++id, cloudId, ownerUid, name, updatedAt, pendingSync',
+            workFiles: '++id, cloudId, ownerUid, projectId, path, name, updatedAt, pendingSync',
+            workFileVersions: '++id, fileId, version, createdAt'
+        });
         
         const SERVER_URL = "https://llink-usz9.onrender.com";
 
@@ -1738,18 +1748,11 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                 lucide.createIcons();
                 window.setLiveEffect(currentLiveEffect);
             } else if (mode === 'work') {
-                document.getElementById('chat-window').innerHTML = `
-                  <section class="max-w-2xl mx-auto w-full py-6">
-                    <div class="flex items-center gap-3 mb-2"><div class="rounded-2xl bg-blue-500/10 p-3"><i data-lucide="briefcase-business" class="w-7 h-7 text-blue-500"></i></div><div><h1 class="text-2xl font-extrabold">Llink Work</h1><p class="text-sm text-gray-500">Un espace pour organiser et réaliser tes tâches.</p></div></div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
-                      <button class="work-action" onclick="sendDirect('Aide-moi à préparer un plan de travail clair avec des étapes et des priorités.')"><i data-lucide="list-checks" class="w-5 h-5 text-blue-500 mb-2"></i><strong>Planifier un projet</strong><p class="text-xs text-gray-500 mt-1">Étapes, priorités et calendrier.</p></button>
-                      <button class="work-action" onclick="sendDirect('Aide-moi à rédiger un document professionnel bien structuré.')"><i data-lucide="file-text" class="w-5 h-5 text-green-500 mb-2"></i><strong>Créer un document</strong><p class="text-xs text-gray-500 mt-1">Préparer un texte professionnel.</p></button>
-                      <button class="work-action" onclick="sendDirect('Aide-moi à analyser ces informations et à en extraire les points importants.')"><i data-lucide="chart-no-axes-combined" class="w-5 h-5 text-purple-500 mb-2"></i><strong>Analyser des données</strong><p class="text-xs text-gray-500 mt-1">Résumer et dégager les conclusions.</p></button>
-                      <button class="work-action" onclick="toggleMediaMenu(); toggleComposer(true)"><i data-lucide="paperclip" class="w-5 h-5 text-orange-500 mb-2"></i><strong>Travailler sur un fichier</strong><p class="text-xs text-gray-500 mt-1">Joindre une image ou un fichier disponible.</p></button>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-5">Décris aussi directement ta tâche dans la zone de saisie.</p>
-                  </section>`;
-                lucide.createIcons();
+                document.getElementById('chat-window').innerHTML = '<div id="work-workspace"></div>';
+                if (window.lucide) lucide.createIcons();
+                if (typeof window.initLlinkWorkWorkspace === "function") {
+                    await window.initLlinkWorkWorkspace();
+                }
             }
             window.loadHistory();
         };
@@ -5532,4 +5535,5 @@ function init(){initMode();initLang();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
 </script>
+<script src="./workspace.js"></script>
 </html>
