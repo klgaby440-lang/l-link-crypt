@@ -27,7 +27,7 @@ Corps :
 - \`message\` et \`model\` obligatoires ; \`model\` est conservé pour compatibilité.
 - \`level\` facultatif : \`velora\`, \`satori\`, \`noetra\`, \`auren\`, \`omnis\`.
 - \`effort\` facultatif : \`normal\`, \`extra\`, \`ultime\`.
-- \`preferences\`, \`mode\`, \`source\` et \`data_collection_consent\` facultatifs.
+- \`preferences\`, \`mode\`, \`source\`, \`source_language\`, \`target_language\` et \`data_collection_consent\` facultatifs. En mode \`translate\`, les champs de langue sont des codes ISO/BCP 47 transmis au backend ; le serveur construit l'instruction de traduction dans la paire demandée.
 
 Limite du message : 12 000 caractères ; préférences : 2 000 caractères. Le champ history accepte jusqu'à 24 tours antérieurs, chacun avec role (user, assistant ou ancien bot) et text. Le backend ne transmet que les 20 tours les plus récents et limite l'historique à 32 000 caractères pour contenir les coûts ; le message courant reste séparé.
 
@@ -74,7 +74,7 @@ Envoi multipart avec un champ \`files\` répété (plusieurs fichiers) et les ch
 
 - Jusqu'à 5 fichiers par message.
 - 10 Mo par fichier, 25 Mo au total ; valeurs configurables côté serveur.
-- PDF, images JPEG/PNG/WebP/BMP/HEIC/HEIF, audio et vidéo : analyse multimodale Gemini, puis synthèse transmise au modèle sélectionné dans Llink.
+- PDF, images JPEG/PNG/WebP/BMP/GIF/TIFF/HEIC/HEIF, audio et vidéo : analyse multimodale Gemini, puis synthèse transmise au modèle sélectionné dans Llink.
 - TXT, Markdown, CSV, JSON, XML, HTML, code, DOCX, XLSX et PPTX : extraction de texte côté serveur.
 - Les autres formats restent acceptés par le sélecteur et peuvent être joints ; tant qu'un extracteur n'existe pas, leur nom et leur type sont transmis au modèle avec une indication explicite que le contenu n'a pas été lu.
 - Les médias binaires combinés sont plafonnés à 18 Mo pour l'analyse inline Gemini.

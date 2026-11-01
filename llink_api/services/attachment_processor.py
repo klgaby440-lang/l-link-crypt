@@ -53,20 +53,28 @@ IMAGE_MIME_TYPES = {
     ".png": "image/png",
     ".webp": "image/webp",
     ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
     ".heic": "image/heic",
     ".heif": "image/heif",
 }
 
 AUDIO_MIME_TYPES = {
-    ".mp3": "audio/mpeg",
+    ".mp3": "audio/mp3",
     ".mpga": "audio/mpeg",
     ".wav": "audio/wav",
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
-    ".m4a": "audio/mp4",
-    ".mp4a": "audio/mp4",
+    ".m4a": "audio/m4a",
+    ".mp4a": "audio/m4a",
+    ".aiff": "audio/aiff",
+    ".opus": "audio/opus",
+    ".l16": "audio/l16",
+    ".alaw": "audio/alaw",
+    ".mulaw": "audio/mulaw",
     ".aac": "audio/aac",
-    ".pcm": "audio/pcm",
+    ".pcm": "audio/l16",
 }
 
 VIDEO_MIME_TYPES = {
@@ -78,8 +86,7 @@ VIDEO_MIME_TYPES = {
     ".avi": "video/avi",
     ".wmv": "video/wmv",
     ".3gp": "video/3gpp",
-    ".mpeg": "video/mpeg",
-    ".mpg": "video/mpg",
+    ".flv": "video/x-flv",
 }
 
 OFFICE_TYPES = {
@@ -329,6 +336,17 @@ def validate_media_signature(kind: str, mime_type: str, data: bytes) -> None:
             )
             or (mime_type == "image/bmp" and data.startswith(b"BM"))
             or (
+                mime_type == "image/gif"
+                and (data.startswith(b"GIF87a") or data.startswith(b"GIF89a"))
+            )
+            or (
+                mime_type == "image/tiff"
+                and (
+                    data.startswith(bytes((0x49, 0x49, 0x2A, 0x00)))
+                    or data.startswith(bytes((0x4D, 0x4D, 0x00, 0x2A)))
+                )
+            )
+            or (
                 mime_type in {"image/heic", "image/heif"}
                 and len(data) >= 12
                 and data[4:8] == b"ftyp"
@@ -340,8 +358,47 @@ def validate_media_signature(kind: str, mime_type: str, data: bytes) -> None:
     elif mime_type == "application/pdf" and not data.startswith(b"%PDF-"):
         raise ValueError("Le fichier n'a pas une signature PDF valide.")
     elif kind == "video":
-        is_mp4_family = len(data) >= 8 and data[4:8] == b"ftyp"
-        is_webm = data.startswith(b"\x1a\x45\xdf\xa3")
-        is_avi = len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"AVI "
-        if not (is_mp4_family or is_webm or is_avi):
-            raise ValueError("Le contenu réel ne correspond pas à un format vidéo reconnu.")
+        is_mp4_family = (
+            mime_type in {"video/mp4", "video/quicktime", "video/3gpp"}
+            and len(data) >= 12
+            and data[4:8] == b"ftyp"
+        )
+        is_webm = mime_type == "video/webm" and data.startswith(b"\x1a\x45\xdf\xa3")
+        is_avi = (
+            mime_type == "video/avi"
+            and len(data) >= 12
+            and data.startswith(b"RIFF")
+            and data[8:12] == b"AVI "
+        )
+        is_mpeg = mime_type in {"video/mpeg", "video/mpg"} and data.startswith(b"\x00\x00\x01")
+        is_wmv = (
+            mime_type in {"video/wmv", "video/x-ms-wmv"}
+            and data.startswith(bytes.fromhex("3026b2758e66cf11a6d900aa0062ce6c"))
+        )
+        is_flv = mime_type == "video/x-flv" and data.startswith(b"FLV")
+        if not (is_mp4_family or is_webm or is_avi or is_mpeg or is_wmv or is_flv):
+            raise ValueError("Le contenu réel ne correspond pas au format vidéo annoncé.")
+
+
+
+def prepare_image_for_gemini(mime_type: str, data: bytes) -> tuple[str, bytes]:
+    """Convertit les formats d'image non natifs de Gemini vers PNG."""
+    if mime_type not in {"image/bmp", "image/gif", "image/tiff"}:
+        return mime_type, data
+
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as image:
+            if image.width * image.height > 40_000_000:
+                raise ValueError("L'image dépasse la limite de pixels autorisée.")
+            image.seek(0)
+            image.load()
+            output = io.BytesIO()
+            converted = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+            converted.save(output, format="PNG", optimize=True)
+            return "image/png", output.getvalue()
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("Impossible de convertir cette image vers un format compatible.") from exc

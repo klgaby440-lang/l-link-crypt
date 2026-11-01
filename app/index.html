@@ -1953,7 +1953,9 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                                 level: (window.llThink ? llThink.level() : 'velora'),
                                 effort: (window.llThink ? llThink.effort() : 'normal'),
                                 preferences: prefs,
-                                source: 'llik_web'
+                                source: 'llik_web',
+                                source_language: currentMode === 'translate' ? (document.getElementById('source-lang')?.value || 'fr') : null,
+                                target_language: currentMode === 'translate' ? (document.getElementById('target-lang')?.value || 'en') : null
                             };
                             let endpoint = `${SERVER_URL}/api/chat`;
                             let body;

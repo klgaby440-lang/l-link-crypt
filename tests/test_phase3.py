@@ -3,6 +3,7 @@
 import asyncio
 
 from llink_api.config import get_settings
+from llink_api.api.routes.chat import build_system_instruction
 from llink_api.providers.openai_compatible import TokenUsage, parse_stream_payload
 from llink_api.services.entitlements import resolve_entitled_level
 from llink_api.services.model_registry import (
@@ -458,3 +459,17 @@ def test_chat_history_is_normalized_and_bounded():
     normalized = normalize_conversation_history(history)
     assert normalized[-1] == {"role": "assistant", "content": "Réponse récente"}
     assert sum(len(item["content"]) for item in normalized) <= MAX_HISTORY_CHARS
+
+
+
+def test_translate_instruction_respects_selected_languages():
+    instruction = build_system_instruction("translate", None, "fr", "ln")
+    assert "français" in instruction
+    assert "lingala" in instruction
+    assert "uniquement la traduction" in instruction.lower()
+
+
+def test_translate_instruction_supports_auto_source_detection():
+    instruction = build_system_instruction("translate", None, "auto", "en")
+    assert "Détecte automatiquement" in instruction
+    assert "anglais" in instruction

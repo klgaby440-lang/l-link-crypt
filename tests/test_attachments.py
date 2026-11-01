@@ -27,13 +27,16 @@ def test_classifies_common_multimodal_and_office_files():
     assert classify_attachment("photo.bmp") == ("image", "image/bmp")
     assert classify_attachment("photo.heic") == ("image", "image/heic")
     assert classify_attachment("photo.heif") == ("image", "image/heif")
+    assert classify_attachment("animation.gif") == ("image", "image/gif")
+    assert classify_attachment("scan.tiff") == ("image", "image/tiff")
     assert classify_attachment("scan.pdf") == ("document", "application/pdf")
     assert classify_attachment("clip.webm", "video/webm") == ("video", "video/webm")
     assert classify_attachment("voice.webm", "audio/webm") == ("audio", "audio/webm")
     assert classify_attachment("clip.mpeg", "video/mpeg") == ("video", "video/mpeg")
     assert classify_attachment("sound.mpeg", "audio/mpeg") == ("audio", "audio/mpeg")
-    assert classify_attachment("voice.MP3") == ("audio", "audio/mpeg")
+    assert classify_attachment("voice.MP3") == ("audio", "audio/mp3")
     assert classify_attachment("clip.mp4") == ("video", "video/mp4")
+    assert classify_attachment("film.flv") == ("video", "video/x-flv")
     assert classify_attachment("notes.txt") == ("text", "text/plain")
     assert classify_attachment("report.docx") == ("document", "Word")
     assert classify_attachment("table.xlsx") == ("spreadsheet", "Excel")
@@ -205,3 +208,52 @@ def test_multipart_route_enforces_file_count_limit(client, monkeypatch):
         ],
     )
     assert response.status_code == 413
+
+
+def test_validates_bmp_and_heic_signatures():
+    validate_media_signature("image", "image/bmp", b"BMpayload")
+    validate_media_signature("image", "image/heic", b"\x00\x00\x00\x18ftypheic")
+    validate_media_signature("image", "image/heif", b"\x00\x00\x00\x18ftypmif1")
+    with pytest.raises(ValueError):
+        validate_media_signature("image", "image/heic", b"not heic")
+
+
+def test_validates_declared_video_container_signatures():
+    validate_media_signature("video", "video/mp4", b"\x00\x00\x00\x18ftypisom")
+    validate_media_signature("video", "video/quicktime", b"\x00\x00\x00\x18ftypqt  ")
+    validate_media_signature("video", "video/webm", b"\x1a\x45\xdf\xa3payload")
+    validate_media_signature("video", "video/avi", b"RIFF\x00\x00\x00\x00AVI ")
+    validate_media_signature("video", "video/mpeg", b"\x00\x00\x01\xbaPayload")
+    validate_media_signature(
+        "video",
+        "video/wmv",
+        bytes.fromhex("3026b2758e66cf11a6d900aa0062ce6c") + b"payload",
+    )
+    validate_media_signature("video", "video/x-flv", b"FLV\x01payload")
+    with pytest.raises(ValueError):
+        validate_media_signature("video", "video/wmv", b"not a video")
+
+
+def test_converts_bmp_gif_and_tiff_to_png_for_gemini():
+    from PIL import Image
+
+    from llink_api.services.attachment_processor import prepare_image_for_gemini
+
+    for image_format, mime_type in [
+        ("BMP", "image/bmp"),
+        ("GIF", "image/gif"),
+        ("TIFF", "image/tiff"),
+    ]:
+        buffer = io.BytesIO()
+        Image.new("RGB", (3, 2), (40, 80, 120)).save(buffer, format=image_format)
+        validate_media_signature("image", mime_type, buffer.getvalue())
+        converted_mime, converted = prepare_image_for_gemini(mime_type, buffer.getvalue())
+        assert converted_mime == "image/png"
+        assert converted.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_keeps_native_heic_image_payload_unchanged():
+    from llink_api.services.attachment_processor import prepare_image_for_gemini
+
+    original = b"\x00\x00\x00\x18ftypheic"
+    assert prepare_image_for_gemini("image/heic", original) == ("image/heic", original)
