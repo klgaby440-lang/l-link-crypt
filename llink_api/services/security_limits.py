@@ -34,6 +34,9 @@ DEFAULT_POLICIES: dict[tuple[str, bool], QuotaPolicy] = {
     ("audio", True): QuotaPolicy(3, 20),
     ("history_read", True): QuotaPolicy(30, 200),
     ("history_sync", True): QuotaPolicy(30, 500),
+    ("history_delete", True): QuotaPolicy(20, 100),
+    ("data_export", True): QuotaPolicy(2, 10),
+    ("account_delete", True): QuotaPolicy(1, 2),
     ("user_status", False): QuotaPolicy(3, 20),
     ("user_status", True): QuotaPolicy(30, 300),
     ("payment_verify", True): QuotaPolicy(3, 10),
@@ -73,6 +76,22 @@ def get_quota_policy(scope: str, authenticated: bool) -> QuotaPolicy:
 
 def _quota_document_id(principal: str, scope: str) -> str:
     return hashlib.sha256(f"{scope}:{principal}".encode("utf-8")).hexdigest()
+
+
+def delete_user_rate_limit_records(db: Any, uid: str) -> int:
+    """Supprime les compteurs pseudonymisés connus de ce compte."""
+    collection = db.collection("api_rate_limits")
+    deleted = 0
+    principal = f"uid:{uid}"
+    for (scope, authenticated), _policy in DEFAULT_POLICIES.items():
+        if not authenticated:
+            continue
+        reference = collection.document(_quota_document_id(principal, scope))
+        snapshot = reference.get()
+        if snapshot.exists:
+            reference.delete()
+            deleted += 1
+    return deleted
 
 
 def _consume_firestore(

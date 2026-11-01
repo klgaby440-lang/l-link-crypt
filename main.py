@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from llink_api.api.routes import chat, health, history, media, usage, users
+from llink_api.api.routes import chat, data, health, history, media, usage, users
 from llink_api.config import get_settings
 from llink_api.middleware import RequestBodyLimitMiddleware
 
@@ -24,7 +24,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
         expose_headers=["Retry-After"],
     )
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     application.include_router(chat.router)
     application.include_router(media.router)
     application.include_router(history.router)
+    application.include_router(data.router)
     application.include_router(usage.router)
     return application
 

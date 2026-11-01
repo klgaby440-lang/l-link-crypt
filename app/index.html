@@ -1094,6 +1094,8 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         db.version(2).stores({ chats: '++id, title, time, mode', msgs: '++id, chatId, role, text' });
         // Version 3 indexe l'identifiant cloud stable utilisé pour fusionner l'historique distant.
         db.version(3).stores({ chats: '++id, title, time, mode, syncId', msgs: '++id, chatId, role, text' });
+        // Tombstones : une suppression hors ligne reste en attente jusqu'au prochain accès cloud.
+        db.version(4).stores({ chats: '++id, title, time, mode, syncId, ownerUid', msgs: '++id, chatId, role, text', deletedChats: '[uid+syncId], uid, syncId, deletedAt' });
         
         const SERVER_URL = "https://llink-usz9.onrender.com";
 
@@ -1118,38 +1120,82 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         document.addEventListener('DOMContentLoaded', () => { document.getElementById('pref-input').value = localStorage.getItem('llink_prefs') || ""; });
         function savePreferences() { localStorage.setItem('llink_prefs', document.getElementById('pref-input').value); alert("Préférences sauvegardées !"); toggleSettingPanel('panel-pref');}
 
-        window.exportDatasetJSON = async () => {
+        window.exportLlinkDataJSON = async () => {
+            const activeUser = window.auth && window.auth.currentUser;
             try {
-                // Récupération de tous les messages de la base de données
-                const allMsgs = await db.msgs.toArray();
-                
-                // Formatage en structure JSON standard (idéal pour le fine-tuning LLM)
-                const dataset = allMsgs.map(m => ({
-                    role: m.role,
-                    content: m.text
-                }));
-                
-                // Création du fichier téléchargeable
-                const blob = new Blob([JSON.stringify(dataset, null, 2)], { type: "application/json" });
+                let cloudData = null;
+                if (activeUser) {
+                    const response = await fetch(SERVER_URL + '/api/data/export', {
+                        method: 'GET',
+                        headers: await llinkAuthHeaders(),
+                        cache: 'no-store'
+                    });
+                    if (!response.ok) {
+                        const detail = await response.json().catch(() => ({}));
+                        throw new Error(detail.detail || ('Export cloud HTTP ' + response.status));
+                    }
+                    cloudData = await response.json();
+                }
+
+                const allLocalChats = await db.chats.toArray();
+                // Ne pas exporter les discussions déjà associées à un autre compte Firebase.
+                const localChats = activeUser
+                    ? allLocalChats.filter(chat => chat.ownerUid === activeUser.uid || (!chat.ownerUid && !chat.syncId))
+                    : allLocalChats.filter(chat => !chat.ownerUid && !chat.syncId);
+                const localExport = [];
+                for (const chat of localChats) {
+                    const messages = await db.msgs.where('chatId').equals(chat.id).toArray();
+                    messages.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+                    localExport.push({
+                        id: chat.id,
+                        syncId: chat.syncId || null,
+                        title: chat.title || 'Discussion Llink',
+                        time: chat.time || null,
+                        mode: chat.mode || 'chat',
+                        messages: messages.map(message => ({
+                            role: message.role,
+                            text: message.text
+                        }))
+                    });
+                }
+
+                const payload = {
+                    format: 'llink-complete-personal-data-export',
+                    version: 1,
+                    exported_at: new Date().toISOString(),
+                    account_email: activeUser ? (activeUser.email || null) : null,
+                    cloud: cloudData,
+                    device: {
+                        chats: localExport,
+                        preferences: {
+                            instructions: localStorage.getItem('llink_prefs') || null,
+                            memory: localStorage.getItem('llink_memory') || null,
+                            workspace: localStorage.getItem('llink_workspace') || null
+                        }
+                    },
+                    scope: activeUser
+                        ? 'Données cloud du compte et données locales de cet appareil.'
+                        : 'Données locales de cet appareil uniquement. Connecte-toi pour inclure les données cloud.'
+                };
+
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
-                
-                // Création d'un lien invisible pour forcer le téléchargement
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Llink_Dataset_${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                
-                // Nettoyage de la mémoire
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                console.log("✅ Dataset exporté avec succès !");
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'Llink_Donnees_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                if (!activeUser) alert('Export local téléchargé. Connecte-toi pour inclure aussi les données enregistrées dans le cloud.');
             } catch (error) {
-                console.error("Erreur lors de l'exportation du dataset :", error);
+                console.error('Erreur export données Llink :', error);
+                alert(error.message || "Impossible d'exporter tes données pour le moment.");
             }
         };
-                
+        // Compatibilité avec les anciennes actions de l'interface.
+        window.exportDatasetJSON = window.exportLlinkDataJSON;
+
         window.checkSubscription = async () => {
             if(!window.isLoggedIn) return;
             try {
@@ -1223,22 +1269,57 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             return `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         }
 
-        async function syncChatToServer(chat) {
-            if(!window.isLoggedIn || localStorage.getItem('llink_sync') === '0' || !chat) return;
-            try {
-                if (!chat.syncId) {
-                    // Les anciennes conversations gardent leur clé Firestore historique.
-                    chat.syncId = chat.id != null ? String(chat.id) : createChatSyncId();
-                    if (chat.id != null) await db.chats.update(chat.id, { syncId: chat.syncId });
+        async function queueChatDeletion(syncId, uid) {
+            if (!syncId || !uid || !db.deletedChats) return;
+            await db.deletedChats.put({
+                uid: String(uid),
+                syncId: String(syncId),
+                deletedAt: Date.now()
+            });
+        }
+
+        async function flushPendingChatDeletions() {
+            const activeUser = window.auth && window.auth.currentUser;
+            if (!activeUser || !db.deletedChats || !window.isOnline) return;
+            const pending = await db.deletedChats.where('uid').equals(activeUser.uid).toArray();
+            for (const item of pending) {
+                try {
+                    const response = await fetch(SERVER_URL + '/api/history/' + encodeURIComponent(item.syncId), {
+                        method: 'DELETE',
+                        headers: await llinkAuthHeaders()
+                    });
+                    if (!response.ok) throw new Error('Suppression cloud HTTP ' + response.status);
+                    await db.deletedChats.delete([item.uid, item.syncId]);
+                } catch (error) {
+                    // Garder le tombstone : la discussion ne doit pas être réimportée localement.
+                    console.warn('Suppression cloud Llink en attente :', error);
                 }
-                const response = await fetch(`${SERVER_URL}/api/history/sync`, {
-                    method: "POST",
+            }
+        }
+
+        async function syncChatToServer(chat) {
+            const activeUser = window.auth && window.auth.currentUser;
+            if (!activeUser || !window.isLoggedIn || localStorage.getItem('llink_sync') === '0' || !chat) return;
+            if (chat.ownerUid && chat.ownerUid !== activeUser.uid) return;
+            if (!chat.syncId) {
+                // Les anciennes conversations gardent leur clé Firestore historique.
+                chat.syncId = chat.id != null ? String(chat.id) : createChatSyncId();
+                if (chat.id != null) await db.chats.update(chat.id, { syncId: chat.syncId });
+            }
+            const pending = await db.deletedChats.get([activeUser.uid, String(chat.syncId)]);
+            if (pending) return;
+            await db.chats.update(chat.id, { ownerUid: activeUser.uid });
+            const syncPayload = { ...chat };
+            delete syncPayload.ownerUid;
+            try {
+                const response = await fetch(SERVER_URL + '/api/history/sync', {
+                    method: 'POST',
                     headers: await llinkAuthHeaders(true),
-                    body: JSON.stringify(chat)
+                    body: JSON.stringify(syncPayload)
                 });
-                if (!response.ok) throw new Error(`Synchronisation historique HTTP ${response.status}`);
+                if (!response.ok) throw new Error('Synchronisation historique HTTP ' + response.status);
             } catch(e) {
-                console.warn("Synchronisation de l'historique Llink impossible :", e);
+                console.warn('Synchronisation de l’historique Llink impossible :', e);
             }
         }
 
@@ -1257,7 +1338,8 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                 title: String(remoteChat.title || 'Discussion Llink').slice(0, 200),
                 time: Number(remoteChat.time) || Date.now(),
                 mode: String(remoteChat.mode || 'chat'),
-                syncId
+                syncId,
+                ownerUid: (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null
             };
             let localChatId;
             if (localChat) {
@@ -1289,19 +1371,28 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
 
         window.restoreHistory = async () => {
             try {
-                const user = window.auth ? window.auth.currentUser : null;
-                if (!user) return;
-                const response = await fetch(`${SERVER_URL}/api/history`, {
+                const activeUser = window.auth ? window.auth.currentUser : null;
+                if (!activeUser) return;
+                await flushPendingChatDeletions();
+                const pending = db.deletedChats
+                    ? await db.deletedChats.where('uid').equals(activeUser.uid).toArray()
+                    : [];
+                const pendingIds = new Set(pending.map(item => String(item.syncId)));
+                const response = await fetch(SERVER_URL + '/api/history', {
                     method: 'GET',
                     headers: await llinkAuthHeaders()
                 });
-                if (!response.ok) throw new Error(`Historique HTTP ${response.status}`);
+                if (!response.ok) throw new Error('Historique HTTP ' + response.status);
                 const data = await response.json();
                 const remoteChats = Array.isArray(data.chats) ? data.chats : [];
-                for (const remoteChat of remoteChats) await importRemoteChat(remoteChat);
+                for (const remoteChat of remoteChats) {
+                    const syncId = String(remoteChat.syncId || remoteChat.cloud_id || remoteChat.id || '');
+                    if (!syncId || pendingIds.has(syncId)) continue;
+                    await importRemoteChat(remoteChat);
+                }
                 if (typeof window.loadHistory === 'function') await window.loadHistory();
-                if (!data.warning) console.log(`Historique Llink restauré : ${remoteChats.length} discussion(s).`);
-            } catch (error) { console.error("Erreur historique:", error); }
+                if (!data.warning) console.log('Historique Llink restauré : ' + Math.max(0, remoteChats.length - pendingIds.size) + ' discussion(s).');
+            } catch (error) { console.error('Erreur historique:', error); }
         };
 
         function updateOfflineUI() {
@@ -1694,14 +1785,31 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             if(window.innerWidth<768) toggleSidebar();
         };
 
-        window.deleteChat = async (id, event) => { 
+        window.deleteChat = async (id, event) => {
             if(event) event.stopPropagation();
-            if(confirm("Supprimer la discussion ?")) { 
+            if(!confirm("Supprimer cette discussion de cet appareil et du cloud lorsqu'il sera accessible ?")) return;
+            try {
+                const chat = await db.chats.get(id);
+                if (!chat) return;
+                const syncId = String(chat.syncId || chat.id || '');
+                const activeUser = window.auth && window.auth.currentUser;
+                const ownerUid = chat.ownerUid || (activeUser ? activeUser.uid : null);
+                if (ownerUid && syncId) {
+                    await queueChatDeletion(syncId, ownerUid);
+                    if (activeUser && activeUser.uid === ownerUid) await flushPendingChatDeletions();
+                }
                 await db.chats.delete(id);
                 await db.msgs.where('chatId').equals(id).delete();
-                if(curChatId===id) newConversation(); 
-                window.loadHistory(); 
-            } 
+                if(curChatId===id) newConversation();
+                if(window.loadHistory) await window.loadHistory();
+                if (ownerUid && (!activeUser || activeUser.uid !== ownerUid ||
+                    await db.deletedChats.get([ownerUid, syncId]))) {
+                    alert('Discussion supprimée de cet appareil. Sa suppression dans le cloud est en attente de la prochaine connexion au compte.');
+                }
+            } catch (error) {
+                console.error('Suppression de discussion impossible :', error);
+                alert('Impossible de supprimer cette discussion pour le moment.');
+            }
         };
 
         function parseMarkdown(text) {
@@ -4144,7 +4252,7 @@ var VIEWS={
       '<div class="ls-card">'+tog('llink_sync','Synchroniser mon historique','Sauvegarde tes discussions sur le serveur quand tu es connecté','1')+tog('llink_auto_export','Export automatique','Télécharge un fichier JSON tous les 50 messages envoyés','1')+'</div>';
   }},
   data:{title:'Historique et données',html:function(){
-    return note("Exporte ou supprime tes discussions enregistrées sur cet appareil.")+btn('exportdata','Exporter mon historique (JSON)','download','primary')+btn('deleteall','Supprimer toutes les discussions','trash-2','danger');
+    return note("Exporte les données enregistrées dans ton compte et sur cet appareil. Les suppressions cloud sont synchronisées quand une connexion est disponible.")+btn('exportdata','Exporter mes données (appareil + cloud)','download','primary')+btn('deleteall','Supprimer toutes mes discussions','trash-2','danger')+sec('Compte')+btn('deleteaccount','Supprimer mon compte et mes données','user-x','danger')+note("La suppression du compte est définitive. Une reconnexion récente est exigée pour la confirmer.");
   }},
   ads:{title:'Gestion des publicités',html:function(){
     return '<div class="ls-card">'+tog('llink_ads','Annonces personnalisées','Autoriser la personnalisation si des annonces apparaissent','0')+'</div>'+note("Llink n'affiche aucune publicité pour le moment. Ce réglage sera appliqué si des annonces sont ajoutées.");
@@ -4250,13 +4358,83 @@ var A={
     try{Object.keys(localStorage).filter(function(k){return k.indexOf('llink_')===0;}).forEach(function(k){localStorage.removeItem(k);});}catch(e){}
     location.reload();
   },
-  exportdata:function(){if(window.exportDatasetJSON)window.exportDatasetJSON();},
+  exportdata:async function(){if(window.exportLlinkDataJSON)await window.exportLlinkDataJSON();},
   deleteall:async function(){
-    if(!confirm('Supprimer toutes les discussions de cet appareil ? Cette action est définitive.'))return;
-    try{await db.msgs.clear();await db.chats.clear();}catch(e){}
-    if(window.newConversation)window.newConversation();
-    if(window.loadHistory)window.loadHistory();
-    alert('Discussions supprimées.');
+    if(!confirm('Supprimer toutes tes discussions de cet appareil et du cloud ? Cette action est définitive.'))return;
+    try {
+      const activeUser = window.auth && window.auth.currentUser;
+      let cloudDeleted = false;
+      if (activeUser && window.isOnline) {
+        const response = await fetch(SERVER_URL + '/api/history', {
+          method: 'DELETE',
+          headers: await llinkAuthHeaders()
+        });
+        if (response.ok) {
+          cloudDeleted = true;
+          await db.deletedChats.where('uid').equals(activeUser.uid).delete();
+        }
+      }
+      if (!cloudDeleted) {
+        const chats = await db.chats.toArray();
+        for (const chat of chats) {
+          const ownerUid = chat.ownerUid || (activeUser ? activeUser.uid : null);
+          const syncId = chat.syncId || chat.id;
+          if (ownerUid && syncId != null) await queueChatDeletion(String(syncId), ownerUid);
+        }
+      }
+      await db.msgs.clear();
+      await db.chats.clear();
+      if(window.newConversation)window.newConversation();
+      if(window.loadHistory)await window.loadHistory();
+      if (activeUser && !cloudDeleted) {
+        alert('Discussions supprimées de cet appareil. Les suppressions cloud restent en attente et seront réessayées à la prochaine connexion.');
+      } else if (activeUser) {
+        alert('Toutes les discussions ont été supprimées de cet appareil et du cloud.');
+      } else {
+        alert('Discussions locales supprimées. Les discussions cloud ne sont accessibles qu’après connexion au compte.');
+      }
+    } catch (error) {
+      console.error('Suppression globale de l’historique impossible :', error);
+      alert('Une erreur est survenue pendant la suppression. Les suppressions en attente seront réessayées à la prochaine connexion.');
+    }
+  },
+  deleteaccount:async function(){
+    const activeUser = window.auth && window.auth.currentUser;
+    if (!activeUser) { alert('Connecte-toi au compte concerné avant de le supprimer.'); return; }
+    const confirmation = prompt('Cette action efface définitivement ton compte et ses données cloud. Pour confirmer, saisis exactement : SUPPRIMER MON COMPTE');
+    if (confirmation !== 'SUPPRIMER MON COMPTE') return;
+    if (!confirm('Dernière confirmation : supprimer définitivement ce compte et ses données ?')) return;
+    try {
+      const response = await fetch(SERVER_URL + '/api/account', {
+        method: 'DELETE',
+        headers: await llinkAuthHeaders(true),
+        body: JSON.stringify({ confirmation: 'SUPPRIMER MON COMPTE' })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          alert(result.detail || 'Une reconnexion récente est nécessaire. Déconnecte-toi puis reconnecte-toi avant de recommencer.');
+          return;
+        }
+        throw new Error(result.detail || ('Suppression HTTP ' + response.status));
+      }
+      const uid = activeUser.uid;
+      const ownedChats = await db.chats.where('ownerUid').equals(uid).toArray();
+      for (const chat of ownedChats) {
+        await db.msgs.where('chatId').equals(chat.id).delete();
+        await db.chats.delete(chat.id);
+      }
+      if (db.deletedChats) await db.deletedChats.where('uid').equals(uid).delete();
+      try {
+        Object.keys(localStorage).filter(key => key.indexOf('llink_') === 0).forEach(key => localStorage.removeItem(key));
+      } catch (error) {}
+      if (window.auth && typeof window.auth.signOut === 'function') await window.auth.signOut();
+      alert('Ton compte et les données cloud associées ont été supprimés.');
+      location.reload();
+    } catch (error) {
+      console.error('Suppression du compte Llink impossible :', error);
+      alert(error.message || 'Impossible de terminer la suppression du compte. Les données locales ont été conservées.');
+    }
   },
   sendbug:async function(){
     var txt=($('ls-bug-text').value||'').trim();if(!txt){alert('Décris le problème avant d\'envoyer.');return;}

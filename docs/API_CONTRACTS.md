@@ -76,3 +76,30 @@ Corps : objet conversation Dexie avec un champ syncId stable et messages. Authen
 ### \`GET /api/history\`
 
 Authentification obligatoire. Réponse : \`{"chats": [...]}\`. Anonyme : 401. Firestore indisponible : 503. Chaque conversation retournée inclut cloud_id et syncId pour la réconciliation locale ; le frontend importe les conversations distantes dans IndexedDB lorsqu'elles ne sont pas déjà présentes.
+
+
+## Confidentialité, export et suppressions — Phase 4
+
+### GET /api/data/export
+
+Authentification obligatoire. Télécharge un JSON contenant le document de compte, l'ensemble de ses sous-collections Firestore (dont l'historique et les compteurs d'usage) ainsi que les anciens enregistrements de global_datasets encore explicitement liés à l'UID. La réponse utilise Content-Disposition: attachment et Cache-Control: no-store.
+
+Le frontend ajoute à ce fichier les conversations et préférences personnelles présentes sur l'appareil courant. Les données locales d'un autre appareil ne sont pas incluses par l'export cloud.
+
+### DELETE /api/history/{sync_id}
+
+Authentification obligatoire. Supprime une seule conversation de users/{uid}/chats/{sync_id}. La suppression est idempotente : une référence déjà absente retourne également un statut deleted. Le compte connecté détermine le propriétaire ; un client ne peut pas cibler les discussions d'un autre compte.
+
+### DELETE /api/history
+
+Authentification obligatoire. Supprime toutes les conversations cloud du compte connecté. Réponse : {"status":"deleted","deleted_count":0} (le compteur représente les documents supprimés).
+
+Sur l'appareil, les suppressions effectuées hors ligne sont conservées comme tombstones Dexie, liés à l'UID propriétaire. À la prochaine connexion au même compte, elles sont envoyées au serveur avant la restauration de l'historique, afin d'éviter la réapparition d'une conversation supprimée.
+
+### DELETE /api/account
+
+Authentification obligatoire et confirmation JSON exacte : {"confirmation":"SUPPRIMER MON COMPTE"}. Le jeton Firebase doit avoir été authentifié dans les 10 dernières minutes (auth_time), sinon l'API répond 401 et demande une reconnexion récente.
+
+Le backend supprime récursivement l'arbre Firestore users/{uid}, les compteurs pseudonymisés correspondants de api_rate_limits, les anciens documents d'amélioration encore liés à l'UID, puis le compte Firebase Auth. Une erreur interrompt le parcours avec 503 ; les suppressions déjà effectuées ne sont pas recréées et une nouvelle tentative est possible tant que Firebase Auth existe encore.
+
+Le client efface ensuite l'historique et les préférences personnelles locales de cet appareil, puis termine la session.

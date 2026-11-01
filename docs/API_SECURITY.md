@@ -52,6 +52,9 @@ Valeurs par défaut :
 | Historique (écriture) | — | — | 30 | 500 |
 | État utilisateur | 3 | 20 | 30 | 300 |
 | Vérification de paiement | — | — | 3 | 10 |
+| Suppression d'historique | — | — | 20 | 100 |
+| Export de données | — | — | 2 | 10 |
+| Suppression de compte | — | — | 1 | 2 |
 | Consommation (lecture) | — | — | 30 | 200 |
 
 Les valeurs doivent être des entiers strictement positifs.
@@ -83,6 +86,8 @@ L'activation par paiement reste désactivée tant que l'intégration serveur-à-
 ## Comportement de sécurité
 
 - Les ID tokens Firebase sont vérifiés avec contrôle de révocation.
+- L'export personnel, les suppressions d'historique et la suppression de compte sont réservés à un compte authentifié.
+- La suppression de compte exige un auth_time de moins de 10 minutes et une confirmation explicite.
 - Token absent : session anonyme uniquement sur les routes qui l'autorisent.
 - Token présent mais invalide/expiré/révoqué : HTTP 401, sans repli anonyme.
 - Firebase absent ou en panne sur une route privée : HTTP 503.
@@ -105,3 +110,14 @@ Les documents de quotas ne conservent pas l'UID ou l'adresse IP en clair. Ils ut
 Le compte de service Firebase Admin doit également lire/écrire les sous-collections \`users/{uid}/usage_hours\`, \`users/{uid}/usage_events\` et la collection globale \`system_usage_hours\`. Les règles client ne doivent pas accorder d'accès direct au registre système anonyme.
 
 Le compteur mémoire mono-processus est réservé à \`development\` et \`test\`.
+
+
+## Quotas Phase 4
+
+Les quotas utilisateur sont surchargeables par les variables suivantes :
+
+- HISTORY_DELETE : QUOTA_USER_HISTORY_DELETE_PER_MINUTE et QUOTA_USER_HISTORY_DELETE_PER_DAY (défaut 20/minute, 100/jour).
+- DATA_EXPORT : QUOTA_USER_DATA_EXPORT_PER_MINUTE et QUOTA_USER_DATA_EXPORT_PER_DAY (défaut 2/minute, 10/jour).
+- ACCOUNT_DELETE : QUOTA_USER_ACCOUNT_DELETE_PER_MINUTE et QUOTA_USER_ACCOUNT_DELETE_PER_DAY (défaut 1/minute, 2/jour).
+
+Ces quotas empêchent les suppressions et exports répétés d'être utilisés comme vecteur d'abus. Ils sont stockés dans api_rate_limits et purgés avec les autres compteurs lors de la suppression du compte.
