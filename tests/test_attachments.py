@@ -27,6 +27,8 @@ def test_classifies_common_multimodal_and_office_files():
     assert classify_attachment("photo.bmp") == ("image", "image/bmp")
     assert classify_attachment("photo.heic") == ("image", "image/heic")
     assert classify_attachment("photo.heif") == ("image", "image/heif")
+    assert classify_attachment("animation.gif") == ("image", "image/gif")
+    assert classify_attachment("scan.tiff") == ("image", "image/tiff")
     assert classify_attachment("scan.pdf") == ("document", "application/pdf")
     assert classify_attachment("clip.webm", "video/webm") == ("video", "video/webm")
     assert classify_attachment("voice.webm", "audio/webm") == ("audio", "audio/webm")
@@ -230,3 +232,27 @@ def test_validates_declared_video_container_signatures():
     validate_media_signature("video", "video/x-flv", b"FLV\x01payload")
     with pytest.raises(ValueError):
         validate_media_signature("video", "video/wmv", b"not a video")
+
+
+def test_converts_bmp_gif_and_tiff_to_png_for_gemini():
+    from PIL import Image
+
+    from llink_api.services.attachment_processor import prepare_image_for_gemini
+
+    for image_format, mime_type in [
+        ("BMP", "image/bmp"),
+        ("GIF", "image/gif"),
+        ("TIFF", "image/tiff"),
+    ]:
+        buffer = io.BytesIO()
+        Image.new("RGB", (3, 2), (40, 80, 120)).save(buffer, format=image_format)
+        converted_mime, converted = prepare_image_for_gemini(mime_type, buffer.getvalue())
+        assert converted_mime == "image/png"
+        assert converted.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_keeps_native_heic_image_payload_unchanged():
+    from llink_api.services.attachment_processor import prepare_image_for_gemini
+
+    original = b"\x00\x00\x00\x18ftypheic"
+    assert prepare_image_for_gemini("image/heic", original) == ("image/heic", original)
