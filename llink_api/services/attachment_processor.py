@@ -52,19 +52,20 @@ IMAGE_MIME_TYPES = {
     ".jpeg": "image/jpeg",
     ".png": "image/png",
     ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
 }
 
 AUDIO_MIME_TYPES = {
     ".mp3": "audio/mpeg",
     ".mpga": "audio/mpeg",
-    ".mpeg": "audio/mpeg",
     ".wav": "audio/wav",
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
     ".m4a": "audio/mp4",
     ".mp4a": "audio/mp4",
     ".aac": "audio/aac",
-    ".webm": "audio/webm",
     ".pcm": "audio/pcm",
 }
 
@@ -77,6 +78,8 @@ VIDEO_MIME_TYPES = {
     ".avi": "video/avi",
     ".wmv": "video/wmv",
     ".3gp": "video/3gpp",
+    ".mpeg": "video/mpeg",
+    ".mpg": "video/mpg",
 }
 
 OFFICE_TYPES = {
@@ -252,8 +255,15 @@ def _extract_xlsx(data: bytes) -> str:
     return "\n\n".join(sections)
 
 
-def classify_attachment(filename: str) -> tuple[str, str] | None:
+def classify_attachment(filename: str, declared_mime: str | None = None) -> tuple[str, str] | None:
     extension = PurePosixPath(filename.replace("\\", "/")).suffix.lower()
+    declared = (declared_mime or "").split(";", 1)[0].strip().lower()
+    if extension == ".webm" and declared.startswith("audio/"):
+        return "audio", "audio/webm"
+    if extension in {".mp4", ".mov", ".webm", ".mpeg", ".mpg"} and declared.startswith("audio/"):
+        return "audio", declared
+    if extension in {".mp4", ".mov", ".webm", ".mpeg", ".mpg", ".avi", ".wmv", ".3gp"} and declared.startswith("video/"):
+        return "video", declared
     if extension == ".pdf":
         return "document", "application/pdf"
     if extension in IMAGE_MIME_TYPES:
@@ -316,6 +326,13 @@ def validate_media_signature(kind: str, mime_type: str, data: bytes) -> None:
                 and len(data) >= 12
                 and data.startswith(b"RIFF")
                 and data[8:12] == b"WEBP"
+            )
+            or (mime_type == "image/bmp" and data.startswith(b"BM"))
+            or (
+                mime_type in {"image/heic", "image/heif"}
+                and len(data) >= 12
+                and data[4:8] == b"ftyp"
+                and data[8:12] in {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1"}
             )
         )
         if not valid:
