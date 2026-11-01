@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from llink_api.config import get_settings
 
 
+class AccountDeletionRequest(BaseModel):
+    """Confirmation explicite d’une suppression irréversible de compte."""
+    confirmation: Literal["SUPPRIMER MON COMPTE"]
+
+
 class VerifyPaymentRequest(BaseModel):
     transactionId: str = Field(min_length=1, max_length=180)
 
