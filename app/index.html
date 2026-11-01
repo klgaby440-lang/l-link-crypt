@@ -1140,8 +1140,8 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                 const allLocalChats = await db.chats.toArray();
                 // Ne pas exporter les discussions déjà associées à un autre compte Firebase.
                 const localChats = activeUser
-                    ? allLocalChats.filter(chat => chat.ownerUid === activeUser.uid || (!chat.ownerUid && !chat.syncId))
-                    : allLocalChats.filter(chat => !chat.ownerUid && !chat.syncId);
+                    ? allLocalChats.filter(chat => chat.ownerUid === activeUser.uid || !chat.ownerUid)
+                    : allLocalChats.filter(chat => !chat.ownerUid);
                 const localExport = [];
                 for (const chat of localChats) {
                     const messages = await db.msgs.where('chatId').equals(chat.id).toArray();
