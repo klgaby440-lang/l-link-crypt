@@ -57,7 +57,7 @@ LIVE_USAGE_MODEL = ModelDefinition(
     input_usd_per_million=Decimal("3.00"),
     output_usd_per_million=LIVE_OUTPUT_AUDIO_USD_PER_MILLION,
     cached_input_usd_per_million=Decimal("0.30"),
-    max_output_tokens=20_000,
+    max_output_tokens=15_000,
 )
 
 
@@ -65,6 +65,7 @@ def build_live_config() -> dict[str, Any]:
     """Configuration audio native, transcription dans les deux directions et voix Elia."""
     return {
         "response_modalities": ["AUDIO"],
+        "media_resolution": types.MediaResolution.MEDIA_RESOLUTION_LOW,
         "speech_config": {
             "voice_config": {
                 "prebuilt_voice_config": {"voice_name": "Kore"}
@@ -348,7 +349,7 @@ async def live_websocket(websocket: WebSocket) -> None:
                 uid=user_uid,
                 level=entitled_level,
                 model=LIVE_USAGE_MODEL,
-                prompt=" " * 380_000,
+                prompt=" " * 100_000,
             )
         except Exception:
             release_slot()
