@@ -1267,17 +1267,22 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             }
 
             const localMessages = await db.msgs.where('chatId').equals(localChatId).toArray();
-            const known = new Set(localMessages.map(item => `${item.role}\\0${item.text}`));
+            localMessages.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
             const remoteMessages = Array.isArray(remoteChat.messages) ? remoteChat.messages : [];
             remoteMessages.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-            for (const message of remoteMessages) {
-                const text = typeof message.text === 'string' ? message.text : '';
-                const role = message.role === 'assistant' || message.role === 'bot' ? 'bot' : 'user';
-                const signature = `${role}\\0${text}`;
-                if (text.trim() && !known.has(signature)) {
-                    await db.msgs.add({ chatId: localChatId, role, text });
-                    known.add(signature);
-                }
+            const normalizedRemote = remoteMessages.map(message => ({
+                text: typeof message.text === 'string' ? message.text : '',
+                role: message.role === 'assistant' || message.role === 'bot' ? 'bot' : 'user'
+            })).filter(message => message.text.trim());
+            const remoteExtendsLocal = localMessages.length <= normalizedRemote.length &&
+                localMessages.every((message, index) =>
+                    message.role === normalizedRemote[index].role &&
+                    message.text === normalizedRemote[index].text
+                );
+            // N'ajouter que le suffixe manquant : les répétitions volontaires restent intactes.
+            const missingMessages = remoteExtendsLocal ? normalizedRemote.slice(localMessages.length) : [];
+            for (const message of missingMessages) {
+                await db.msgs.add({ chatId: localChatId, role: message.role, text: message.text });
             }
         }
 
@@ -1733,7 +1738,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             const stored = await db.msgs.where('chatId').equals(chatId).toArray();
             stored.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
             return stored
-                .filter(item => (item.role === 'user' || item.role === 'bot' || item.role === 'assistant') && typeof item.text === 'string' && item.text.trim())
+                .filter(item => (item.role === 'user' || item.role === 'bot' || item.role === 'assistant') && typeof item.text === 'string' && item.text.trim() && !item.text.trim().startsWith('❌'))
                 .slice(-20)
                 .map(item => ({
                     role: item.role === 'user' ? 'user' : 'assistant',
