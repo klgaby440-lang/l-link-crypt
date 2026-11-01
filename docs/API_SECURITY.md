@@ -15,7 +15,10 @@
 | \`MINIMAX_BASE_URL\` | \`https://api.minimax.io/v1\` | Base URL de l'API MiniMax |
 | \`DEEPSEEK_BASE_URL\` | \`https://api.deepseek.com\` | Base URL de l'API DeepSeek |
 | \`LLINK_HOURLY_CREDIT_LIMITS_USD\` | — | Budgets horaires facultatifs, objet JSON par niveau |
-| \`MAX_REQUEST_BODY_BYTES\` | \`13500000\` | Taille totale maximale d'un corps HTTP |
+| `MAX_REQUEST_BODY_BYTES` | `27000000` | Taille totale maximale d'un corps HTTP |
+| `MAX_ATTACHMENT_BYTES` | `10000000` | Taille maximale d'un fichier joint |
+| `MAX_ATTACHMENT_TOTAL_BYTES` | `25000000` | Taille totale maximale des pièces jointes |
+| `MAX_ATTACHMENT_FILES` | `5` | Nombre maximal de fichiers par message |
 | \`MAX_IMAGE_BYTES\` | \`6000000\` | Taille image décodée maximale |
 | \`MAX_AUDIO_BYTES\` | \`12000000\` | Taille audio maximale |
 | \`MAX_MESSAGE_CHARS\` | \`12000\` | Taille maximale d'un prompt utilisateur |
@@ -48,6 +51,7 @@ Valeurs par défaut :
 | Chat | 3 | 20 | 12 | 240 |
 | OCR | 1 | 5 | 5 | 40 |
 | Audio | 1 | 3 | 3 | 20 |
+| Pièces jointes | 2 | 10 | 5 | 30 |
 | Historique (lecture) | — | — | 30 | 200 |
 | Historique (écriture) | — | — | 30 | 500 |
 | État utilisateur | 3 | 20 | 30 | 300 |
@@ -94,7 +98,8 @@ L'activation par paiement reste désactivée tant que l'intégration serveur-à-
 - Quota dépassé : HTTP 429 avec \`Retry-After\`.
 - Niveau supérieur non autorisé : HTTP 403.
 - Budget horaire configuré dépassé : HTTP 429 avec \`Retry-After\`.
-- Corps trop volumineux : HTTP 413.
+- Corps ou pièce jointe trop volumineux : HTTP 413.
+- Analyse des pièces jointes : 5 fichiers maximum, 10 Mo par fichier, 25 Mo au total, et 18 Mo pour les contenus multimédias transmis en ligne à Gemini.
 - Format fichier non accepté : HTTP 415.
 - Validation de schéma : HTTP 422.
 - Panne fournisseur : message client générique.
@@ -111,6 +116,10 @@ Le compte de service Firebase Admin doit également lire/écrire les sous-collec
 
 Le compteur mémoire mono-processus est réservé à \`development\` et \`test\`.
 
+
+## Quotas Phase 5
+
+Les pièces jointes utilisent le scope `ATTACHMENT` : par défaut 2/minute et 10/jour pour les sessions anonymes, 5/minute et 30/jour pour les comptes. Les appels au chat qui suivent restent également soumis au quota CHAT.
 
 ## Quotas Phase 4
 
