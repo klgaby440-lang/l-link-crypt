@@ -67,7 +67,11 @@ test("Work crée, enregistre et télécharge un fichier Markdown", async ({ page
   await page.locator("#work-input-dialog button[type='submit']").click();
 
   await expect(page.locator("#work-file-name")).toHaveText("rapport-ci.md");
-  await expect(page.locator("#work-editor-host")).toContainText("Contenu de test");
+  const savedMarkdown = await page.evaluate(async () => {
+    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
+    return files.find(file => file.name === "rapport-ci.md")?.content ?? null;
+  });
+  expect(savedMarkdown).toContain("Contenu de test");
 
   const downloadPromise = page.waitForEvent("download");
   await page.locator('[data-act="download"]').first().click();
@@ -117,5 +121,9 @@ test("Work importe un fichier texte dans l'espace local", async ({ page }) => {
 
   await expect(page.locator(".work-file-item").filter({ hasText: "import-ci.txt" })).toBeVisible();
   await expect(page.locator("#work-file-name")).toHaveText("import-ci.txt");
-  await expect(page.locator("#work-editor-host")).toContainText("Fichier importé par le test");
+  const importedText = await page.evaluate(async () => {
+    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
+    return files.find(file => file.name === "import-ci.txt")?.content ?? null;
+  });
+  expect(importedText).toContain("Fichier importé par le test");
 });
