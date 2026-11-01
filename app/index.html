@@ -1706,6 +1706,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             if (mode === 'voice' && currentMode !== 'voice') previousModeBeforeLive = currentMode || 'chat';
             currentMode = mode;
             document.body.classList.toggle('live-mode-active', mode === 'voice');
+            document.body.classList.toggle('work-mode-active', mode === 'work');
             if (mode !== 'voice') { closeLiveMoreOptions(); closeLiveVoicePicker(); }
             const menu = document.getElementById('quick-options');
             menu.querySelectorAll('[data-mode]').forEach((button) => {
