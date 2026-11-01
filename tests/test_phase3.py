@@ -273,3 +273,76 @@ def test_gemini_chat_preserves_plain_text_streaming_contract(client, monkeypatch
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
     assert response.text == "Bonjour depuis Gemini"
+
+
+
+def test_provider_stream_sends_server_model_effort_and_usage_options(monkeypatch):
+    from llink_api.providers import openai_compatible
+
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def aiter_lines(self):
+            yield (
+                'data: {"choices":[{"delta":{"content":"Réponse","reasoning_content":"secret"}}]}'
+            )
+            yield (
+                'data: {"choices":[{"delta":{},"finish_reason":"stop"}],'
+                '"usage":{"prompt_tokens":15,"completion_tokens":9}}'
+            )
+            yield "data: [DONE]"
+
+    class FakeClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        def stream(self, method, url, *, json, headers):
+            captured.update({
+                "method": method,
+                "url": url,
+                "payload": json,
+                "headers": headers,
+            })
+            return FakeResponse()
+
+    monkeypatch.setattr(openai_compatible.httpx, "AsyncClient", FakeClient)
+
+    async def collect():
+        return [
+            event
+            async for event in openai_compatible.stream_openai_compatible(
+                provider="deepseek",
+                base_url="https://api.deepseek.com",
+                api_key="test-secret",
+                model_id="deepseek-flash",
+                system_instruction="Tu es Llink.",
+                user_text="Bonjour",
+                effort="ultime",
+                max_output_tokens=2048,
+                timeout_seconds=30,
+            )
+        ]
+
+    events = asyncio.run(collect())
+    assert captured["method"] == "POST"
+    assert captured["url"] == "https://api.deepseek.com/chat/completions"
+    assert captured["payload"]["model"] == "deepseek-flash"
+    assert captured["payload"]["reasoning_effort"] == "max"
+    assert captured["payload"]["thinking"] == {"type": "enabled"}
+    assert captured["payload"]["stream_options"] == {"include_usage": True}
+    assert [event.text for event in events if event.text] == ["Réponse"]
+    assert events[-1].usage == TokenUsage(prompt_tokens=15, completion_tokens=9)

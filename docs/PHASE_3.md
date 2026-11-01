@@ -6,7 +6,7 @@
 
 ## 1. Registre de modèles
 
-| Niveau Llink | Fournisseur | Modèle API | Tarif de référence par million de tokens (entrée / sortie) |
+| Niveau Llink | Fournisseur | Modèle API | Entrée / sortie / entrée mise en cache (USD par million de tokens) |
 |---|---|---|---:|
 | VELORA | Google Gemini | \`gemini-3.5-flash-lite\` | 0,30 $ / 2,50 $ |
 | SATORI | Z.ai | \`glm-4.7-flash\` | 0 $ / 0 $ (tarif public affiché gratuit à la date de vérification) |
