@@ -80,6 +80,9 @@ class Settings:
     max_request_body_bytes: int
     max_image_bytes: int
     max_audio_bytes: int
+    max_attachment_bytes: int
+    max_attachment_total_bytes: int
+    max_attachment_files: int
     max_message_chars: int
     max_preferences_chars: int
     provider_timeout_seconds: int
@@ -121,9 +124,12 @@ def get_settings() -> Settings:
         enable_dataset_collection=os.getenv("ENABLE_DATASET_COLLECTION", "false").lower()
         in {"1", "true", "yes"},
         environment=environment,
-        max_request_body_bytes=_int_env("MAX_REQUEST_BODY_BYTES", 13_500_000),
+        max_request_body_bytes=_int_env("MAX_REQUEST_BODY_BYTES", 27_000_000),
         max_image_bytes=_int_env("MAX_IMAGE_BYTES", 6_000_000),
         max_audio_bytes=_int_env("MAX_AUDIO_BYTES", 12_000_000),
+        max_attachment_bytes=_int_env("MAX_ATTACHMENT_BYTES", 10_000_000),
+        max_attachment_total_bytes=_int_env("MAX_ATTACHMENT_TOTAL_BYTES", 25_000_000),
+        max_attachment_files=_int_env("MAX_ATTACHMENT_FILES", 5),
         max_message_chars=_int_env("MAX_MESSAGE_CHARS", 12_000),
         max_preferences_chars=_int_env("MAX_PREFERENCES_CHARS", 2_000),
         provider_timeout_seconds=_int_env("PROVIDER_TIMEOUT_SECONDS", 60),

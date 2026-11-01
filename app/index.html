@@ -857,6 +857,24 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
 /* v25 : Paramètres, seul le symbole est coloré, plus de fond coloré */
 #llset .ls-ico{background:transparent!important}
 </style>
+<style id="llink-phase5-attachments">
+#attachment-preview:not(.hidden){display:grid}
+.llink-composer-attachment{position:relative;display:flex;align-items:center;gap:10px;min-width:0;padding:8px 34px 8px 8px;border:1px solid var(--llink-panel-border,#8884);border-radius:13px;background:var(--llink-panel-bg,rgba(128,128,128,.08));}
+.llink-composer-thumb{width:64px;height:58px;object-fit:cover;border-radius:8px;flex:0 0 64px;background:#8882}
+.llink-composer-audio{width:100%;min-width:0;max-width:240px;height:36px}
+.llink-composer-file-icon{width:34px;height:34px;flex:0 0 34px;opacity:.72}
+.llink-composer-details{display:flex;flex-direction:column;min-width:0;gap:3px;flex:1}
+.llink-composer-name{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.llink-composer-details small{font-size:10px;opacity:.65}
+.llink-composer-remove{position:absolute;right:6px;top:6px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#7772}
+.llink-composer-remove svg{width:14px;height:14px}
+.llink-message-attachments{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:7px;margin-bottom:8px}
+.llink-message-attachment{display:grid;grid-template-columns:18px minmax(0,1fr);column-gap:7px;align-items:center;padding:8px;border:1px solid #8883;border-radius:10px;background:#8881;font-size:11px}
+.llink-message-attachment svg{width:16px;height:16px;grid-row:span 2;opacity:.7}
+.llink-attachment-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.llink-message-attachment small{opacity:.65;font-size:9px}
+@media(max-width:480px){.llink-composer-attachment{gap:7px}.llink-composer-thumb{width:52px;height:50px;flex-basis:52px}.llink-composer-name{font-size:11px}}
+</style>
 </head>
 <body class="bg-campagne-light dark:bg-campagne-dark text-gray-900 dark:text-gray-100 h-full flex transition-colors duration-300 font-sans">
 
@@ -905,6 +923,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                 </div>
 
                 <textarea id="user-msg" placeholder="Commencez à discuter..." class="w-full bg-transparent border-none outline-none resize-none p-[0.5rem] text-[1rem] max-h-[10rem] overflow-y-auto no-scrollbar" oninput="this.style.height='3rem';this.style.height=this.scrollHeight+'px'"></textarea>
+                <div id="attachment-preview" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[13rem] overflow-y-auto px-[0.25rem]" aria-live="polite" aria-label="Fichiers joints"></div>
                 
                 <div class="flex justify-between items-center mt-[0.5rem]">
                     <div class="flex items-center gap-[0.5rem]">
@@ -919,8 +938,8 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                 </div>
 
                 <div id="media-menu" class="hidden absolute bottom-[4rem] left-[1rem] bg-campagne-light dark:bg-campagne-dark rounded-xl shadow-xl flex-col border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
-                    <button onclick="triggerInput('camera-in')" class="flex items-center gap-[0.75rem] px-[1rem] py-[0.75rem] hover:bg-surface-light dark:hover:bg-surface-dark font-semibold text-[0.875rem] transition"><i data-lucide="camera" class="w-[1rem] h-[1rem]"></i> Prendre photo</button>
-                    <button onclick="triggerInput('file-in')" class="flex items-center gap-[0.75rem] px-[1rem] py-[0.75rem] hover:bg-surface-light dark:hover:bg-surface-dark font-semibold text-[0.875rem] transition"><i data-lucide="image" class="w-[1rem] h-[1rem]"></i> Choisir image</button>
+                    <button onclick="triggerInput('file-in')" class="flex items-center gap-[0.75rem] px-[1rem] py-[0.75rem] hover:bg-surface-light dark:hover:bg-surface-dark font-semibold text-[0.875rem] transition"><i data-lucide="paperclip" class="w-[1rem] h-[1rem]"></i> Ajouter des fichiers</button>
+                    <button onclick="triggerInput('camera-in')" class="flex items-center gap-[0.75rem] px-[1rem] py-[0.75rem] hover:bg-surface-light dark:hover:bg-surface-dark font-semibold text-[0.875rem] transition"><i data-lucide="camera" class="w-[1rem] h-[1rem]"></i> Prendre une photo</button>
                 </div>
             </div>
             <div class="text-center text-[0.65rem] font-bold text-gray-400 mt-[0.75rem] tracking-widest uppercase">from Crypt Enterprise</div>
@@ -941,7 +960,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         </button>
     </div>
 
-    <input type="file" id="file-in" class="hidden" accept="image/*">
+    <input type="file" id="file-in" class="hidden" multiple>
     <input type="file" id="camera-in" class="hidden" accept="image/*" capture="environment">
 
     <div id="rename-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-[1rem] z-[3000]">
@@ -1781,7 +1800,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             const m = await db.msgs.where('chatId').equals(id).toArray();
             m.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
             document.getElementById('chat-window').innerHTML = "";
-            m.forEach(msg => renderMessage(msg.text, msg.role));
+            m.forEach(msg => renderMessage(msg.text, msg.role, "", Array.isArray(msg.attachments) ? msg.attachments : []));
             if(window.innerWidth<768) toggleSidebar();
         };
 
@@ -1820,26 +1839,37 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         }
 
         // ================= INJECTION DES BOUTONS COPIER / PARTAGER =================
-        function renderMessage(txt, role, id="") {
+        function escapeAttachmentText(value) {
+            return String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+        }
+
+        function attachmentChipsHTML(attachments) {
+            if (!Array.isArray(attachments) || !attachments.length) return '';
+            return `<div class="llink-message-attachments">${attachments.map(item => {
+                const name = escapeAttachmentText(item.name || 'Fichier');
+                const size = Number(item.size) > 0 ? (Number(item.size) / 1000000).toFixed(2) + ' Mo' : '';
+                const kind = escapeAttachmentText(item.kind || 'file');
+                return `<div class="llink-message-attachment"><i data-lucide="file" aria-hidden="true"></i><span class="llink-attachment-name" title="${name}">${name}</span><small>${kind}${size ? ' · ' + size : ''}</small></div>`;
+            }).join('')}</div>`;
+        }
+
+        function renderMessage(txt, role, id="", attachments=[]) {
             const w = document.getElementById('chat-window');
             const html = parseMarkdown(txt);
-            
-            // On encode le texte pour éviter que des guillemets cassent le code HTML du bouton
-            const safeTxt = encodeURIComponent(txt);
-            
+            const safeTxt = encodeURIComponent(txt || '');
+            const attachmentHtml = attachmentChipsHTML(attachments);
             const actionBtns = `
                 <div class="msg-actions flex gap-[0.75rem] mt-[0.5rem] px-[0.5rem] text-gray-500">
                     <button onclick="navigator.clipboard.writeText(decodeURIComponent('${safeTxt}')); this.innerHTML='<i data-lucide=\\'check\\' class=\\'w-[1rem] h-[1rem] text-green-500\\'></i>'; setTimeout(() => { this.innerHTML='<i data-lucide=\\'copy\\' class=\\'w-[1rem] h-[1rem]\\'></i>'; lucide.createIcons(); }, 2000);" title="Copier" class="hover:text-blue-500 transition flex items-center justify-center p-[0.25rem]"><i data-lucide="copy" class="w-[1rem] h-[1rem]"></i></button>
                     <button onclick="if(navigator.share) { navigator.share({title: 'Llink', text: decodeURIComponent('${safeTxt}')}) } else { alert('Partage non supporté.'); }" title="Partager" class="hover:text-green-500 transition flex items-center justify-center p-[0.25rem]"><i data-lucide="share-2" class="w-[1rem] h-[1rem]"></i></button>
-                </div>
-            `;
-
+                </div>`;
             if(role === 'user') {
-                w.insertAdjacentHTML('beforeend', `<div class="flex flex-col items-end w-full msg-wrapper" id="${id}"><div class="bg-userBg-light dark:bg-userBg-dark p-[1rem] rounded-3xl rounded-br-sm max-w-[85%] font-medium msg-content text-[1rem] shadow-sm">${html}</div>${actionBtns}</div>`);
+                w.insertAdjacentHTML('beforeend', `<div class="flex flex-col items-end w-full msg-wrapper" id="${id}"><div class="bg-userBg-light dark:bg-userBg-dark p-[1rem] rounded-3xl rounded-br-sm max-w-[92%] font-medium msg-content text-[1rem] shadow-sm">${attachmentHtml}${html}</div>${actionBtns}</div>`);
             } else {
                 w.insertAdjacentHTML('beforeend', `<div class="flex flex-col items-start w-full msg-wrapper" id="${id}"><div class="flex items-center gap-[0.5rem] mb-[0.25rem]"><div class="w-[2rem] h-[2rem] rounded-full logo-anim flex items-center justify-center flex-shrink-0 bg-gray-200 dark:bg-gray-800"><svg viewBox="-5 -5 110 110" class="logo-llink overflow-visible w-full h-full"><circle cx="50" cy="20" r="18" fill="none" stroke="#FF5733" stroke-width="8"/><circle cx="76" cy="35" r="18" fill="none" stroke="#33FF57" stroke-width="8"/><circle cx="76" cy="65" r="18" fill="none" stroke="#3357FF" stroke-width="8"/><circle cx="50" cy="80" r="18" fill="none" stroke="#F333FF" stroke-width="8"/><circle cx="24" cy="65" r="18" fill="none" stroke="#FFBD33" stroke-width="8"/><circle cx="24" cy="35" r="18" fill="none" stroke="#33FFF3" stroke-width="8"/></svg></div><span class="text-[0.75rem] font-black uppercase tracking-wider">LLINK</span></div><div class="px-[0.5rem] w-full font-medium msg-content text-[1rem]">${html}</div>${actionBtns}</div>`);
             }
-            lucide.createIcons(); scrollToBottom();
+            if (window.lucide) lucide.createIcons();
+            scrollToBottom();
         }
 
         async function getConversationContext(chatId) {
@@ -1859,11 +1889,27 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         
         window.sendFromInput = async () => {
                     const input = document.getElementById('user-msg');
-                    const txt = input.value;
-                    if(!txt.trim()) return; input.value = ''; input.style.height = '3rem';
+                    const typedText = input.value || '';
+                    const files = selectedAttachments.slice();
+                    if (!typedText.trim() && !files.length) return;
+                    if (!window.isOnline && files.length) {
+                        alert("Les fichiers sont prêts, mais leur analyse nécessite une connexion. Ils restent attachés au message : reconnecte-toi pour les envoyer.");
+                        return;
+                    }
+                    const txt = typedText.trim() || "Analyse les fichiers joints.";
+                    input.value = '';
+                    input.style.height = '3rem';
+
+                    const attachmentMetadata = files.map(item => ({
+                        name: item.file.name,
+                        size: item.file.size,
+                        type: item.file.type || 'application/octet-stream',
+                        kind: (item.file.type || '').split('/')[0] || 'file'
+                    }));
+
                     if(!curChatId) {
                         curChatId = await db.chats.add({
-                            title: txt.substring(0,20),
+                            title: (typedText.trim() || files[0]?.file.name || 'Fichiers joints').substring(0,40),
                             time: Date.now(),
                             mode: currentMode,
                             syncId: createChatSyncId()
@@ -1871,14 +1917,16 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                         window.loadHistory();
                     }
 
-                    // Lire les échanges précédents AVANT d'ajouter le message courant.
                     const conversationHistory = await getConversationContext(curChatId);
-
                     const emptyState = document.getElementById('empty-state');
                     if(emptyState) emptyState.remove();
 
-                    // Conserver aussi les échanges anonymes localement pour le contexte de la session.
-                    await db.msgs.add({chatId: curChatId, role: 'user', text: txt});
+                    await db.msgs.add({
+                        chatId: curChatId,
+                        role: 'user',
+                        text: txt,
+                        attachments: attachmentMetadata
+                    });
 
                     if(window.isLoggedIn) {
                         const userPromptsCount = await db.msgs.where('role').equals('user').count();
@@ -1887,12 +1935,13 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                             setTimeout(() => alert(`🎉 Cap des ${userPromptsCount} prompts atteint ! Ton dataset JSON a été exporté automatiquement.`), 1000);
                         }
                     }
-                    renderMessage(txt, 'user');
-                    
-                    const loadId = "load-"+Date.now(); renderMessage("Réflexion...", 'bot', loadId);
+
+                    renderMessage(txt, 'user', '', attachmentMetadata);
+                    const loadId = "load-"+Date.now();
+                    renderMessage("Réflexion...", 'bot', loadId);
                     const contentDiv = document.getElementById(loadId).querySelector('.msg-content');
                     let fullReply = "";
-                
+
                     if(window.isOnline) {
                         try {
                             const prefs = (window.llinkPrefsPayload ? window.llinkPrefsPayload() : (localStorage.getItem('llink_prefs') || ""));
@@ -1906,48 +1955,64 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                                 preferences: prefs,
                                 source: 'llik_web'
                             };
-                            const res = await fetch(`${SERVER_URL}/api/chat`, { method: 'POST', body: JSON.stringify(payload), headers: await llinkAuthHeaders(true) });
+                            let endpoint = `${SERVER_URL}/api/chat`;
+                            let body;
+                            let headers;
+                            if (files.length) {
+                                endpoint = `${SERVER_URL}/api/chat/attachments`;
+                                body = new FormData();
+                                Object.entries(payload).forEach(([key, value]) => {
+                                    body.append(key, key === 'history' ? JSON.stringify(value) : String(value ?? ''));
+                                });
+                                files.forEach(item => body.append('files', item.file, item.file.name));
+                                headers = await llinkAuthHeaders(false);
+                            } else {
+                                body = JSON.stringify(payload);
+                                headers = await llinkAuthHeaders(true);
+                            }
+                            // Les URL d'aperçu sont libérées après avoir construit le formulaire ;
+                            // FormData conserve les références aux objets File d'origine.
+                            const res = await fetch(endpoint, { method: 'POST', body, headers });
                             if (!res.ok) {
                                 const errorData = await res.json().catch(() => ({}));
                                 throw new Error(errorData.detail || `Requête refusée (${res.status}).`);
                             }
+                            if (files.length) clearSelectedAttachments();
                             if (!res.body) throw new Error("Le serveur n'a pas ouvert le flux de réponse.");
                             const reader = res.body.getReader();
-                            const decoder = new TextDecoder('utf-8'); 
+                            const decoder = new TextDecoder('utf-8');
                             contentDiv.innerHTML = "";
-                            while(true) { 
-                                const {value, done} = await reader.read(); 
+                            while(true) {
+                                const {value, done} = await reader.read();
                                 if(done) break;
-                                
-                                // Le {stream: true} évite de casser les caractères multioctets
-                                fullReply += decoder.decode(value, {stream:true}); 
-                                
-                                // Pour le streaming, on affiche le texte brut avec un échappement basique pour éviter les sauts du DOM.
-                                // Le parseMarkdown complet sera appliqué uniquement à la fin de la génération pour stabiliser l'UI.
+                                fullReply += decoder.decode(value, {stream:true});
                                 let tempHtml = fullReply.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
-                                contentDiv.innerHTML = tempHtml + '<span class="animate-pulse inline-block w-2 h-4 bg-gray-500 ml-1"></span>'; 
-                                scrollToBottom(); 
+                                contentDiv.innerHTML = tempHtml + '<span class="animate-pulse inline-block w-2 h-4 bg-gray-500 ml-1"></span>';
+                                scrollToBottom();
                             }
                             fullReply += decoder.decode();
-                            // Application du Markdown définitif une fois le stream terminé
                             contentDiv.innerHTML = parseMarkdown(fullReply);
                             scrollToBottom();
-                        } catch(e) { fullReply = `❌ ${e.message || "Erreur de connexion au serveur."}`; contentDiv.innerHTML = parseMarkdown(fullReply); }
+                        } catch(e) {
+                            fullReply = `❌ ${e.message || "Erreur de connexion au serveur."}`;
+                            contentDiv.innerHTML = parseMarkdown(fullReply);
+                        }
                     } else {
-                        if(!window.isOfflineValid) { fullReply = "❌ Votre accès au mode Hors-Ligne est expiré. Veuillez vous connecter à Internet et vous abonner."; }
-                        else if(window.generateOfflineText) { fullReply = await window.generateOfflineText(txt, loadId); }
-                        else { fullReply = "⚠️ Modèle WASM non prêt."; }
+                        if(!window.isOfflineValid) fullReply = "❌ Votre accès au mode Hors-Ligne est expiré. Veuillez vous connecter à Internet et vous abonner.";
+                        else if(window.generateOfflineText) fullReply = await window.generateOfflineText(txt, loadId);
+                        else fullReply = "⚠️ Modèle WASM non prêt.";
                         contentDiv.innerHTML = parseMarkdown(fullReply);
                     }
-                
+
                     if (currentMode === 'voice' && 'speechSynthesis' in window && fullReply.trim()) {
                         try {
                             window.speechSynthesis.cancel();
-                            const spokenReply = new SpeechSynthesisUtterance(fullReply.replace(/[#*_`>]/g, ' ')); if (window.selectedLiveVoice) spokenReply.voice = window.selectedLiveVoice;
+                            const spokenReply = new SpeechSynthesisUtterance(fullReply.replace(/[#*_\x60>]/g, ' '));
+                            if (window.selectedLiveVoice) spokenReply.voice = window.selectedLiveVoice;
                             spokenReply.lang = (document.getElementById('target-lang')?.value || 'fr') === 'en' ? 'en-US' : 'fr-FR';
                             spokenReply.rate = 1;
                             window.speechSynthesis.speak(spokenReply);
-                        } catch (e) { /* La synthèse vocale peut être indisponible selon le navigateur. */ }
+                        } catch (e) { /* Synthèse vocale facultative selon le navigateur. */ }
                     }
                     if (fullReply.trim() && !fullReply.trim().startsWith('❌')) {
                         await db.msgs.add({chatId: curChatId, role: 'bot', text: fullReply});
@@ -1958,12 +2023,130 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                             fullChat.messages = (await db.msgs.where('chatId').equals(curChatId).toArray()).slice(-200);
                             await syncChatToServer(fullChat);
                         }
-                        // Actualise le budget après règlement de la consommation fournisseur.
-                        if (typeof window.refreshLlinkUsage === "function") {
-                            window.refreshLlinkUsage({ warn: true });
-                        }
+                        if (typeof window.refreshLlinkUsage === "function") window.refreshLlinkUsage({ warn: true });
                     }
                 };
+        // ================= MULTIMODAL ATTACHMENTS =================
+        const selectedAttachments = [];
+        const MAX_UI_ATTACHMENT_COUNT = 5;
+        const MAX_UI_ATTACHMENT_BYTES = 10_000_000;
+        const MAX_UI_ATTACHMENT_TOTAL = 25_000_000;
+
+        function formatAttachmentSize(bytes) {
+            return bytes < 1_000_000 ? Math.max(1, Math.round(bytes / 1000)) + ' Ko' : (bytes / 1_000_000).toFixed(2) + ' Mo';
+        }
+
+        function attachmentIcon(file) {
+            const type = (file.type || '').toLowerCase();
+            if (type.startsWith('image/')) return 'image';
+            if (type.startsWith('audio/')) return 'audio-lines';
+            if (type.startsWith('video/')) return 'video';
+            if (type.includes('pdf')) return 'file-text';
+            if (type.includes('spreadsheet') || /\.(xlsx|xls|csv)$/i.test(file.name)) return 'file-spreadsheet';
+            if (type.includes('word') || /\.(doc|docx|rtf)$/i.test(file.name)) return 'file-text';
+            if (type.includes('presentation') || /\.(ppt|pptx)$/i.test(file.name)) return 'presentation';
+            if (type.startsWith('text/') || /\.(py|js|ts|json|xml|md|html|css|sql)$/i.test(file.name)) return 'file-code';
+            return 'file';
+        }
+
+        function clearSelectedAttachments() {
+            selectedAttachments.forEach(item => { try { URL.revokeObjectURL(item.url); } catch (_) {} });
+            selectedAttachments.splice(0, selectedAttachments.length);
+            renderAttachmentPreviews();
+        }
+
+        function removeSelectedAttachment(id) {
+            const index = selectedAttachments.findIndex(item => item.id === id);
+            if (index < 0) return;
+            try { URL.revokeObjectURL(selectedAttachments[index].url); } catch (_) {}
+            selectedAttachments.splice(index, 1);
+            renderAttachmentPreviews();
+        }
+
+        function renderAttachmentPreviews() {
+            const container = document.getElementById('attachment-preview');
+            if (!container) return;
+            container.replaceChildren();
+            container.classList.toggle('hidden', selectedAttachments.length === 0);
+            selectedAttachments.forEach(item => {
+                const file = item.file;
+                const card = document.createElement('div');
+                card.className = 'llink-composer-attachment';
+                const mediaType = (file.type || '').toLowerCase();
+                if (mediaType.startsWith('image/')) {
+                    const image = document.createElement('img');
+                    image.src = item.url;
+                    image.alt = file.name;
+                    image.className = 'llink-composer-thumb';
+                    card.appendChild(image);
+                } else if (mediaType.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = item.url;
+                    video.controls = true;
+                    video.preload = 'metadata';
+                    video.className = 'llink-composer-thumb';
+                    card.appendChild(video);
+                } else if (mediaType.startsWith('audio/')) {
+                    const audio = document.createElement('audio');
+                    audio.src = item.url;
+                    audio.controls = true;
+                    audio.preload = 'metadata';
+                    audio.className = 'llink-composer-audio';
+                    card.appendChild(audio);
+                } else {
+                    const icon = document.createElement('i');
+                    icon.setAttribute('data-lucide', attachmentIcon(file));
+                    icon.className = 'llink-composer-file-icon';
+                    card.appendChild(icon);
+                }
+                const details = document.createElement('div');
+                details.className = 'llink-composer-details';
+                const name = document.createElement('div');
+                name.className = 'llink-composer-name';
+                name.textContent = file.name;
+                name.title = file.name;
+                const size = document.createElement('small');
+                size.textContent = formatAttachmentSize(file.size);
+                details.append(name, size);
+                card.appendChild(details);
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'llink-composer-remove';
+                remove.setAttribute('aria-label', 'Retirer ' + file.name);
+                remove.title = 'Retirer ce fichier';
+                remove.innerHTML = '<i data-lucide="x"></i>';
+                remove.addEventListener('click', () => removeSelectedAttachment(item.id));
+                card.appendChild(remove);
+                container.appendChild(card);
+            });
+            if (window.lucide) lucide.createIcons();
+        }
+
+        window.handleAttachmentSelection = function(event) {
+            const incoming = Array.from(event.target.files || []);
+            event.target.value = '';
+            if (!incoming.length) return;
+            let total = selectedAttachments.reduce((sum, item) => sum + item.file.size, 0);
+            for (const file of incoming) {
+                if (selectedAttachments.length >= MAX_UI_ATTACHMENT_COUNT) {
+                    alert('Tu peux joindre ' + MAX_UI_ATTACHMENT_COUNT + ' fichiers au maximum par message.');
+                    break;
+                }
+                if (file.size > MAX_UI_ATTACHMENT_BYTES) {
+                    alert(file.name + ' dépasse la limite de 10 Mo par fichier.');
+                    continue;
+                }
+                if (total + file.size > MAX_UI_ATTACHMENT_TOTAL) {
+                    alert('La taille totale des pièces jointes ne peut pas dépasser 25 Mo.');
+                    break;
+                }
+                const id = 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                selectedAttachments.push({id, file, url: URL.createObjectURL(file)});
+                total += file.size;
+            }
+            renderAttachmentPreviews();
+        };
+
         // ================= MEDIA LOGIC =================
         let isRecording = false;
         let mediaRecorder;
@@ -2066,8 +2249,8 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             }
         };
 
-        document.getElementById('file-in').addEventListener('change', handleImageUpload);
-        document.getElementById('camera-in').addEventListener('change', handleImageUpload);
+        document.getElementById('file-in').addEventListener('change', window.handleAttachmentSelection);
+        document.getElementById('camera-in').addEventListener('change', window.handleAttachmentSelection);
 
         window.addEventListener('resize', () => {
             if (window.innerWidth > 768) document.body.classList.remove('composer-open');
