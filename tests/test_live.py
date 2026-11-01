@@ -8,6 +8,7 @@ from llink_api.api.routes.live import (
     LIVE_MODEL,
     _decode_chunk,
     build_live_config,
+    default_live_audio_output_rate,
     live_token_usage,
 )
 from llink_api.services.security_limits import get_quota_policy
@@ -76,3 +77,11 @@ def test_live_websocket_rejects_empty_firebase_token(client):
         response = websocket.receive_json()
     assert response["type"] == "error"
     assert "Connecte-toi" in response["message"]
+
+
+def test_live_output_rate_changes_on_scheduled_google_price_date():
+    from datetime import date
+    from decimal import Decimal
+
+    assert default_live_audio_output_rate(date(2026, 12, 31)) == Decimal("12.00")
+    assert default_live_audio_output_rate(date(2027, 1, 1)) == Decimal("21.60")
