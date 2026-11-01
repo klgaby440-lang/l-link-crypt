@@ -28,7 +28,7 @@ router = APIRouter()
 MAX_TOOL_CODE_CHARS = 24_000
 MAX_EXPORT_CHARS = 700_000
 TOOL_OUTPUT_CHARS = 16_000
-_SAFE_OUTPUT_NAME = re.compile(r"[^\\w. -]", re.UNICODE)
+_SAFE_OUTPUT_NAME = re.compile(r"[^\w. -]", re.UNICODE)
 
 
 class WebSearchRequest(BaseModel):
@@ -53,7 +53,7 @@ def safe_output_filename(value: str, extension: str) -> str:
         name = "document"
     suffix = "." + extension
     if not name.lower().endswith(suffix):
-        name = re.sub(r"\\.[A-Za-z0-9]{1,8}$", "", name) + suffix
+        name = re.sub(r"\.[A-Za-z0-9]{1,8}$", "", name) + suffix
     return name[:160]
 
 
@@ -92,7 +92,7 @@ def _plain_pdf_blocks(content: str) -> list[Any]:
         line = raw.rstrip()
         if line.strip().startswith("```"):
             if in_code:
-                blocks.append(Preformatted("\\n".join(code_lines), code_style))
+                blocks.append(Preformatted("\n".join(code_lines), code_style))
                 blocks.append(Spacer(1, 7))
                 code_lines = []
             in_code = not in_code
@@ -101,17 +101,17 @@ def _plain_pdf_blocks(content: str) -> list[Any]:
             code_lines.append(line)
         elif not line.strip():
             blocks.append(Spacer(1, 5))
-        elif re.match(r"^#{1,6}\\s+", line):
+        elif re.match(r"^#{1,6}\s+", line):
             level = len(line) - len(line.lstrip("#"))
             style_name = "Title" if level == 1 else "Heading2" if level == 2 else "Heading3"
-            blocks.append(Paragraph(escape(re.sub(r"^#{1,6}\\s+", "", line)), styles[style_name]))
-        elif re.match(r"^\\s*[-*+]\\s+", line):
-            item = re.sub(r"^\\s*[-*+]\\s+", "", line)
+            blocks.append(Paragraph(escape(re.sub(r"^#{1,6}\s+", "", line)), styles[style_name]))
+        elif re.match(r"^\s*[-*+]\s+", line):
+            item = re.sub(r"^\s*[-*+]\s+", "", line)
             blocks.append(Paragraph("•&nbsp;&nbsp;" + escape(item), body))
         else:
             blocks.append(Paragraph(escape(line), body))
     if code_lines:
-        blocks.append(Preformatted("\\n".join(code_lines), code_style))
+        blocks.append(Preformatted("\n".join(code_lines), code_style))
     return blocks
 
 
@@ -160,13 +160,13 @@ def create_export_bytes(file_format: str, content: str) -> tuple[bytes, str]:
                 run.font.size = Pt(8)
             elif not line.strip():
                 document.add_paragraph("")
-            elif re.match(r"^#{1,6}\\s+", line):
+            elif re.match(r"^#{1,6}\s+", line):
                 level = min(3, len(line) - len(line.lstrip("#")))
-                document.add_heading(re.sub(r"^#{1,6}\\s+", "", line), level=level)
-            elif re.match(r"^\\s*[-*+]\\s+", line):
-                document.add_paragraph(re.sub(r"^\\s*[-*+]\\s+", "", line), style="List Bullet")
-            elif re.match(r"^\\s*\\d+[.)]\\s+", line):
-                document.add_paragraph(re.sub(r"^\\s*\\d+[.)]\\s+", "", line), style="List Number")
+                document.add_heading(re.sub(r"^#{1,6}\s+", "", line), level=level)
+            elif re.match(r"^\s*[-*+]\s+", line):
+                document.add_paragraph(re.sub(r"^\s*[-*+]\s+", "", line), style="List Bullet")
+            elif re.match(r"^\s*\d+[.)]\s+", line):
+                document.add_paragraph(re.sub(r"^\s*\d+[.)]\s+", "", line), style="List Number")
             else:
                 document.add_paragraph(line)
         output = io.BytesIO()
@@ -198,7 +198,7 @@ def create_export_bytes(file_format: str, content: str) -> tuple[bytes, str]:
         else:
             sample = stripped[:2048]
             try:
-                dialect = csv.Sniffer().sniff(sample, delimiters=",;\\t")
+                dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
                 rows = list(csv.reader(io.StringIO(content), dialect))
             except csv.Error:
                 rows = [[line] for line in content.splitlines()]
@@ -317,8 +317,8 @@ async def run_python(
             timeout=28,
         )
         logs = getattr(execution, "logs", None)
-        stdout = "\\n".join(getattr(logs, "stdout", []) or []) if logs else ""
-        stderr = "\\n".join(getattr(logs, "stderr", []) or []) if logs else ""
+        stdout = "\n".join(getattr(logs, "stdout", []) or []) if logs else ""
+        stderr = "\n".join(getattr(logs, "stderr", []) or []) if logs else ""
         result_text = str(getattr(execution, "text", "") or "")
         error = getattr(execution, "error", None)
         error_text = ""
