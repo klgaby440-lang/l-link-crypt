@@ -9,6 +9,7 @@ on:
       - 'phase-3/**'
       - 'phase-4/**'
       - 'phase-5/**'
+      - 'phase-6/**'
     paths:
       - 'main.py'
       - 'llink_api/**'
