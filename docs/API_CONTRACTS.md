@@ -74,7 +74,7 @@ Envoi multipart avec un champ \`files\` répété (plusieurs fichiers) et les ch
 
 - Jusqu'à 5 fichiers par message.
 - 10 Mo par fichier, 25 Mo au total ; valeurs configurables côté serveur.
-- PDF, images JPEG/PNG/WebP, audio et vidéo : analyse multimodale Gemini, puis synthèse transmise au modèle sélectionné dans Llink.
+- PDF, images JPEG/PNG/WebP/BMP/HEIC/HEIF, audio et vidéo : analyse multimodale Gemini, puis synthèse transmise au modèle sélectionné dans Llink.
 - TXT, Markdown, CSV, JSON, XML, HTML, code, DOCX, XLSX et PPTX : extraction de texte côté serveur.
 - Les autres formats restent acceptés par le sélecteur et peuvent être joints ; tant qu'un extracteur n'existe pas, leur nom et leur type sont transmis au modèle avec une indication explicite que le contenu n'a pas été lu.
 - Les médias binaires combinés sont plafonnés à 18 Mo pour l'analyse inline Gemini.
