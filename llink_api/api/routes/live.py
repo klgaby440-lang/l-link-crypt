@@ -6,6 +6,7 @@ import asyncio
 import base64
 import binascii
 import logging
+import os
 from decimal import Decimal, ROUND_CEILING
 from typing import Any
 
@@ -40,8 +41,11 @@ LIVE_INPUT_RATES = {
     "IMAGE": Decimal("1.00"),
     "VIDEO": Decimal("1.00"),
 }
+LIVE_OUTPUT_AUDIO_USD_PER_MILLION = Decimal(
+    os.getenv("LLINK_LIVE_AUDIO_OUTPUT_USD_PER_MILLION", "12.00")
+)
 LIVE_OUTPUT_RATES = {
-    "AUDIO": Decimal("12.00"),
+    "AUDIO": LIVE_OUTPUT_AUDIO_USD_PER_MILLION,
     "TEXT": Decimal("4.50"),
 }
 LIVE_USAGE_MODEL = ModelDefinition(
@@ -51,7 +55,7 @@ LIVE_USAGE_MODEL = ModelDefinition(
     model_id=LIVE_MODEL,
     display_model="Gemini 3.1 Flash Live Preview",
     input_usd_per_million=Decimal("3.00"),
-    output_usd_per_million=Decimal("12.00"),
+    output_usd_per_million=LIVE_OUTPUT_AUDIO_USD_PER_MILLION,
     cached_input_usd_per_million=Decimal("0.30"),
     max_output_tokens=20_000,
 )
@@ -344,7 +348,7 @@ async def live_websocket(websocket: WebSocket) -> None:
                 uid=user_uid,
                 level=entitled_level,
                 model=LIVE_USAGE_MODEL,
-                prompt=" " * 160_000,
+                prompt=" " * 380_000,
             )
         except Exception:
             release_slot()
