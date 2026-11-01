@@ -47,6 +47,8 @@ DEFAULT_POLICIES: dict[tuple[str, bool], QuotaPolicy] = {
     ("work_read", True): QuotaPolicy(60, 2000),
     ("work_write", True): QuotaPolicy(20, 200),
     ("work_delete", True): QuotaPolicy(10, 50),
+    ("work_tool_read", True): QuotaPolicy(10, 100),
+    ("work_tool_run", True): QuotaPolicy(4, 25),
 }
 
 _memory_lock = threading.Lock()
