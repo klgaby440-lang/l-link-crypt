@@ -104,6 +104,8 @@ async def chat_with_attachments(
     mode = str(form.get("mode") or "chat").strip()
     preferences = str(form.get("preferences") or "").strip() or None
     source = str(form.get("source") or "llink_web").strip()
+    source_language = str(form.get("source_language") or "").strip() or None
+    target_language = str(form.get("target_language") or "").strip() or None
     consent = _form_bool(form.get("data_collection_consent"), False)
 
     try:
@@ -124,6 +126,8 @@ async def chat_with_attachments(
             preferences=preferences,
             mode=mode,
             source=source,
+            source_language=source_language,
+            target_language=target_language,
             data_collection_consent=consent,
         )
     except ValidationError as exc:
