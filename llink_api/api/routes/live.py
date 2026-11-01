@@ -195,6 +195,8 @@ async def _receive_client_events(websocket: WebSocket, session: Any) -> None:
             )
         elif event_type == "audio_end":
             await session.send_realtime_input(audio_stream_end=True)
+        elif event_type == "ping":
+            await _safe_send(websocket, {"type": "pong"})
         elif event_type == "video":
             frame = _decode_chunk(
                 event.get("data"),
