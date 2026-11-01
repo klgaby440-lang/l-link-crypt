@@ -346,3 +346,51 @@ def test_provider_stream_sends_server_model_effort_and_usage_options(monkeypatch
     assert captured["payload"]["stream_options"] == {"include_usage": True}
     assert [event.text for event in events if event.text] == ["Réponse"]
     assert events[-1].usage == TokenUsage(prompt_tokens=15, completion_tokens=9)
+
+
+
+def test_gemini_adapter_maps_effort_to_official_thinking_config(monkeypatch):
+    from llink_api.providers import gemini as gemini_provider
+
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return type("Response", (), {"text": "ok"})()
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+            self.models = FakeModels()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    monkeypatch.setattr(gemini_provider.genai, "Client", FakeClient)
+    monkeypatch.setattr(
+        gemini_provider,
+        "get_settings",
+        lambda: type(
+            "Settings",
+            (),
+            {"gemini_api_key": "fake-key", "provider_timeout_seconds": 21},
+        )(),
+    )
+
+    model = gemini_provider.get_gemini_model(
+        "System instruction",
+        model_name="gemini-3.5-flash-lite",
+        effort="ultime",
+    )
+    response = model.generate_content("Bonjour")
+
+    assert response.text == "ok"
+    assert captured["model"] == "gemini-3.5-flash-lite"
+    assert captured["config"].thinking_config.thinking_level == "high"
+    assert captured["config"].system_instruction == "System instruction"
+    assert captured["config"].max_output_tokens == 2048
+    assert captured["client_kwargs"]["http_options"].timeout == 21_000

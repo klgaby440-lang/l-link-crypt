@@ -202,6 +202,7 @@ async def chat_endpoint(
                 gemini_model = get_gemini_model(
                     system_instruction,
                     model_name=model.model_id,
+                    effort=payload.effort,
                 )
                 response = await asyncio.to_thread(
                     gemini_model.generate_content,
