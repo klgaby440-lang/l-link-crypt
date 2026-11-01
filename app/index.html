@@ -17,6 +17,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/marked@18.1.2/lib/marked.umd.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js"></script>
     
     <script>
         tailwind.config = {
@@ -875,6 +877,26 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
 .llink-message-attachment small{opacity:.65;font-size:9px}
 @media(max-width:480px){.llink-composer-attachment{gap:7px}.llink-composer-thumb{width:52px;height:50px;flex-basis:52px}.llink-composer-name{font-size:11px}}
 </style>
+<style id="llink-markdown-library-style">
+.msg-content h1,.msg-content h2,.msg-content h3{font-weight:800;line-height:1.25;margin:.9em 0 .45em;letter-spacing:-.02em}
+.msg-content h1{font-size:1.35em}.msg-content h2{font-size:1.2em}.msg-content h3{font-size:1.08em}
+.msg-content p{margin:.45em 0;line-height:1.65}
+.msg-content ul,.msg-content ol{padding-left:1.5em;margin:.5em 0}
+.msg-content ul{list-style:disc}.msg-content ol{list-style:decimal}
+.msg-content li{margin:.2em 0;padding-left:.12em}
+.msg-content blockquote{border-left:3px solid #9998;padding:.2em .8em;margin:.7em 0;opacity:.85}
+.msg-content pre{max-width:100%;overflow:auto;padding:12px;border-radius:12px;background:#17191d;color:#f2f2f2;font-size:.88em;line-height:1.5;margin:.7em 0}
+.msg-content pre code{white-space:pre}
+.msg-content :not(pre)>code{padding:.12em .38em;border-radius:5px;background:#8882;font-size:.9em}
+.msg-content table{display:block;max-width:100%;overflow:auto;border-collapse:collapse;margin:.7em 0;font-size:.92em}
+.msg-content th,.msg-content td{border:1px solid #8886;padding:6px 9px;text-align:left;vertical-align:top}
+.msg-content th{font-weight:800;background:#8882}
+.msg-content hr{border:0;border-top:1px solid #8886;margin:1em 0}
+.msg-content a{color:#3b82f6;text-decoration:underline;overflow-wrap:anywhere}
+.msg-content img{max-width:100%;height:auto;border-radius:10px}
+.msg-content input[type=checkbox]{margin-right:.4em}
+</style>
+
 </head>
 <body class="bg-campagne-light dark:bg-campagne-dark text-gray-900 dark:text-gray-100 h-full flex transition-colors duration-300 font-sans">
 
@@ -1832,10 +1854,25 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         };
 
         function parseMarkdown(text) {
-            if(!text) return "";
-            let html = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            html = html.replace(/```([\s\S]*?)```/g, function(m, p1){ return `<div class="relative"><button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText); this.innerText='Copié!'; setTimeout(()=>this.innerText='Copier',2000);" class="absolute top-[0.5rem] right-[0.5rem] bg-gray-700 text-white text-[0.625rem] font-bold py-[0.25rem] px-[0.5rem] rounded">Copier</button><pre><code>${p1}</code></pre></div>`; });
-            html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>'); html = html.replace(/\n/g, '<br>'); return html;
+            if (!text) return "";
+            const source = String(text).replace(/^\u200B/, "");
+            if (window.marked && typeof window.marked.parse === "function" &&
+                window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
+                const rendered = window.marked.parse(source, {
+                    gfm: true,
+                    breaks: true,
+                    async: false
+                });
+                return window.DOMPurify.sanitize(rendered, {
+                    USE_PROFILES: { html: true },
+                    FORBID_TAGS: ["style", "script", "iframe", "object", "embed", "form"],
+                    FORBID_ATTR: ["style"]
+                });
+            }
+            // Fallback lisible si les CDN sont momentanément indisponibles.
+            return source.replace(/[&<>"']/g, function(char) {
+                return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char];
+            }).replace(/\n/g, "<br>");
         }
 
         // ================= INJECTION DES BOUTONS COPIER / PARTAGER =================
