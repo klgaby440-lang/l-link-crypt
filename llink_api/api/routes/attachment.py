@@ -21,6 +21,7 @@ from llink_api.services.ai_slots import reserve_ai_slot
 from llink_api.services.attachment_processor import (
     classify_attachment,
     extract_text_attachment,
+    prepare_image_for_gemini,
     validate_media_signature,
 )
 from llink_api.services.entitlements import resolve_entitled_level
@@ -203,6 +204,11 @@ async def chat_with_attachments(
                 validate_media_signature(kind, declared_type, data)
             except ValueError as exc:
                 raise HTTPException(status_code=415, detail=f"{filename} : {exc}") from exc
+            if kind == "image":
+                try:
+                    declared_type, data = prepare_image_for_gemini(declared_type, data)
+                except ValueError as exc:
+                    raise HTTPException(status_code=415, detail=f"{filename} : {exc}") from exc
             binary_parts.append({"mime_type": declared_type, "data": data})
             summary["kind"] = kind
             attachment_summaries.append(summary)
