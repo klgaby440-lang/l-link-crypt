@@ -147,7 +147,7 @@ def build_system_instruction(
             "après chaque résultat, poursuis le travail si une autre étape est nécessaire, puis "
             "termine par un compte rendu bref et honnête. La limite d'orchestration est de plusieurs "
             "étapes, mais n'effectue que les actions nécessaires. "
-            "            "Pour la recherche Web, cite les URL exactes retournées. N'invente jamais de recherche "
+            "Pour la recherche Web, cite les URL exactes retournées. N'invente jamais de recherche "
             "ou d'exécution, et n'expose pas les balises techniques à l'utilisateur."
         )
     else:
