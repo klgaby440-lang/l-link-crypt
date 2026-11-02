@@ -128,11 +128,11 @@ const request=extractToolRequest(full);
 if(!request)break;
 ans.text=request.before;renderMessages();
 if(request.invalid||!request.call){ans.text+="\n\n[Demande d'outil invalide : aucune action n'a été exécutée.]";full=ans.text;break;}
-const signature=JSON.stringify(request.call);
+calls++;const signature=JSON.stringify(request.call);
 let result;
 if(executedCalls.has(signature)){result={executed:false,error:"Cette commande identique a déjà été exécutée. Ne la répète pas ; poursuis avec les résultats déjà reçus."};}
 else{
-executedCalls.add(signature);calls++;
+executedCalls.add(signature);
 try{
 const labels={web_search:"Recherche Web",python:"Exécution Python isolée",create_document:"Création du document Word",export_file:"Export du fichier"};
 toast(labels[request.call.name]||"Exécution de l'outil Work…");
