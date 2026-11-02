@@ -58,13 +58,13 @@ const summary=esc(String(reasoning.summary||"Démarche de travail en cours.").sl
 return '<details class="work-reasoning" open><summary><span class="work-reasoning-summary-title">Démarche de Llink</span><span class="work-reasoning-summary-state">'+state+'</span></summary><div class="work-reasoning-content"><p class="work-reasoning-overview">'+summary+'</p>'+stepHtml+eventHtml+decisionHtml+caveatHtml+'</div></details>';
 }
 function updateWorkReasoning(source,ans){
-const pattern=/<llink_reasoning\\b[^>]*>([\\s\\S]*?)<\\/llink_reasoning>/i;
+const pattern=/<llink_reasoning\b[^>]*>([\s\S]*?)<\/llink_reasoning>/i;
 const match=pattern.exec(String(source||""));
 if(!match){
-const opening=String(source||"").search(/<llink_reasoning\\b/i);
+const opening=String(source||"").search(/<llink_reasoning\b/i);
 return {visible:opening>=0?String(source).slice(0,opening).trim():String(source||""),found:false};
 }
-let raw=String(match[1]||"").trim().replace(/^\x60{3}(?:json)?\\s*/i,"").replace(/\\s*\x60{3}$/,"").trim();
+let raw=String(match[1]||"").trim().replace(/^\x60{3}(?:json)?\s*/i,"").replace(/\s*\x60{3}$/,"").trim();
 let value=null;
 try{value=JSON.parse(repairToolJsonControls(raw));}
 catch(e){return {visible:(String(source).slice(0,match.index)+String(source).slice(match.index+match[0].length)).trim(),found:true,invalid:true};}
