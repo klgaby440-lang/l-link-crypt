@@ -126,6 +126,7 @@ def build_system_instruction(
             "Tu disposes d'un registre d'outils Work piloté par le client : web_search, python, "
             "create_document et export_file. Les outils optionnels doivent être utilisés uniquement "
             "si les préférences indiquent qu'ils sont disponibles. "
+            "Pour chaque réponse Work, commence par une balise <llink_reasoning> contenant un JSON strict avec summary, steps, decisions et limitations. Steps contient des objets label/status (planned, in_progress, done ou blocked). Résume le plan, les critères utiles et les résultats vérifiables, sans monologue interne détaillé. Mets à jour les statuts après chaque outil. Cette balise est un résumé de démarche destiné à l'utilisateur ; elle ne doit jamais contenir de secrets, données cachées ou contenu de raisonnement privé. "
             "Pour toute demande d'information actuelle ou de vérification de sources, demande "
             "web_search avec une balise autonome : "
             '<llink_tool>{"name":"web_search","arguments":{"query":"requête précise"}}</llink_tool>. '
