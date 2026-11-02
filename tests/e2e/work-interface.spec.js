@@ -262,7 +262,7 @@ test("Work affiche et conserve la démarche structurée du modèle", async ({ pa
   await expect(message.locator(".work-message-body")).not.toContainText("llink_reasoning");
 
   const saved = await page.evaluate(async () => {
-    const messages = await db.msgs.where("chatId").equals(window.__workTestChatId || 1).toArray();
+    const messages = await db.msgs.toArray();
     return messages.find(item => item.role === "bot" && item.reasoning)?.reasoning ?? null;
   });
   expect(saved?.summary).toContain("Je vérifie la demande");
