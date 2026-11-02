@@ -1,7 +1,7 @@
 
 (() => {
 "use strict";
-const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,python:false,exports:true},busy:false};
+const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,python:false,exports:true,document_create:true},busy:false};
 const SERVER=typeof SERVER_URL!=="undefined"?SERVER_URL:"https://llink-usz9.onrender.com";
 const $=id=>S.root?.querySelector("#"+id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
