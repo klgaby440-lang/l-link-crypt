@@ -138,3 +138,73 @@ def test_sync_stream_adapter_accepts_iterable_response_objects():
 def test_usage_route_is_authenticated(client):
     response = client.get("/api/usage")
     assert response.status_code == 401
+
+
+def test_work_tool_registry_is_discoverable_without_login(client, monkeypatch):
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("E2B_API_KEY", raising=False)
+
+    response = client.get("/api/work/tools")
+
+    assert response.status_code == 200
+    tools = response.json()["tools"]
+    assert tools["web_search"] is False
+    assert tools["python"] is False
+    assert tools["exports"] is True
+    assert tools["document_create"] is True
+
+
+def test_work_creates_structured_word_document_without_login(client):
+    from io import BytesIO
+    from docx import Document
+
+    response = client.post(
+        "/api/work/tools/document",
+        json={
+            "filename": "rapport-test.docx",
+            "title": "Rapport de systématique",
+            "subtitle": "Famille des Pinaceae",
+            "author": "Test Work",
+            "institution": "Llink",
+            "blocks": [
+                {"type": "heading", "level": 1, "text": "Introduction"},
+                {"type": "paragraph", "text": "Les Pinaceae sont des conifères."},
+                {"type": "table", "rows": [["Genre", "Exemple"], ["Pinus", "Pin sylvestre"]]},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    document = Document(BytesIO(response.content))
+    assert "Rapport de systématique" in [paragraph.text for paragraph in document.paragraphs]
+    assert "Introduction" in [paragraph.text for paragraph in document.paragraphs]
+    assert len(document.tables) == 1
+
+
+def test_work_structured_word_rejects_remote_image_urls(client):
+    response = client.post(
+        "/api/work/tools/document",
+        json={
+            "filename": "rapport.docx",
+            "title": "Document",
+            "blocks": [
+                {"type": "image", "data_url": "https://example.com/image.png"}
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_work_pdf_export_is_available_without_login(client):
+    response = client.post(
+        "/api/work/exports/pdf",
+        json={"filename": "rapport.pdf", "content": "# Rapport\\n\\nTexte de test."},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
