@@ -77,7 +77,7 @@ return {label:String(step.label||"Étape").slice(0,220),status:["planned","in_pr
 const decisions=Array.isArray(value.decisions)?value.decisions.filter(x=>typeof x==="string").slice(0,5).map(x=>x.slice(0,240)):[];
 const limitations=Array.isArray(value.limitations)?value.limitations.filter(x=>typeof x==="string").slice(0,4).map(x=>x.slice(0,240)):[];
 const events=ans.reasoning?.events||[];
-ans.reasoning={summary:String(value.summary||"Démarche mise à jour.").slice(0,600),steps,decisions,limitations,events,status:ans.reasoning?.status||"in_progress"};
+ans.reasoning={summary:String(value.summary||"Démarche mise à jour.").slice(0,600),steps,decisions,limitations,events,status:ans.reasoning?.status||"in_progress",modelProvided:true};
 const visible=(String(source).slice(0,match.index)+String(source).slice(match.index+match[0].length)).trim();
 return {visible,found:true};
 }
@@ -260,7 +260,7 @@ S.messages.push(user);
 const ans={role:"assistant",text:"",id:"work-"+Date.now(),reasoning:{summary:"Je prépare le travail demandé et les étapes de vérification.",steps:[{label:"Comprendre la demande",status:"in_progress"},{label:"Réaliser le travail et vérifier le résultat",status:"planned"}],decisions:[],limitations:[],events:[],status:"in_progress",modelProvided:false}};S.messages.push(ans);renderMessages();
 S.busy=true;$("work-send").disabled=true;
 try{
-const payload={
+let payload={
 message:text,
 history:S.messages.slice(0,-2).slice(-20).map(m=>({role:m.role==="user"?"user":"assistant",text:m.text})),
 model:$("work-model").value||"gemini-1.5-flash",
