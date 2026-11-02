@@ -35,10 +35,79 @@ const m=document.getElementById("model-selector"),s=$("work-model");if(m&&s){s.i
 function renderToolStatus(){const el=$("work-tool-status");if(!el)return;const labels=[];if(S.tools.web_search)labels.push("Web");if(S.tools.python)labels.push("Python");if(S.tools.document_create)labels.push("Word structuré");if(S.tools.exports)labels.push("PDF · Excel");el.textContent=labels.length?labels.join(" · "):"Outils à configurer";el.title=labels.length?"Outils Work disponibles : "+labels.join(", "):"Les exports locaux sont disponibles ; connecte-toi pour les outils Web et Python.";}
 async function loadTools(){S.tools=Object.assign({web_search:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}renderToolStatus();}
 async function ensureChat(){if(S.chatId==null)S.chatId=await db.chats.add({title:"Espace Work",time:Date.now(),mode:"work",syncId:crypto.randomUUID().replace(/-/g,""),ownerUid:S.owner});}
-async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||""}));renderMessages();}
+async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null}));renderMessages();}
 function renderProjects(){const s=$("work-project"),v=S.project;s.innerHTML='<option value="all">Tous les fichiers</option>'+S.projects.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");s.value=S.projects.some(p=>String(p.id)===String(v))||v==="all"?v:"all";S.project=s.value;}
 function renderFiles(){const h=$("work-list"),q=($("work-search").value||"").toLowerCase(),a=S.files.filter(f=>(S.project==="all"||String(f.projectLocalId??f.projectId)===String(S.project))&&(!q||(f.name+" "+f.path).toLowerCase().includes(q)));if(!a.length){h.innerHTML='<div class="work-empty-files"><div class="work-empty-icon"><i data-lucide="folder-open"></i></div><b>Aucun fichier</b><p>Crée un fichier ou importe un document pour commencer.</p><button class="work-file-action mt-3" data-act="new-file">+ Créer un fichier</button></div>';}else{const g={};a.forEach(f=>{const k=f.folder||"Racine";(g[k] ||= []).push(f);});h.innerHTML=Object.entries(g).map(([k,items])=>'<div class="work-file-group">'+esc(k)+'</div>'+items.map(f=>'<button class="work-file-item '+(S.file?.id===f.id?"is-active":"")+'" data-act="open" data-id="'+f.id+'"><span class="work-file-icon"><i data-lucide="'+icon(f.name)+'"></i></span><span class="work-file-info"><span class="work-file-name">'+esc(f.name)+'</span><span class="work-file-meta">'+esc(f.isBinary?"Fichier local":(f.language||"texte"))+' · '+size(f.sizeBytes||0)+(f.pendingSync?" · En attente":"")+'</span></span></button>').join("")).join("");}if(window.lucide)lucide.createIcons();}
-function renderMessages(){const h=$("work-messages");if(!S.messages.length){h.innerHTML='<div class="work-welcome"><div class="work-welcome-mark"><i data-lucide="sparkles"></i></div><h2>Sur quoi travaillons-nous&nbsp;?</h2><p>Rédige, analyse, organise un projet ou travaille sur du code. Les changements restent dans l’éditeur jusqu’à ta validation.</p><div class="work-starter-grid"><button class="work-starter" data-act="starter" data-prompt="Aide-moi à rédiger un document professionnel sur : "><i data-lucide="file-text"></i><span>Rédiger un document</span></button><button class="work-starter" data-act="starter" data-prompt="Analyse le fichier ouvert : "><i data-lucide="chart-no-axes-combined"></i><span>Analyser un fichier</span></button><button class="work-starter" data-act="starter" data-prompt="Conçois une structure de projet logiciel pour : "><i data-lucide="code"></i><span>Créer un projet de code</span></button><button class="work-starter" data-act="starter" data-prompt="Prépare un plan de recherche en distinguant les faits et les sources à vérifier sur : "><i data-lucide="search"></i><span>Préparer une recherche</span></button></div></div>';}else{h.innerHTML=S.messages.map(m=>{const html=typeof parseMarkdown==="function"?parseMarkdown(m.text):esc(m.text).replace(/\n/g,"<br>");const has=m.role!=="user";return '<article class="work-message '+(m.role==="user"?"user":"assistant")+'" data-mid="'+esc(m.id)+'"><div class="work-message-role">'+(m.role==="user"?"TOI":"LLINK WORK")+'</div><div class="work-message-body">'+html+'</div>'+(has?'<div class="work-message-actions"><button class="work-message-action" data-act="apply" data-id="'+esc(m.id)+'">Appliquer la réponse à l’éditeur</button><button class="work-message-action" data-act="create-code" data-id="'+esc(m.id)+'">Créer un fichier depuis la réponse</button></div>':"")+'</article>';}).join("");}h.scrollTop=h.scrollHeight;if(window.lucide)lucide.createIcons();}
+function renderWorkReasoning(reasoning){
+if(!reasoning)return "";
+const steps=Array.isArray(reasoning.steps)?reasoning.steps.slice(0,10):[];
+const events=Array.isArray(reasoning.events)?reasoning.events.slice(0,12):[];
+const decisions=Array.isArray(reasoning.decisions)?reasoning.decisions.slice(0,5):[];
+const statusLabel={planned:"À faire",in_progress:"En cours",done:"Terminé",blocked:"Bloqué",failed:"Échec"};
+const state=reasoning.status==="failed"?"Interrompue":reasoning.status==="completed"?"Terminée":"En cours";
+const stepHtml=steps.length?'<ol class="work-reasoning-steps">'+steps.map(step=>{
+const item=typeof step==="string"?{label:step,status:"planned"}:step||{};
+const status=["planned","in_progress","done","blocked","failed"].includes(item.status)?item.status:"planned";
+return '<li class="work-reasoning-step is-'+status+'"><span class="work-reasoning-step-label">'+esc(String(item.label||"Étape").slice(0,220))+'</span><span class="work-reasoning-step-status">'+esc(statusLabel[status]||"À faire")+'</span></li>';
+}).join("")+'</ol>':"";
+const eventHtml=events.length?'<div class="work-reasoning-events"><div class="work-reasoning-subtitle">Actions et résultats confirmés</div>'+events.map(event=>'<div class="work-reasoning-event is-'+esc(event.status||"done")+'"><span class="work-reasoning-event-mark"></span><span><b>'+esc(String(event.label||"Action Work").slice(0,180))+'</b>'+(event.detail?'<small>'+esc(String(event.detail).slice(0,260))+'</small>':"")+'</span></div>').join("")+'</div>':"";
+const decisionHtml=decisions.length?'<div class="work-reasoning-decisions"><div class="work-reasoning-subtitle">Choix et justifications</div><ul>'+decisions.map(item=>'<li>'+esc(String(item).slice(0,240))+'</li>').join("")+'</ul></div>':"";
+const caveats=Array.isArray(reasoning.limitations)?reasoning.limitations.slice(0,4):[];
+const caveatHtml=caveats.length?'<div class="work-reasoning-caveats"><div class="work-reasoning-subtitle">Limites signalées</div><ul>'+caveats.map(item=>'<li>'+esc(String(item).slice(0,240))+'</li>').join("")+'</ul></div>':"";
+const summary=esc(String(reasoning.summary||"Démarche de travail en cours.").slice(0,600));
+return '<details class="work-reasoning" open><summary><span class="work-reasoning-summary-title">Démarche de Llink</span><span class="work-reasoning-summary-state">'+state+'</span></summary><div class="work-reasoning-content"><p class="work-reasoning-overview">'+summary+'</p>'+stepHtml+eventHtml+decisionHtml+caveatHtml+'</div></details>';
+}
+function updateWorkReasoning(source,ans){
+const pattern=/<llink_reasoning\\b[^>]*>([\\s\\S]*?)<\\/llink_reasoning>/i;
+const match=pattern.exec(String(source||""));
+if(!match){
+const opening=String(source||"").search(/<llink_reasoning\\b/i);
+return {visible:opening>=0?String(source).slice(0,opening).trim():String(source||""),found:false};
+}
+let raw=String(match[1]||"").trim().replace(/^\x60{3}(?:json)?\\s*/i,"").replace(/\\s*\x60{3}$/,"").trim();
+let value=null;
+try{value=JSON.parse(repairToolJsonControls(raw));}
+catch(e){return {visible:(String(source).slice(0,match.index)+String(source).slice(match.index+match[0].length)).trim(),found:true,invalid:true};}
+if(!value||typeof value!=="object"||Array.isArray(value))return {visible:(String(source).slice(0,match.index)+String(source).slice(match.index+match[0].length)).trim(),found:true,invalid:true};
+const steps=Array.isArray(value.steps)?value.steps.slice(0,10).map(step=>{
+if(typeof step==="string")return {label:step.slice(0,220),status:"planned"};
+if(!step||typeof step!=="object")return null;
+return {label:String(step.label||"Étape").slice(0,220),status:["planned","in_progress","done","blocked","failed"].includes(step.status)?step.status:"planned"};
+}).filter(Boolean):[];
+const decisions=Array.isArray(value.decisions)?value.decisions.filter(x=>typeof x==="string").slice(0,5).map(x=>x.slice(0,240)):[];
+const limitations=Array.isArray(value.limitations)?value.limitations.filter(x=>typeof x==="string").slice(0,4).map(x=>x.slice(0,240)):[];
+const events=ans.reasoning?.events||[];
+ans.reasoning={summary:String(value.summary||"Démarche mise à jour.").slice(0,600),steps,decisions,limitations,events,status:ans.reasoning?.status||"in_progress"};
+const visible=(String(source).slice(0,match.index)+String(source).slice(match.index+match[0].length)).trim();
+return {visible,found:true};
+}
+function renderMessages(){
+const h=$("work-messages");
+if(!S.messages.length){
+h.innerHTML='<div class="work-welcome"><div class="work-welcome-mark"><i data-lucide="sparkles"></i></div><h2>Sur quoi travaillons-nous&nbsp;?</h2><p>Rédige, analyse, organise un projet ou travaille sur du code. Les changements restent dans l’éditeur jusqu’à ta validation.</p><div class="work-starter-grid"><button class="work-starter" data-act="starter" data-prompt="Aide-moi à rédiger un document professionnel sur : "><i data-lucide="file-text"></i><span>Rédiger un document</span></button><button class="work-starter" data-act="starter" data-prompt="Analyse le fichier ouvert : "><i data-lucide="chart-no-axes-combined"></i><span>Analyser un fichier</span></button><button class="work-starter" data-act="starter" data-prompt="Conçois une structure de projet logiciel pour : "><i data-lucide="code"></i><span>Créer un projet de code</span></button><button class="work-starter" data-act="starter" data-prompt="Prépare un plan de recherche en distinguant les faits et les sources à vérifier sur : "><i data-lucide="search"></i><span>Préparer une recherche</span></button></div></div>';
+}else{
+h.innerHTML=S.messages.map(m=>{
+const html=typeof parseMarkdown==="function"?parseMarkdown(m.text):esc(m.text).replace(/\\n/g,"<br>");
+const has=m.role!=="user";
+return '<article class="work-message '+(m.role==="user"?"user":"assistant")+'" data-mid="'+esc(m.id)+'"><div class="work-message-role">'+(m.role==="user"?"TOI":"LLINK WORK")+'</div>'+(has?'<div class="work-reasoning-slot">'+renderWorkReasoning(m.reasoning)+'</div>':"")+'<div class="work-message-body">'+html+'</div>'+(has?'<div class="work-message-actions"><button class="work-message-action" data-act="apply" data-id="'+esc(m.id)+'">Appliquer la réponse à l’éditeur</button><button class="work-message-action" data-act="create-code" data-id="'+esc(m.id)+'">Créer un fichier depuis la réponse</button></div>':"")+'</article>';
+}).join("");
+}
+h.scrollTop=h.scrollHeight;
+if(window.lucide)lucide.createIcons();
+}
+function updateReasoningSlot(ans){
+const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-reasoning-slot');
+if(slot)slot.innerHTML=renderWorkReasoning(ans.reasoning);
+}
+function recordWorkEvent(ans,name,status,detail){
+if(!ans.reasoning)ans.reasoning={summary:"J'exécute les étapes nécessaires à la tâche.",steps:[],decisions:[],limitations:[],events:[],status:"in_progress"};
+if(!Array.isArray(ans.reasoning.events))ans.reasoning.events=[];
+const labels={web_search:"Recherche Web",python:"Exécution Python isolée",create_document:"Création du document Word",export_file:"Export du fichier"};
+ans.reasoning.events.push({label:labels[name]||("Outil "+String(name||"Work")),status:status==="running"?"in_progress":status,detail:String(detail||"").slice(0,260)});
+ans.reasoning.events=ans.reasoning.events.slice(-12);
+updateReasoningSlot(ans);
+}
+
 function meta(){const f=S.file;if(!f){$("work-file-name").textContent="Aucun fichier ouvert";$("work-file-status").textContent="Crée ou ouvre un fichier";$("work-count").textContent="0 caractères";$("work-version").textContent="Local";return;} $("work-file-name").textContent=f.name;$("work-file-status").textContent=f.isBinary?"Fichier binaire — stockage local":(f.dirty?"Modifications non enregistrées":"Toutes les modifications sont enregistrées");$("work-lang").textContent=f.isBinary?(f.mimeType||"Fichier binaire"):(f.language||"Texte");$("work-count").textContent=f.isBinary?size(f.sizeBytes||f.blob?.size||0):(f.content||"").length.toLocaleString("fr-FR")+" caractères";$("work-version").textContent=f.isBinary?"Local":("Version "+(f.version||1));$("work-editor-icon").innerHTML='<i data-lucide="'+icon(f.name)+'"></i>';if(window.lucide)lucide.createIcons();}
 function setTab(t){S.tab=t;S.root.querySelectorAll("[data-act='tab']").forEach(b=>b.classList.toggle("active",b.dataset.tab===t));$("work-editor-host").style.display=t==="edit"?"flex":"none";$("work-preview").classList.toggle("is-visible",t==="preview");if(t==="preview")preview();}
 function preview(){const f=S.file,p=$("work-preview");if(!f)return;const x=ext(f.name),c=f.content||"";if(["md","markdown"].includes(x)&&window.marked&&window.DOMPurify){const h=window.marked.parse(c,{gfm:true,breaks:true});p.innerHTML='<div class="work-preview-markdown">'+window.DOMPurify.sanitize(h,{USE_PROFILES:{html:true},FORBID_TAGS:["script","iframe","object","embed","form","style"],FORBID_ATTR:["style","onclick","onerror"]})+'</div>';}else if(["html","htm"].includes(x)&&window.DOMPurify){p.innerHTML='<iframe class="work-preview-html" sandbox="" title="Aperçu HTML"></iframe>';p.querySelector("iframe").srcdoc=window.DOMPurify.sanitize(c,{USE_PROFILES:{html:true},FORBID_TAGS:["script","iframe","object","embed","form","style"],FORBID_ATTR:["style","onclick","onerror"]});}else p.innerHTML='<pre class="work-preview-markdown" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(c)+'</pre>';}
@@ -146,7 +215,33 @@ if(invocation.name==="create_document"){if(!S.tools.document_create)throw new Er
 if(invocation.name==="export_file"){const format=String(args.format||"").toLowerCase();if(!["pdf","xlsx"].includes(format))throw new Error("Le format d'exportation doit être pdf ou xlsx.");if(!S.tools.exports)throw new Error("Le moteur d'exportation est indisponible.");const name=uniqueBinaryName(args.filename||("document."+format));return await fetchWorkBinary("/api/work/exports/"+format,{filename:name,content:String(args.content||"")},name);}
 throw new Error("Outil Work inconnu : "+String(invocation.name||""));
 }
-async function streamWorkResponse(payload,uploads,ans){let url="/api/chat",body,hd;if(uploads?.length){url="/api/chat/attachments";body=new FormData();Object.entries(payload).forEach(([k,v])=>body.append(k,k==="history"?JSON.stringify(v):String(v??"")));uploads.forEach(f=>body.append("files",f,f.name));hd=await headers(false);}else{body=JSON.stringify(payload);hd=await headers(true);}const r=await fetch(SERVER+url,{method:"POST",headers:hd,body});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(typeof d.detail==="string"?d.detail:(d.detail?.message||"HTTP "+r.status));}const reader=r.body.getReader(),decoder=new TextDecoder(),host=$("work-messages");let full="";while(true){const {value,done}=await reader.read();if(done)break;full+=decoder.decode(value,{stream:true});const marker=full.indexOf("<llink_tool>");ans.text=marker>=0?full.slice(0,marker):full.slice(0,Math.max(0,full.length-16));const el=host.querySelector('[data-mid="'+ans.id+'"] .work-message-body');if(el)el.innerHTML=typeof parseMarkdown==="function"?parseMarkdown(ans.text):esc(ans.text).replace(/\n/g,"<br>");host.scrollTop=host.scrollHeight;}full+=decoder.decode();return full;}
+async function streamWorkResponse(payload,uploads,ans){
+let url="/api/chat",body,hd;
+if(uploads?.length){url="/api/chat/attachments";body=new FormData();Object.entries(payload).forEach(([k,v])=>body.append(k,k==="history"?JSON.stringify(v):String(v??"")));uploads.forEach(f=>body.append("files",f,f.name));hd=await headers(false);}
+else{body=JSON.stringify(payload);hd=await headers(true);}
+const r=await fetch(SERVER+url,{method:"POST",headers:hd,body});
+if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(typeof d.detail==="string"?d.detail:(d.detail?.message||"HTTP "+r.status));}
+const reader=r.body.getReader(),decoder=new TextDecoder(),host=$("work-messages");
+let full="";
+while(true){
+const {value,done}=await reader.read();if(done)break;
+full+=decoder.decode(value,{stream:true});
+const marker=full.indexOf("<llink_tool>");
+let visible=marker>=0?full.slice(0,marker):full.slice(0,Math.max(0,full.length-16));
+const reasoning=updateWorkReasoning(visible,ans);
+visible=reasoning.visible;
+ans.text=visible;
+const article=host.querySelector('[data-mid="'+ans.id+'"]');
+const slot=article?.querySelector(".work-reasoning-slot");
+if(slot)slot.innerHTML=renderWorkReasoning(ans.reasoning);
+const el=article?.querySelector(".work-message-body");
+if(el)el.innerHTML=typeof parseMarkdown==="function"?parseMarkdown(ans.text):esc(ans.text).replace(/\\n/g,"<br>");
+host.scrollTop=host.scrollHeight;
+}
+full+=decoder.decode();
+return full;
+}
+
 async function sendWork(){
 if(S.busy)return;
 const input=$("work-prompt"),typed=input.value.trim(),uploads=S.uploads.slice();
