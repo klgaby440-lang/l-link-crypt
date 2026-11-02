@@ -206,3 +206,65 @@ test("Work répare une commande JSON et crée automatiquement un document Word",
   expect(saved?.isBinary).toBe(true);
   expect(saved.size).toBeGreaterThan(0);
 });
+
+test("Work affiche et conserve la démarche structurée du modèle", async ({ page }) => {
+  await page.route(API + "/api/work/tools", async route => {
+    if (route.request().method() === "OPTIONS") {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
+    return route.fulfill({
+      status: 200,
+      headers: { ...CORS_HEADERS, "content-type": "application/json" },
+      body: JSON.stringify({
+        tools: {
+          web_search: false,
+          python: false,
+          exports: true,
+          document_create: true,
+          file_attachments: true
+        }
+      })
+    });
+  });
+
+  const reasoning = {
+    summary: "Je vérifie la demande, organise les étapes et contrôle le résultat.",
+    steps: [
+      { label: "Analyser la demande", status: "done" },
+      { label: "Vérifier les informations", status: "in_progress" },
+      { label: "Présenter le résultat", status: "planned" }
+    ],
+    decisions: ["Je sépare les faits vérifiés des hypothèses."],
+    limitations: ["Aucune source externe n'a été consultée pour ce test."]
+  };
+  const openTag = String.fromCharCode(60) + "llink_reasoning" + String.fromCharCode(62);
+  const closeTag = String.fromCharCode(60) + "/llink_reasoning" + String.fromCharCode(62);
+
+  await mockChatResponse(
+    page,
+    openTag + JSON.stringify(reasoning) + closeTag
+      + "\nVoici le résultat de démonstration."
+  );
+
+  await openWork(page);
+  await page.locator("#work-prompt").fill("Explique ta démarche avant de répondre.");
+  await page.locator("#work-send").click();
+
+  const message = page.locator(".work-message.assistant").last();
+  const panel = message.locator(".work-reasoning");
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText("Démarche de Llink");
+  await expect(panel).toContainText("Je vérifie la demande");
+  await expect(panel).toContainText("Analyser la demande");
+  await expect(panel).toContainText("Terminé");
+  await expect(panel).toContainText("Je sépare les faits vérifiés");
+  await expect(message.locator(".work-message-body")).toContainText("résultat de démonstration");
+  await expect(message.locator(".work-message-body")).not.toContainText("llink_reasoning");
+
+  const saved = await page.evaluate(async () => {
+    const messages = await db.msgs.where("chatId").equals(window.__workTestChatId || 1).toArray();
+    return messages.find(item => item.role === "bot" && item.reasoning)?.reasoning ?? null;
+  });
+  expect(saved?.summary).toContain("Je vérifie la demande");
+  expect(saved?.steps).toHaveLength(3);
+});
