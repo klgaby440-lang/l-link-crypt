@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import Response
 
 from llink_api.database import get_db
-from llink_api.security import require_authenticated_user
+from llink_api.security import get_optional_user, require_authenticated_user\nfrom llink_api.services.document_engine import build_structured_docx
 from llink_api.services.security_limits import enforce_endpoint_quota
 
 logger = logging.getLogger(__name__)
@@ -346,12 +346,47 @@ async def run_python(
                 logger.warning("Impossible de fermer immédiatement le bac à sable E2B.", exc_info=True)
 
 
+@router.post("/api/work/tools/document")
+async def create_work_document(
+    payload: DocumentCreateRequest,
+    request: Request,
+    user: dict = Depends(get_optional_user),
+    db: Any | None = Depends(get_db),
+):
+    """Crée un vrai document Word structuré et le retourne comme pièce jointe."""
+    await _quota(request, user, db, "work_write")
+    try:
+        document_bytes = await asyncio.to_thread(
+            build_structured_docx, payload.model_dump()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("La génération du document Word a échoué.")
+        raise HTTPException(
+            status_code=500,
+            detail="Le moteur documentaire n'a pas pu construire ce fichier Word.",
+        ) from exc
+
+    filename = safe_output_filename(payload.filename, "docx")
+    encoded = quote(filename)
+    return Response(
+        content=document_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{filename.encode('ascii', 'ignore').decode('ascii')}\"; filename*=UTF-8''{encoded}",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post("/api/work/exports/{file_format}")
 async def export_work_file(
     file_format: str,
     payload: ExportRequest,
     request: Request,
-    user: dict = Depends(require_authenticated_user),
+    user: dict = Depends(get_optional_user),
     db: Any | None = Depends(get_db),
 ):
     await _quota(request, user, db, "work_write")
