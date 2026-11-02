@@ -45,7 +45,7 @@ DEFAULT_POLICIES: dict[tuple[str, bool], QuotaPolicy] = {
     ("payment_verify", True): QuotaPolicy(3, 10),
     ("usage_read", True): QuotaPolicy(30, 200),
     ("work_read", True): QuotaPolicy(60, 2000),
-    ("work_write", True): QuotaPolicy(20, 200),
+    ("work_write", False): QuotaPolicy(4, 20),\n    ("work_write", True): QuotaPolicy(20, 200),
     ("work_delete", True): QuotaPolicy(10, 50),
     ("work_tool_read", True): QuotaPolicy(10, 100),
     ("work_tool_run", True): QuotaPolicy(4, 25),
