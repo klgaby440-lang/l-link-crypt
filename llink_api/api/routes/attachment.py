@@ -99,12 +99,19 @@ async def chat_with_attachments(
         )
 
     raw_message = str(form.get("message") or "").strip()
-    model_alias = str(form.get("model") or "gemini-1.5-flash").strip()
-    level_value = str(form.get("level") or "").strip().lower() or None
-    effort = str(form.get("effort") or "normal").strip().lower()
-    mode = str(form.get("mode") or "chat").strip()
+    if len(raw_message) > settings.max_message_chars:
+        raw_message = raw_message[:settings.max_message_chars]
+        logger.info("Message Work avec pièces jointes tronqué à la limite du schéma.")
+    model_alias = str(form.get("model") or "gemini-1.5-flash").strip()[:100]
+    requested_level = str(form.get("level") or "").strip().lower()
+    level_value = requested_level if requested_level in {"velora", "satori", "noetra", "auren", "omnis"} else None
+    requested_effort = str(form.get("effort") or "normal").strip().lower()
+    effort = requested_effort if requested_effort in {"normal", "extra", "ultime"} else "normal"
+    mode = str(form.get("mode") or "chat").strip()[:32]
     preferences = str(form.get("preferences") or "").strip() or None
-    source = str(form.get("source") or "llink_web").strip()
+    if preferences and len(preferences) > settings.max_preferences_chars:
+        preferences = preferences[:settings.max_preferences_chars]
+    source = str(form.get("source") or "llink_web").strip()[:100]
     source_language = str(form.get("source_language") or "").strip() or None
     target_language = str(form.get("target_language") or "").strip() or None
     consent = _form_bool(form.get("data_collection_consent"), False)
@@ -114,6 +121,21 @@ async def chat_with_attachments(
         history = json.loads(str(history_value)) if history_value else []
         if not isinstance(history, list):
             raise ValueError("L'historique doit être une liste.")
+        normalized_history = []
+        remaining_history_chars = 48_000
+        for item in reversed(history[-24:]):
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role")
+            if role not in {"user", "assistant", "bot"}:
+                continue
+            turn_text = str(item.get("text") or "").strip()
+            if not turn_text or remaining_history_chars <= 0:
+                continue
+            turn_text = turn_text[:min(8_000, remaining_history_chars)]
+            normalized_history.append({"role": role, "text": turn_text})
+            remaining_history_chars -= len(turn_text)
+        history = list(reversed(normalized_history))
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=422, detail="Historique de conversation invalide.") from exc
 
@@ -132,7 +154,18 @@ async def chat_with_attachments(
             data_collection_consent=consent,
         )
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail="Les paramètres du message sont invalides.") from exc
+        field_errors = [
+            {"field": ".".join(str(part) for part in error.get("loc", ())), "reason": error.get("msg", "Valeur invalide")}
+            for error in exc.errors()
+        ]
+        logger.warning("Paramètres du chat avec pièces jointes invalides : %s", field_errors)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Les paramètres du message sont invalides.",
+                "fields": field_errors,
+            },
+        ) from exc
 
     try:
         selected_model = resolve_model(payload.level, payload.model)
