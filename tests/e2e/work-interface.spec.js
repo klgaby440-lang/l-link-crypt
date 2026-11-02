@@ -127,3 +127,82 @@ test("Work importe un fichier texte dans l'espace local", async ({ page }) => {
   });
   expect(importedText).toContain("Fichier importé par le test");
 });
+
+test("Work répare une commande JSON et crée automatiquement un document Word", async ({ page }) => {
+  const headers = { ...CORS_HEADERS, "content-type": "application/json" };
+  const openTag = String.fromCharCode(60) + "llink_tool" + String.fromCharCode(62);
+  const closeTag = String.fromCharCode(60) + "/llink_tool" + String.fromCharCode(62);
+  let chatCalls = 0;
+
+  await page.route(API + "/api/work/tools", async route => {
+    if (route.request().method() === "OPTIONS") {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
+    return route.fulfill({
+      status: 200,
+      headers,
+      body: JSON.stringify({ tools: {
+        web_search: false, python: false, exports: true,
+        document_create: true, file_attachments: true
+      }})
+    });
+  });
+
+  await page.route(API + "/api/work/tools/document", async route => {
+    if (route.request().method() === "OPTIONS") {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
+    const payload = route.request().postDataJSON();
+    expect(payload.filename).toBe("rapport-docx-ci.docx");
+    expect(payload.blocks[0].text).toBe("Première ligne\nDeuxième ligne");
+    return route.fulfill({
+      status: 200,
+      headers: {
+        ...CORS_HEADERS,
+        "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "content-disposition": 'attachment; filename="rapport-docx-ci.docx"'
+      },
+      body: Buffer.from("PK\u0003\u0004Llink Work DOCX test")
+    });
+  });
+
+  await page.route(API + "/api/chat", async route => {
+    if (route.request().method() === "OPTIONS") {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
+    chatCalls += 1;
+    const invalidJson = '{"name":"create_document","arguments":{"filename":"rapport-docx-ci.docx","title":"Rapport CI","blocks":[{"type":"paragraph","text":"Première ligne'
+      + String.fromCharCode(10) + 'Deuxième ligne"}]}}';
+    const responseText = chatCalls === 1
+      ? openTag + invalidJson + closeTag
+      : "Le document Word a été créé, enregistré localement et téléchargé.";
+    return route.fulfill({
+      status: 200,
+      headers: {
+        ...CORS_HEADERS,
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache"
+      },
+      body: responseText
+    });
+  });
+
+  await openWork(page);
+  await page.locator("#work-prompt").fill("Crée un document Word et remets-moi le fichier.");
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("#work-send").click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toBe("rapport-docx-ci.docx");
+  await expect(page.locator("#work-file-name")).toHaveText("rapport-docx-ci.docx");
+  await expect(page.locator(".work-message.assistant").last()).toContainText("créé");
+  expect(chatCalls).toBe(2);
+
+  const saved = await page.evaluate(async () => {
+    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
+    const file = files.find(item => item.name === "rapport-docx-ci.docx");
+    return file ? { isBinary: file.isBinary, size: file.blob?.size ?? 0 } : null;
+  });
+  expect(saved?.isBinary).toBe(true);
+  expect(saved.size).toBeGreaterThan(0);
+});
