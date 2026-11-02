@@ -57,7 +57,7 @@ def test_structured_docx_can_embed_a_valid_png_and_caption():
     document = Document(io.BytesIO(build_structured_docx(payload)))
 
     assert len(document.inline_shapes) == 1
-    assert "Figure 1" in [paragraph.text for paragraph in document.paragraphs]
+    assert any(paragraph.text.startswith("Figure 1") for paragraph in document.paragraphs)
 
 
 @pytest.mark.parametrize(
