@@ -47,8 +47,10 @@ def test_work_xlsx_export_accepts_json_rows_and_neutralizes_formulas():
     assert sheet["A3"].data_type == "s"
 
 
-def test_work_tool_routes_require_authentication(client):
-    assert client.get("/api/work/tools").status_code == 401
+def test_work_registry_is_public_but_remote_tools_require_authentication(client):
+    registry = client.get("/api/work/tools")
+    assert registry.status_code == 200
+    assert registry.json()["tools"]["document_create"] is True
     assert client.post(
         "/api/work/tools/search",
         json={"query": "actualité scientifique"},
@@ -57,7 +59,9 @@ def test_work_tool_routes_require_authentication(client):
         "/api/work/tools/python",
         json={"code": "print(1 + 1)"},
     ).status_code == 401
-    assert client.post(
+    exported = client.post(
         "/api/work/exports/pdf",
         json={"filename": "rapport.pdf", "content": "Bonjour"},
-    ).status_code == 401
+    )
+    assert exported.status_code == 200
+    assert exported.content.startswith(b"%PDF")
