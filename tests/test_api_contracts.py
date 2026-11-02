@@ -208,3 +208,14 @@ def test_work_pdf_export_is_available_without_login(client):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
+
+
+def test_work_system_instruction_advertises_document_tools():
+    from llink_api.api.routes.chat import build_system_instruction
+
+    instruction = build_system_instruction("work", "create_document DOCX=oui; exports PDF/XLSX=oui")
+
+    assert "create_document" in instruction
+    assert "export_file" in instruction
+    assert "table" in instruction
+    assert "data_url" in instruction
