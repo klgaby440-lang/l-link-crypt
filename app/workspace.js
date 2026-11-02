@@ -105,7 +105,7 @@ if(!Array.isArray(ans.reasoning.events))ans.reasoning.events=[];
 const labels={web_search:"Recherche Web",python:"Exécution Python isolée",create_document:"Création du document Word",export_file:"Export du fichier"};
 const label=labels[name]||("Outil "+String(name||"Work"));
 const normalizedStatus=status==="running"?"in_progress":status;
-const existing=ans.reasoning.events.findLast?.(event=>event.label===label&&event.status==="in_progress");
+const existing=ans.reasoning.events.slice().reverse().find(event=>event.label===label&&event.status==="in_progress");
 if(existing){existing.status=normalizedStatus;existing.detail=String(detail||"").slice(0,260);}
 else ans.reasoning.events.push({label,status:normalizedStatus,detail:String(detail||"").slice(0,260)});
 ans.reasoning.events=ans.reasoning.events.slice(-12);
