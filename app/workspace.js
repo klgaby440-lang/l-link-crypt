@@ -249,11 +249,19 @@ return full;
 async function sendWork(){
 if(S.busy)return;
 const input=$("work-prompt"),typed=input.value.trim(),uploads=S.uploads.slice();
-if(S.file?.isBinary&&S.file.blob instanceof Blob&&!uploads.some(f=>f.name===S.file.name)){if(uploads.length>=5)return toast("Retire une pièce jointe pour ajouter le fichier ouvert.");uploads.push(new File([S.file.blob],S.file.name,{type:S.file.mimeType||S.file.blob.type||"application/octet-stream"}));}
+if(S.file&&!uploads.some(f=>f.name===S.file.name)){
+if(S.file.isBinary&&S.file.blob instanceof Blob){
+if(uploads.length>=5)return toast("Retire une pièce jointe pour ajouter le fichier ouvert.");
+uploads.push(new File([S.file.blob],S.file.name,{type:S.file.mimeType||S.file.blob.type||"application/octet-stream"}));
+}else if(typeof S.file.content==="string"){
+if(uploads.length>=5)return toast("Retire une pièce jointe pour ajouter le fichier ouvert.");
+uploads.push(new File([S.file.content],S.file.name,{type:S.file.mimeType||"text/plain"}));
+}
+}
 if(uploads.reduce((n,f)=>n+f.size,0)>25e6)return toast("La taille totale des pièces jointes doit rester sous 25 Mo.");
 if(!typed&&!uploads.length)return;
 S.uploads=[];renderUploads();input.value="";await ensureChat();
-const fence=String.fromCharCode(96).repeat(3),ctx=S.file?(S.file.isBinary?"\n\nFICHIER OUVERT ("+S.file.path+") : le fichier binaire a été ajouté aux pièces jointes de ce message.":"\n\nFICHIER OUVERT ("+S.file.path+") :\n"+fence+(S.file.language||"")+"\n"+value()+"\n"+fence+"\nSi tu proposes une modification, retourne le fichier complet dans un seul bloc de code. Ne prétends pas l’avoir enregistré."):"";
+const ctx=S.file?"\n\nFICHIER OUVERT ("+S.file.path+") : le fichier a été ajouté aux pièces jointes. Analyse son contenu si cela aide à répondre. Ne prétends pas l’avoir enregistré.":"";
 const text=(typed||"Analyse les fichiers joints.")+ctx,user={role:"user",text};
 user.id=await db.msgs.add({chatId:S.chatId,role:"user",text,attachments:uploads.map(f=>({name:f.name,size:f.size,type:f.type}))});
 S.messages.push(user);
@@ -262,12 +270,12 @@ S.busy=true;$("work-send").disabled=true;
 try{
 let payload={
 message:text,
-history:S.messages.slice(0,-2).slice(-20).map(m=>({role:m.role==="user"?"user":"assistant",text:m.text})),
+history:S.messages.slice(0,-2).slice(-12).map(m=>({role:m.role==="user"?"user":"assistant",text:String(m.text||"").slice(0,8000)})).filter(m=>m.text.trim().length>0),
 model:$("work-model").value||"gemini-1.5-flash",
 level:window.llThink?.level?window.llThink.level():"velora",
 effort:window.llThink?.effort?window.llThink.effort():"normal",
 mode:"work",source:"llink_work",
-preferences:"Tu es l'assistant de l'espace Work de Llink. Aide à rédiger, analyser, organiser des projets et modifier du code. Pour une demande de fichier final, utilise les outils de création/exportation disponibles au lieu de laisser seulement du texte. Pour chaque réponse Work, commence par un bloc <llink_reasoning> contenant un JSON strict avec summary (résumé bref de la démarche), steps (1 à 8 objets label/status: planned, in_progress, done ou blocked), decisions (choix importants et justification courte) et limitations (limites connues). Mets à jour les étapes après chaque outil. Explique les grandes étapes, critères et résultats utiles, sans exposer de monologue interne privé. N'invente jamais une action ou un résultat. Ne prétends pas qu'un fichier est enregistré ou qu'un outil a été exécuté sans preuve. Les changements de code restent soumis à validation. Outils réellement activés : web_search=Outils réellement activés : web_search="+(S.tools.web_search?"oui":"non")+", python isolé="+(S.tools.python?"oui":"non")+", create_document DOCX="+(S.tools.document_create?"oui":"non")+", exports PDF/XLSX="+(S.tools.exports?"oui":"non")+". Utilise le protocole d'outil intégré uniquement lorsque nécessaire."
+preferences:"Tu es l'assistant de l'espace Work de Llink. Aide à rédiger, analyser, organiser des projets et modifier du code. Pour une demande de fichier final, utilise les outils de création/exportation disponibles au lieu de laisser seulement du texte. Pour chaque réponse Work, commence par un bloc <llink_reasoning> contenant un JSON strict avec summary (résumé bref de la démarche), steps (1 à 8 objets label/status: planned, in_progress, done ou blocked), decisions (choix importants et justification courte) et limitations (limites connues). Mets à jour les étapes après chaque outil. Explique les grandes étapes, critères et résultats utiles, sans exposer de monologue interne privé. N'invente jamais une action ou un résultat. Ne prétends pas qu'un fichier est enregistré ou qu'un outil a été exécuté sans preuve. Les changements de code restent soumis à validation. Outils réellement activés : web_search="+(S.tools.web_search?"oui":"non")+", python isolé="+(S.tools.python?"oui":"non")+", create_document DOCX="+(S.tools.document_create?"oui":"non")+", exports PDF/XLSX="+(S.tools.exports?"oui":"non")+". Utilise le protocole d'outil intégré uniquement lorsque nécessaire."
 };
 let full=await streamWorkResponse(payload,uploads,ans);
 const executedCalls=new Set();
