@@ -67,22 +67,73 @@ async function renameProject(){const p=S.projects.find(x=>String(x.id)===String(
 async function newProject(){const n=await askInput("Créer un projet","Un projet regroupe tes fichiers et ton travail.","Nom du projet","","Ex. Site web, Rapport annuel","Créer le projet");if(!n?.trim())return;const p={cloudId:null,ownerUid:S.owner,name:n.trim(),description:"",updatedAt:new Date().toISOString(),pendingSync:true};p.id=await db.workProjects.add(p);S.projects.unshift(p);if(connected()&&navigator.onLine){try{const d=await api("/api/work/projects",{method:"POST",body:JSON.stringify({name:p.name,description:""})});p.cloudId=d.id;p.pendingSync=false;await db.workProjects.put(p);}catch(e){toast("Projet créé localement; synchronisation en attente.");}}S.project=String(p.id);renderProjects();renderFiles();}
 function codeFrom(mid){const m=S.messages.find(x=>String(x.id)===String(mid));const fence=String.fromCharCode(96).repeat(3),re=new RegExp(fence+"(?:[a-zA-Z0-9_+-]+)?\\s*\\n([\\s\\S]*?)"+fence),x=re.exec(m?.text||"");return x?x[1].replace(/\n$/,""):null;}
 async function applyCode(mid,create){const message=S.messages.find(x=>String(x.id)===String(mid));if(!message)return;const c=codeFrom(mid)??message.text??"";if(create||!S.file){let n=await askInput("Créer un fichier depuis la réponse","Le fichier sera ajouté à ton espace de travail. Pour PDF, Word ou Excel, indique l’extension correspondante.","Nom du fichier","document.md","Ex. rapport.pdf, notes.md, tableau.xlsx","Créer le fichier");if(!n)return;n=n.trim();if(!/\.[A-Za-z0-9]{1,8}$/.test(n))n+=".md";const format=ext(n);if(["pdf","docx","xlsx"].includes(format)){const response=await fetch(SERVER+"/api/work/exports/"+format,{method:"POST",headers:await headers(true),body:JSON.stringify({filename:n,content:c})});if(!response.ok){const d=await response.json().catch(()=>({}));throw new Error(d.detail||"La génération du fichier a échoué.");}const blob=await response.blob();await createBinaryFile(n,blob,response.headers.get("content-type")||blob.type);await download();toast("Fichier "+n+" créé et téléchargé.");}else{await createFile(n,c);toast("Fichier ajouté à l’espace de travail.");}}else{setValue(c);setTab("edit");toast("Réponse appliquée à l’éditeur. Clique sur Enregistrer pour la conserver.");}}
+function repairToolJsonControls(source){
+let out="",inString=false,escaped=false;
+for(let i=0;i<source.length;i++){
+const ch=source[i],code=source.charCodeAt(i);
+if(inString){
+if(escaped){out+=ch;escaped=false;continue;}
+if(ch==="\\"){out+=ch;escaped=true;continue;}
+if(ch==='"'){out+=ch;inString=false;continue;}
+if(code===10){out+="\\n";continue;}
+if(code===13){out+="\\r";continue;}
+if(code===9){out+="\\t";continue;}
+if(code<32){out+=" ";continue;}
+out+=ch;continue;
+}
+if(ch==='"')inString=true;
+out+=ch;
+}
+return out;
+}
 function extractToolRequest(text){
-const match=/<llink_tool>([\s\S]*?)<\/llink_tool>/i.exec(String(text||""));
+const source=String(text||"");
+const match=/<llink_tool\b[^>]*>([\s\S]*?)<\/llink_tool>/i.exec(source);
 if(!match)return null;
-const raw=match[1],start=raw.indexOf("{");
-if(start<0)return {call:null,before:String(text||"").slice(0,match.index).trim(),invalid:true};
+let raw=String(match[1]||"").trim();
+raw=raw.replace(/^\x60{3}(?:json)?\s*/i,"").replace(/\s*\x60{3}$/,"").trim();
+raw=raw.replace(/^json\s*/i,"").trim();
+const start=raw.indexOf("{");
+const base={before:source.slice(0,match.index).trim(),raw:raw.slice(0,3000)};
+if(start<0)return {...base,call:null,invalid:true,error:"Aucun objet JSON trouvé dans la balise llink_tool."};
 let depth=0,inString=false,escaped=false,end=-1;
 for(let i=start;i<raw.length;i++){
 const ch=raw[i];
-if(inString){if(escaped)escaped=false;else if(ch==="\\")escaped=true;else if(ch==='"')inString=false;continue;}
+if(inString){
+if(escaped)escaped=false;
+else if(ch==="\\")escaped=true;
+else if(ch==='"')inString=false;
+continue;
+}
 if(ch==='"'){inString=true;continue;}
 if(ch==="{")depth++;
 else if(ch==="}"){depth--;if(depth===0){end=i;break;}}
 }
-if(end<0)return {call:null,before:String(text||"").slice(0,match.index).trim(),invalid:true};
-try{return {call:JSON.parse(raw.slice(start,end+1)),before:String(text||"").slice(0,match.index).trim(),after:raw.slice(end+1).trim()};}
-catch(e){return {call:null,before:String(text||"").slice(0,match.index).trim(),invalid:true};}
+if(end<0)return {...base,call:null,invalid:true,error:"L'objet JSON de l'outil est incomplet : accolades ou guillemets non fermés."};
+const jsonSource=repairToolJsonControls(raw.slice(start,end+1));
+let parsed;
+try{parsed=JSON.parse(jsonSource);}
+catch(firstError){
+const withoutTrailingCommas=jsonSource.replace(/,\s*([}\]])/g,"$1");
+try{parsed=JSON.parse(withoutTrailingCommas);}
+catch(secondError){
+return {...base,call:null,invalid:true,error:"JSON invalide : "+String(secondError.message||firstError.message).slice(0,220)};
+}
+}
+if(parsed&&typeof parsed==="object"&&parsed.tool_call&&typeof parsed.tool_call==="object")parsed=parsed.tool_call;
+if(parsed&&typeof parsed==="object"&&parsed.function&&typeof parsed.function==="object"&&!parsed.name)parsed={name:parsed.function.name,arguments:parsed.function.arguments};
+if(parsed&&typeof parsed.arguments==="string"){
+try{parsed.arguments=JSON.parse(repairToolJsonControls(parsed.arguments));}
+catch(e){return {...base,call:null,invalid:true,error:"Le champ arguments contient un JSON invalide : "+String(e.message).slice(0,180)};}
+}
+if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)||typeof parsed.name!=="string"||!parsed.name.trim()){
+return {...base,call:null,invalid:true,error:"La commande doit contenir un nom d'outil dans le champ name."};
+}
+if(parsed.arguments==null)parsed.arguments={};
+if(typeof parsed.arguments!=="object"||Array.isArray(parsed.arguments)){
+return {...base,call:null,invalid:true,error:"Le champ arguments doit être un objet JSON."};
+}
+return {call:parsed,before:base.before,after:raw.slice(end+1).trim()};
 }
 function uniqueBinaryName(rawName){const clean=String(rawName||"document.docx").replace(/\\/g,"/").split("/").pop().trim()||"document.docx";if(!S.files.some(f=>String(f.path||f.name).toLowerCase()===clean.toLowerCase()))return clean;const dot=clean.lastIndexOf("."),base=dot>0?clean.slice(0,dot):clean,suffix=dot>0?clean.slice(dot):"";let n=2;while(S.files.some(f=>String(f.path||f.name).toLowerCase()===(base+" ("+n+")"+suffix).toLowerCase()))n++;return base+" ("+n+")"+suffix;}
 async function fetchWorkBinary(path,payload,preferredName){const response=await fetch(SERVER+path,{method:"POST",headers:await headers(true),body:JSON.stringify(payload)});if(!response.ok){const d=await response.json().catch(()=>({}));throw new Error(typeof d.detail==="string"?d.detail:"La génération du fichier a échoué (HTTP "+response.status+").");}const blob=await response.blob(),filename=uniqueBinaryName(preferredName||payload.filename||"document.bin");const file=await createBinaryFile(filename,blob,response.headers.get("content-type")||blob.type);if(!file)throw new Error("Le fichier n'a pas pu être ajouté à l'espace local.");await download();return {executed:true,filename:file.name,size_bytes:blob.size,stored:"espace Work local",downloaded:true};}
@@ -121,13 +172,17 @@ preferences:"Tu es l'assistant de l'espace Work de Llink. Aide à rédiger, anal
 };
 let full=await streamWorkResponse(payload,uploads,ans);
 const executedCalls=new Set();
+S.workToolRepairAttempt=0;
 const maxCalls=8;
 let calls=0;
 while(calls<maxCalls){
 const request=extractToolRequest(full);
 if(!request)break;
 ans.text=request.before;renderMessages();
-if(request.invalid||!request.call){ans.text+="\n\n[Demande d'outil invalide : aucune action n'a été exécutée.]";full=ans.text;break;}
+if(request.invalid||!request.call){
+if(!S.workToolRepairAttempt){S.workToolRepairAttempt=1;toast("Correction du format de la commande Work…");payload={...payload,message:text+"\n\nUne commande Work précédente était mal formée. Erreur détectée : "+String(request.error||"JSON invalide")+". Voici la balise à corriger :\n<llink_tool>"+String(request.raw||"").slice(0,3000)+"</llink_tool>\nRenvoie UNE SEULE balise llink_tool avec un JSON strictement valide. Utilise des guillemets doubles, échappe les retours à la ligne dans les chaînes sous la forme \\n, et n'ajoute ni Markdown ni texte dans la balise. Ne répète pas le contenu hors de la balise.",history:payload.history,preferences:payload.preferences+" La commande précédente était invalide. Corrige uniquement sa syntaxe et conserve exactement son intention."};full=await streamWorkResponse(payload,[],ans);continue;}
+ans.text+="\n\n[Commande Work invalide : "+String(request.error||"format JSON incorrect")+". Aucune action n'a été exécutée. Vérifie la syntaxe de l'appel d'outil.]";full=ans.text;break;
+}
 calls++;const signature=JSON.stringify(request.call);
 let result;
 if(executedCalls.has(signature)){result={executed:false,error:"Cette commande identique a déjà été exécutée. Ne la répète pas ; poursuis avec les résultats déjà reçus."};}
