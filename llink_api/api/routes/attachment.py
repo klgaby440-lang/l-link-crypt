@@ -99,9 +99,12 @@ async def chat_with_attachments(
         )
 
     raw_message = str(form.get("message") or "").strip()
-    if len(raw_message) > settings.max_message_chars:
-        raw_message = raw_message[:settings.max_message_chars]
-        logger.info("Message Work avec pièces jointes tronqué à la limite du schéma.")
+    message_budget = max(1, settings.max_message_chars - min(2_000, settings.max_message_chars // 4))
+    if len(raw_message) > message_budget:
+        marker = "\n[Message raccourci pour laisser de la place au contenu des pièces jointes.]"
+        keep = max(1, message_budget - len(marker))
+        raw_message = raw_message[:keep] + marker
+        logger.info("Message Work avec pièces jointes raccourci à %s caractères.", message_budget)
     model_alias = str(form.get("model") or "gemini-1.5-flash").strip()[:100]
     requested_level = str(form.get("level") or "").strip().lower()
     level_value = requested_level if requested_level in {"velora", "satori", "noetra", "auren", "omnis"} else None
