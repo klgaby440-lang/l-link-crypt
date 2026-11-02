@@ -19,7 +19,8 @@ from pydantic import BaseModel, Field
 from starlette.responses import Response
 
 from llink_api.database import get_db
-from llink_api.security import get_optional_user, require_authenticated_user\nfrom llink_api.services.document_engine import build_structured_docx
+from llink_api.security import get_optional_user, require_authenticated_user
+from llink_api.services.document_engine import build_structured_docx
 from llink_api.services.security_limits import enforce_endpoint_quota
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,15 @@ class PythonExecutionRequest(BaseModel):
 class ExportRequest(BaseModel):
     filename: str = Field(min_length=1, max_length=160)
     content: str = Field(max_length=MAX_EXPORT_CHARS)
+
+
+class DocumentCreateRequest(BaseModel):
+    filename: str = Field(default="document.docx", min_length=1, max_length=160)
+    title: str = Field(default="", max_length=300)
+    subtitle: str = Field(default="", max_length=500)
+    author: str = Field(default="", max_length=160)
+    institution: str = Field(default="", max_length=200)
+    blocks: list[dict[str, Any]] = Field(min_length=1, max_length=160)
 
 
 def safe_output_filename(value: str, extension: str) -> str:
@@ -231,7 +241,7 @@ def create_export_bytes(file_format: str, content: str) -> tuple[bytes, str]:
 
 
 @router.get("/api/work/tools")
-async def list_work_tools(user: dict = Depends(require_authenticated_user)):
+async def list_work_tools(user: dict = Depends(get_optional_user)):
     """Indique seulement les outils réellement configurés côté serveur."""
     return {
         "tools": {
