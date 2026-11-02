@@ -1,6 +1,7 @@
 """Tests de classification, extraction et réception des pièces jointes Phase 5."""
 
 import io
+import json
 import zipfile
 
 import pytest
@@ -130,6 +131,9 @@ def prepare_attachment_route(monkeypatch, captured):
     async def fake_chat(payload, request, user, db):
         captured["message"] = payload.message
         captured["level"] = payload.level
+        captured["effort"] = payload.effort
+        captured["history"] = [{"role": turn.role, "text": turn.text} for turn in payload.history]
+        captured["preferences"] = payload.preferences
         return JSONResponse({"message": payload.message})
 
     monkeypatch.setattr(attachment_routes, "enforce_endpoint_quota", allow_quota)
@@ -257,3 +261,36 @@ def test_keeps_native_heic_image_payload_unchanged():
 
     original = b"\x00\x00\x00\x18ftypheic"
     assert prepare_image_for_gemini("image/heic", original) == ("image/heic", original)
+
+
+def test_multipart_route_normalizes_oversized_work_context(client, monkeypatch):
+    captured = {}
+    prepare_attachment_route(monkeypatch, captured)
+    response = client.post(
+        "/api/chat/attachments",
+        data={
+            "message": "Demande longue de Work. " * 700,
+            "model": "gemini-1.5-flash",
+            "level": "not-a-level",
+            "effort": "high",
+            "preferences": "Préférences " * 300,
+            "history": json.dumps([
+                {"role": "user", "text": "Ancien contenu " * 4000},
+                {"role": "assistant", "text": "Dernière réponse conservée."},
+            ]),
+            "mode": "work",
+        },
+        files=[("files", ("notes.txt", b"Contenu important du fichier.", "text/plain"))],
+    )
+
+    assert response.status_code == 200
+    assert len(captured["message"]) <= 12_000
+    assert "Message raccourci" in captured["message"]
+    assert "Contenu important du fichier." in captured["message"]
+    assert len(captured["history"]) <= 24
+    assert all(0 < len(turn["text"]) <= 8_000 for turn in captured["history"])
+    assert captured["history"][-1]["text"] == "Dernière réponse conservée."
+    assert captured["preferences"] is not None
+    assert len(captured["preferences"]) <= 2_000
+    assert captured["effort"] == "normal"
+    assert captured["level"] is None
