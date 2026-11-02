@@ -157,3 +157,15 @@ def test_request_body_limit_middleware_rejects_oversized_body(monkeypatch):
     with TestClient(tiny_app) as tiny_client:
         response = tiny_client.post("/echo", content=b"x" * 11)
     assert response.status_code == 413
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/work/tools/search", {"query": "Pinaceae reproduction", "max_results": 3}),
+        ("/api/work/tools/python", {"code": "print(1 + 1)"}),
+    ],
+)
+def test_paid_or_remote_work_tools_still_require_authentication(client, path, payload):
+    response = client.post(path, json=payload)
+    assert response.status_code == 401
