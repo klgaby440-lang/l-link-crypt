@@ -38,3 +38,18 @@ Les documents sont stockés dans \`users/{uid}/work_projects\` et \`users/{uid}/
 - Tests sur validation des chemins et tailles.
 - Tests d'accès prouvant que les routes Work cloud refusent les sessions anonymes.
 - Tests d'intégration Firestore et tests navigateur encore requis avant d'annoncer le lot comme validé.
+
+
+## Extension — moteur documentaire et orchestration Work
+
+- Le registre `GET /api/work/tools` expose les capacités non sensibles même sans session : export PDF/XLSX et création DOCX structurée. Les disponibilités Web/Python ne sont déclarées que si leurs clés serveur sont configurées.
+- `POST /api/work/tools/document` génère un vrai DOCX à partir de blocs contrôlés : titres, paragraphes, listes, citations, tableaux, sauts de page, légendes et images PNG/JPEG transmises sous forme de data URL.
+- Les images distantes ne sont pas téléchargées automatiquement : le moteur refuse les URL distantes pour éviter les requêtes serveur non vérifiées. Une future intégration de recherche/génération d'images devra fournir un service dédié et sécurisé.
+- Les exports de documents sans données privées sont accessibles à l'utilisateur anonyme avec quota par adresse IP. Les outils Web Search et Python restent réservés aux sessions Firebase authentifiées.
+- Le client Work extrait les commandes JSON avec un parseur de accolades équilibrées et peut exécuter jusqu'à huit étapes successives dans une même tâche. Les documents binaires générés sont enregistrés dans IndexedDB local et proposés au téléchargement.
+
+### Limites restantes
+
+- Les documents binaires créés sont conservés localement dans IndexedDB ; ils ne sont pas encore synchronisés vers un stockage cloud d'objets.
+- La recherche d'images et la génération d'images ne sont pas encore reliées à un fournisseur dans Work.
+- Les formats structurés pris en charge par le nouveau moteur sont DOCX ; PDF et XLSX utilisent encore le convertisseur de contenu existant.
