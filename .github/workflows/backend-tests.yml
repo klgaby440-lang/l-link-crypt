@@ -59,6 +59,9 @@ jobs:
       - name: Check Work workspace JavaScript syntax
         run: node --check app/workspace.js
 
+      - name: Check Python syntax
+        run: python -m compileall -q llink_api
+
       - name: Run API tests
         env:
           APP_ENV: test
