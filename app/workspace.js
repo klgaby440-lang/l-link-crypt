@@ -68,14 +68,14 @@ async function newProject(){const n=await askInput("Créer un projet","Un projet
 function codeFrom(mid){const m=S.messages.find(x=>String(x.id)===String(mid));const fence=String.fromCharCode(96).repeat(3),re=new RegExp(fence+"(?:[a-zA-Z0-9_+-]+)?\\s*\\n([\\s\\S]*?)"+fence),x=re.exec(m?.text||"");return x?x[1].replace(/\n$/,""):null;}
 async function applyCode(mid,create){const message=S.messages.find(x=>String(x.id)===String(mid));if(!message)return;const c=codeFrom(mid)??message.text??"";if(create||!S.file){let n=await askInput("Créer un fichier depuis la réponse","Le fichier sera ajouté à ton espace de travail. Pour PDF, Word ou Excel, indique l’extension correspondante.","Nom du fichier","document.md","Ex. rapport.pdf, notes.md, tableau.xlsx","Créer le fichier");if(!n)return;n=n.trim();if(!/\.[A-Za-z0-9]{1,8}$/.test(n))n+=".md";const format=ext(n);if(["pdf","docx","xlsx"].includes(format)){const response=await fetch(SERVER+"/api/work/exports/"+format,{method:"POST",headers:await headers(true),body:JSON.stringify({filename:n,content:c})});if(!response.ok){const d=await response.json().catch(()=>({}));throw new Error(d.detail||"La génération du fichier a échoué.");}const blob=await response.blob();await createBinaryFile(n,blob,response.headers.get("content-type")||blob.type);await download();toast("Fichier "+n+" créé et téléchargé.");}else{await createFile(n,c);toast("Fichier ajouté à l’espace de travail.");}}else{setValue(c);setTab("edit");toast("Réponse appliquée à l’éditeur. Clique sur Enregistrer pour la conserver.");}}
 function extractToolRequest(text){
-const match=/<llink_tool>([\\s\\S]*?)<\\/llink_tool>/i.exec(String(text||""));
+const match=/<llink_tool>([\s\S]*?)<\/llink_tool>/i.exec(String(text||""));
 if(!match)return null;
 const raw=match[1],start=raw.indexOf("{");
 if(start<0)return {call:null,before:String(text||"").slice(0,match.index).trim(),invalid:true};
 let depth=0,inString=false,escaped=false,end=-1;
 for(let i=start;i<raw.length;i++){
 const ch=raw[i];
-if(inString){if(escaped)escaped=false;else if(ch==="\\\\")escaped=true;else if(ch==='"')inString=false;continue;}
+if(inString){if(escaped)escaped=false;else if(ch==="\\")escaped=true;else if(ch==='"')inString=false;continue;}
 if(ch==='"'){inString=true;continue;}
 if(ch==="{")depth++;
 else if(ch==="}"){depth--;if(depth===0){end=i;break;}}
@@ -84,7 +84,7 @@ if(end<0)return {call:null,before:String(text||"").slice(0,match.index).trim(),i
 try{return {call:JSON.parse(raw.slice(start,end+1)),before:String(text||"").slice(0,match.index).trim(),after:raw.slice(end+1).trim()};}
 catch(e){return {call:null,before:String(text||"").slice(0,match.index).trim(),invalid:true};}
 }
-function uniqueBinaryName(rawName){const clean=String(rawName||"document.docx").replace(/\\\\/g,"/").split("/").pop().trim()||"document.docx";if(!S.files.some(f=>String(f.path||f.name).toLowerCase()===clean.toLowerCase()))return clean;const dot=clean.lastIndexOf("."),base=dot>0?clean.slice(0,dot):clean,suffix=dot>0?clean.slice(dot):"";let n=2;while(S.files.some(f=>String(f.path||f.name).toLowerCase()===(base+" ("+n+")"+suffix).toLowerCase()))n++;return base+" ("+n+")"+suffix;}
+function uniqueBinaryName(rawName){const clean=String(rawName||"document.docx").replace(/\\/g,"/").split("/").pop().trim()||"document.docx";if(!S.files.some(f=>String(f.path||f.name).toLowerCase()===clean.toLowerCase()))return clean;const dot=clean.lastIndexOf("."),base=dot>0?clean.slice(0,dot):clean,suffix=dot>0?clean.slice(dot):"";let n=2;while(S.files.some(f=>String(f.path||f.name).toLowerCase()===(base+" ("+n+")"+suffix).toLowerCase()))n++;return base+" ("+n+")"+suffix;}
 async function fetchWorkBinary(path,payload,preferredName){const response=await fetch(SERVER+path,{method:"POST",headers:await headers(true),body:JSON.stringify(payload)});if(!response.ok){const d=await response.json().catch(()=>({}));throw new Error(typeof d.detail==="string"?d.detail:"La génération du fichier a échoué (HTTP "+response.status+").");}const blob=await response.blob(),filename=uniqueBinaryName(preferredName||payload.filename||"document.bin");const file=await createBinaryFile(filename,blob,response.headers.get("content-type")||blob.type);if(!file)throw new Error("Le fichier n'a pas pu être ajouté à l'espace local.");await download();return {executed:true,filename:file.name,size_bytes:blob.size,stored:"espace Work local",downloaded:true};}
 async function runWorkTool(invocation){
 if(!invocation||typeof invocation!=="object")throw new Error("Demande d'outil invalide.");
