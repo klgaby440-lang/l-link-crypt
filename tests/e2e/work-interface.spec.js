@@ -25,6 +25,23 @@ async function openWork(page) {
       })
     });
   });
+
+  await page.route(API + "/api/work/agent/status", async route => {
+    if (route.request().method() === "OPTIONS") {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
+    return route.fulfill({
+      status: 200,
+      headers: { ...CORS_HEADERS, "content-type": "application/json" },
+      body: JSON.stringify({
+        agent: "llink-work",
+        version: "native-functions-v1",
+        protocol: "native_function_calling",
+        tools: ["update_plan", "document_begin", "document_add_blocks", "document_finalize", "artifact_verify"],
+        limits: { model_turns: 24, tool_calls: 32, seconds: 240 }
+      })
+    });
+  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => typeof window.Dexie === "function"
@@ -35,6 +52,7 @@ async function openWork(page) {
   await page.evaluate(() => window.selectAppMode("work"));
   await expect(page.locator(".work-brand-title")).toHaveText("Llink Work");
   await expect(page.locator("#work-list")).toBeVisible();
+  await expect(page.locator("#work-tool-status")).toContainText("Agent natif native-functions-v1");
 }
 
 async function mockAgentEvents(page, events, verifyRequest = null) {
@@ -62,6 +80,7 @@ function plan(summary, steps) {
     summary,
     steps: steps.map(label => ({ label, status: "done" })),
     decisions: ["Les actions sont exécutées par des outils natifs côté serveur."],
+    acceptance_criteria: ["Les actions sont confirmées par leurs retours d'outils."],
     limitations: []
   };
 }
@@ -79,6 +98,7 @@ function finalEvent(answer, artifact = null, reasoningOverride = null) {
       { label: "Vérifier le résultat", status: "done" }
     ],
     decisions: ["Le fichier est remis uniquement après vérification."],
+    acceptance_criteria: ["La vérification indépendante est réussie."],
     limitations: [],
     events: [],
     status: "completed",
@@ -255,6 +275,8 @@ test("Work affiche et conserve le plan, les décisions et les actions réelles",
   await expect(panel).toContainText("Analyse et planification");
   await expect(panel).toContainText("Analyse terminée ; 1 action sélectionnée.");
   await expect(panel).toContainText("Recherche sur le Web");
+  await expect(panel).toContainText("Critères de réussite");
+  await expect(panel).toContainText("Les actions sont confirmées par leurs retours d'outils.");
   await expect(message.locator(".work-message-body")).toContainText("résultat de démonstration");
 
   const saved = await page.evaluate(async () => {
@@ -265,4 +287,32 @@ test("Work affiche et conserve le plan, les décisions et les actions réelles",
   expect(saved?.events).toHaveLength(2);
   expect(saved?.events.some(event => event.tool === "model_reasoning")).toBe(true);
   expect(saved?.events.some(event => event.tool === "web_search")).toBe(true);
+});
+
+
+test("Work refuse d'exécuter une tâche si Render utilise encore l'ancien protocole", async ({ page }) => {
+  await openWork(page);
+  let agentCalls = 0;
+  await page.route(API + "/api/work/agent/status", async route => {
+    return route.fulfill({
+      status: 200,
+      headers: { ...CORS_HEADERS, "content-type": "application/json" },
+      body: JSON.stringify({
+        agent: "llink-work",
+        version: "legacy",
+        protocol: "text_tool_tags",
+        tools: ["create_document"]
+      })
+    });
+  });
+  await page.route(API + "/api/work/agent", async route => {
+    agentCalls += 1;
+    return route.fulfill({ status: 500, body: "Should not be called" });
+  });
+
+  await page.locator("#work-prompt").fill("Crée un document Word.");
+  await page.locator("#work-send").click();
+
+  await expect(page.locator(".work-message.assistant").last()).toContainText("protocole ancien");
+  expect(agentCalls).toBe(0);
 });
