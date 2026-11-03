@@ -103,7 +103,7 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
             request=None,
             user={"uid": "anonymous"},
             db=None,
-            model=resolve_model("velora"),
+            model=resolve_model("auren"),
             api_key="test-key",
             base_url="https://provider.example/v1",
             emit=emit,
