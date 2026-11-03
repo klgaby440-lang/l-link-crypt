@@ -679,3 +679,88 @@ def test_requested_file_is_not_reported_as_delivered_when_no_verified_artifact_e
         assert any("aucun fichier vérifié" in item for item in final["reasoning"]["limitations"])
 
     asyncio.run(run())
+
+
+def test_corrected_docx_supersedes_failed_version_and_can_be_delivered():
+    async def run():
+        state = work_agent.AgentState()
+        begin = await work_agent._dispatch_tool(
+            "document_begin",
+            {
+                "filename": "rapport-corrige.docx",
+                "title": "Rapport corrigé",
+                "quality": {"minimum_words": 20},
+            },
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        document_id = begin["document_id"]
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {
+                "document_id": document_id,
+                "blocks": [
+                    {"type": "heading", "level": 1, "text": "Introduction"},
+                    {"type": "paragraph", "text": "Texte initial trop court."},
+                ],
+            },
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        first = await work_agent._dispatch_tool(
+            "document_finalize",
+            {"document_id": document_id},
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        assert first["precheck_passed"] is False
+
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {
+                "document_id": document_id,
+                "blocks": [
+                    {"type": "paragraph", "text": "Ce paragraphe supplémentaire apporte assez de contenu pour atteindre le minimum de mots exigé par le contrat de qualité."}
+                ],
+            },
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        second = await work_agent._dispatch_tool(
+            "document_finalize",
+            {"document_id": document_id},
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        assert second["precheck_passed"] is True
+        assert state.artifacts[first["artifact_id"]]["superseded"] is True
+        assert state.artifacts[second["artifact_id"]]["superseded"] is False
+
+        verified = await work_agent._dispatch_tool(
+            "artifact_verify",
+            {"artifact_id": second["artifact_id"]},
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        assert verified["verified"] is True
+        assert state.artifacts[second["artifact_id"]]["verified_by_agent"] is True
+
+        active_artifacts = [
+            artifact for artifact in state.artifacts.values()
+            if not artifact.get("superseded")
+        ]
+        assert [artifact["artifact_id"] for artifact in active_artifacts] == [second["artifact_id"]]
+
+    asyncio.run(run())
