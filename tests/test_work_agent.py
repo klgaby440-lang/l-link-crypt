@@ -109,6 +109,8 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
         )
 
         final = next(event for event in events if event["type"] == "final")
+        assert any(event["type"] == "model_start" for event in events)
+        assert any(event["type"] == "model_done" and event["tool_calls"] > 0 for event in events)
         assert turns == 4
         assert final["answer"] == "Le document a été créé et vérifié."
         assert len(final["artifacts"]) == 1
