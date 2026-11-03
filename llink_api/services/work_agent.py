@@ -1103,8 +1103,10 @@ async def _gemini_turn(
         function_call = getattr(part, "function_call", None)
         if function_call is not None:
             args = getattr(function_call, "args", {}) or {}
+            native_call_id = str(getattr(function_call, "id", "") or "")
             calls.append({
-                "id": f"gemini-call-{index}",
+                "id": native_call_id or f"gemini-call-{index}",
+                "native_id": native_call_id,
                 "name": str(getattr(function_call, "name", "") or ""),
                 "arguments": dict(args) if isinstance(args, dict) else args,
             })
@@ -1252,6 +1254,7 @@ async def _run_agent(
                 final_answer = text.strip()
                 break
 
+            gemini_function_responses: list[Any] = []
             for call in calls:
                 if state.tool_calls >= MAX_TOOL_CALLS:
                     raise RuntimeError("La limite de sécurité des appels d'outils est atteinte.")
@@ -1311,10 +1314,15 @@ async def _run_agent(
                 result_for_model = _json_safe(result)
                 if model.provider == "gemini":
                     from google.genai import types
-                    gemini_contents.append(types.Content(
-                        role="tool",
-                        parts=[types.Part.from_function_response(name=name, response={"result": json.loads(result_for_model)})],
-                    ))
+                    response_kwargs = {
+                        "name": name,
+                        "response": {"result": json.loads(result_for_model)},
+                    }
+                    if call.get("native_id"):
+                        response_kwargs["id"] = str(call["native_id"])
+                    gemini_function_responses.append(
+                        types.Part.from_function_response(**response_kwargs)
+                    )
                 else:
                     messages.append({
                         "role": "tool",
@@ -1324,6 +1332,14 @@ async def _run_agent(
 
                 if name == "update_plan" and result.get("updated"):
                     await emit({"type": "plan", **state.plan})
+
+            if model.provider == "gemini" and gemini_function_responses:
+                # Gemini attend les réponses des appels parallèles dans un seul Content,
+                # avec les functionResponse dans le même ordre que les functionCall.
+                gemini_contents.append(types.Content(
+                    role="user",
+                    parts=gemini_function_responses,
+                ))
 
         else:
             final_answer = "J'ai atteint la limite d'étapes d'exécution. Voici les actions confirmées et les éventuels fichiers déjà créés."
