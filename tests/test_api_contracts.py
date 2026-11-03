@@ -213,15 +213,22 @@ def test_work_pdf_export_is_available_without_login(client):
     assert response.content.startswith(b"%PDF")
 
 
-def test_work_system_instruction_advertises_document_tools():
-    from llink_api.api.routes.chat import build_system_instruction
+def test_work_agent_prompt_describes_general_native_tool_use():
+    from llink_api.services.work_agent import TOOLS, _agent_system
 
-    instruction = build_system_instruction("work", "create_document DOCX=oui; exports PDF/XLSX=oui")
+    names = [item["function"]["name"] for item in TOOLS]
+    instruction = _agent_system("Réponds en français.", names)
 
-    assert "create_document" in instruction
-    assert "export_file" in instruction
-    assert "table" in instruction
-    assert "data_url" in instruction
+    assert "general-purpose tool-using agent" in instruction
+    assert "acceptance_criteria" in instruction
+    assert "artifact_verify" in instruction
+    assert "web_search" in instruction
+    assert "image_search" in instruction
+    assert "python" in instruction
+    assert "document_begin" in instruction
+    assert "document_add_blocks" in instruction
+    assert "document_finalize" in instruction
+    assert "Réponds en français." in instruction
 
 
 def test_work_native_agent_status_exposes_protocol_and_session_tools(client):
@@ -232,8 +239,8 @@ def test_work_native_agent_status_exposes_protocol_and_session_tools(client):
     assert payload["agent"] == "llink-work"
     assert payload["protocol"] == "native_function_calling"
     assert payload["version"] == "native-functions-v1"
-    assert payload["limits"]["model_turns"] >= 16
-    assert payload["limits"]["tool_calls"] >= 24
+    assert payload["limits"]["model_turns"] >= 24
+    assert payload["limits"]["tool_calls"] >= 32
     assert {
         "update_plan",
         "web_search",
