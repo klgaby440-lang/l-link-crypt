@@ -130,7 +130,7 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
 def test_agent_tool_registry_is_general_and_uses_native_function_schemas():
     names = {item["function"]["name"] for item in work_agent.TOOLS}
     assert {
-        "update_plan", "web_search", "web_open", "python",
+        "update_plan", "web_search", "web_open", "image_search", "python",
         "document_begin", "document_add_blocks", "document_finalize",
         "artifact_verify", "create_text_file", "export_file",
     }.issubset(names)
@@ -300,5 +300,30 @@ def test_artifact_is_not_delivered_without_explicit_independent_verification(mon
         )
         final = next(event for event in state_events if event["type"] == "final")
         assert final["artifacts"] == []
+
+    asyncio.run(run())
+
+
+def test_image_search_tool_is_advertised_with_bounded_results():
+    image_tool = next(
+        item["function"] for item in work_agent.TOOLS
+        if item["function"]["name"] == "image_search"
+    )
+    properties = image_tool["parameters"]["properties"]
+    assert properties["max_images"]["maximum"] == 4
+    assert properties["query"]["maxLength"] == 400
+
+
+def test_public_host_resolution_rejects_private_dns(monkeypatch):
+    import asyncio
+    import socket
+
+    def private_resolution(*_args, **_kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))]
+
+    async def run():
+        monkeypatch.setattr(work_agent.socket, "getaddrinfo", private_resolution)
+        with pytest.raises(ValueError, match="non public"):
+            await work_agent._assert_public_host_resolves("https://public.example/resource")
 
     asyncio.run(run())
