@@ -461,7 +461,7 @@ async def _search_work_images(query: str, max_images: int, state: AgentState) ->
             break
         image_id = uuid.uuid4().hex
         description = str(candidate.get("description") or candidate.get("alt") or query)[:350]
-        source_url = str(candidate.get("source_url") or candidate.get("page_url") or "")[:1500]
+        source_url = str(candidate.get("source_url") or candidate.get("page_url") or image_url)[:1500]
         source_title = str(candidate.get("source_title") or "")[:300]
         state.image_bytes += validated["size_bytes"]
         state.images[image_id] = {
@@ -703,7 +703,7 @@ async def _dispatch_tool(
             "kind": "text",
         }
         state.artifacts[artifact_id] = artifact
-        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": True}
+        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": False, "next": "Call artifact_verify before delivery."}
 
     if name == "export_file":
         from llink_api.api.routes.work_tools import create_export_bytes, safe_output_filename
@@ -1026,6 +1026,9 @@ async def _run_agent(
         artifacts = []
         for artifact in state.artifacts.values():
             if not artifact.get("verified_by_agent") or not artifact["verification"].get("passed"):
+                state.plan["limitations"].append(
+                    f"Le fichier {artifact.get('filename', 'inconnu')} n'a pas passé la vérification indépendante et n'a pas été remis."
+                )
                 continue
             artifacts.append({
                 "artifact_id": artifact["artifact_id"],
