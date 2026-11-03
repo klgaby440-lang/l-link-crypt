@@ -235,6 +235,10 @@ async def chat_endpoint(
     user: dict = Depends(get_optional_user),
     db: Any | None = Depends(get_db),
 ):
+    if payload.mode == "work":
+        from llink_api.services.work_agent import work_agent_response
+        return await work_agent_response(payload, request, user, db)
+
     await enforce_endpoint_quota(request=request, user=user, db=db, scope="chat")
 
     try:
