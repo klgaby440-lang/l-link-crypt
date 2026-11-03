@@ -87,6 +87,7 @@ async def reserve_usage_budget(
     level: str,
     model: ModelDefinition,
     prompt: str,
+    max_output_tokens: int | None = None,
 ) -> UsageReservation | None:
     """Réserve une estimation dans une transaction avant de lancer le modèle."""
     if db is None:
@@ -99,7 +100,7 @@ async def reserve_usage_budget(
 
     now = int(time.time())
     hour_bucket = now // 3600
-    estimate = estimate_request_cost_microusd(model, prompt)
+    estimate = estimate_request_cost_microusd(model, prompt, max_output_tokens=max_output_tokens)
     budget = hourly_budget_microusd(level)
     request_id = uuid4().hex
     hour_ref, _ = _usage_refs(db, uid, hour_bucket, request_id)
