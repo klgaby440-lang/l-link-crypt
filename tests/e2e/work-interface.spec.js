@@ -9,8 +9,11 @@ const CORS_HEADERS = {
   "vary": "Origin"
 };
 
-async function openWork(page) {
-  await page.addInitScript(() => localStorage.removeItem("llink_effort"));
+async function openWork(page, savedEffort = null) {
+  await page.addInitScript(effort => {
+    if (effort) localStorage.setItem("llink_effort", effort);
+    else localStorage.removeItem("llink_effort");
+  }, savedEffort);
   await page.route(API + "/api/work/tools", async route => {
     if (route.request().method() === "OPTIONS") {
       return route.fulfill({ status: 204, headers: CORS_HEADERS });
@@ -321,4 +324,20 @@ test("Work refuse d'exécuter une tâche si Render utilise encore l'ancien proto
   await expect(page.locator(".work-message.assistant").last().locator(".work-reasoning")).toContainText("Interrompue");
   await expect(page.locator(".work-message.assistant").last().locator(".work-reasoning")).toContainText("agent_preflight");
   expect(agentCalls).toBe(0);
+});
+
+
+test("Work respecte un réglage explicite de réflexion Normal", async ({ page }) => {
+  await openWork(page, "normal");
+  await mockAgentEvents(page, [
+    plan("Je réponds en respectant le niveau de réflexion choisi.", ["Analyser la demande", "Répondre"])
+      ,
+    finalEvent("Le réglage Normal a été respecté.")
+  ], payload => {
+    expect(payload.effort).toBe("normal");
+  });
+  await expect(page.locator("#work-tool-status")).toContainText("Réflexion normal");
+  await page.locator("#work-prompt").fill("Réponds brièvement à cette question.");
+  await page.locator("#work-send").click();
+  await expect(page.locator(".work-message-body").last()).toContainText("réglage Normal");
 });
