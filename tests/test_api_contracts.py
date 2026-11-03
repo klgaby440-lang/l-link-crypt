@@ -222,3 +222,25 @@ def test_work_system_instruction_advertises_document_tools():
     assert "export_file" in instruction
     assert "table" in instruction
     assert "data_url" in instruction
+
+
+def test_work_native_agent_status_exposes_protocol_and_session_tools(client):
+    response = client.get("/api/work/agent/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["agent"] == "llink-work"
+    assert payload["protocol"] == "native_function_calling"
+    assert payload["version"] == "native-functions-v1"
+    assert payload["limits"]["model_turns"] >= 16
+    assert payload["limits"]["tool_calls"] >= 24
+    assert {
+        "update_plan",
+        "web_search",
+        "web_open",
+        "python",
+        "document_begin",
+        "document_add_blocks",
+        "document_finalize",
+        "artifact_verify",
+    }.intersection(payload["tools"])
