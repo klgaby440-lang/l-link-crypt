@@ -53,5 +53,5 @@ Les documents sont stockés dans \`users/{uid}/work_projects\` et \`users/{uid}/
 ### Limites restantes
 
 - Les documents binaires créés sont conservés localement dans IndexedDB ; ils ne sont pas encore synchronisés vers un stockage cloud d'objets.
-- La génération d'images originales n'est pas encore reliée à un fournisseur dans Work.
+- La génération d'images originales utilise GLM-Image via `ZAI_API_KEY`. Les fichiers PNG générés sont stockés comme artefacts temporaires, insérables par `image_id`, puis relus par Pillow avant leur livraison. La clé Z.AI doit être configurée sur Render.
 - Les formats structurés pris en charge par le nouveau moteur sont DOCX ; PDF et XLSX utilisent encore le convertisseur de contenu existant.
