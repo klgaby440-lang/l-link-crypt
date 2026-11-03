@@ -87,6 +87,17 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "image_search",
+            "description": "Find relevant real images through Tavily, fetch and validate a small selection, and retain them as image references that can be embedded in a Word draft. Use this when illustrations materially improve a requested artifact. Keep source attribution.",
+            "parameters": {"type": "object", "properties": {
+                "query": {"type": "string", "minLength": 3, "maxLength": 400},
+                "max_images": {"type": "integer", "minimum": 1, "maximum": 4}
+            }, "required": ["query"]}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "python",
             "description": "Run Python in a temporary isolated sandbox for calculations, data analysis, transformations and verification. Never claim execution unless a result is returned.",
             "parameters": {"type": "object", "properties": {
@@ -123,6 +134,7 @@ TOOLS: list[dict[str, Any]] = [
                         "text": {"type": "string", "maxLength": 6000},
                         "rows": {"type": "array", "maxItems": 50, "items": {"type": "array", "maxItems": 12, "items": {"type": "string"}}},
                         "data_url": {"type": "string", "maxLength": 5_600_000},
+                        "image_id": {"type": "string", "maxLength": 64},
                         "alt": {"type": "string", "maxLength": 500},
                     },
                     "required": ["type"],
@@ -213,6 +225,7 @@ class AgentState:
     events: list[dict[str, Any]] = field(default_factory=list)
     drafts: dict[str, dict[str, Any]] = field(default_factory=dict)
     artifacts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    images: dict[str, dict[str, Any]] = field(default_factory=dict)
     call_signatures: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_calls: int = 0
 
@@ -319,6 +332,144 @@ def _verify_docx(data: bytes, expected_blocks: list[dict[str, Any]]) -> dict[str
     return checks
 
 
+async def _resolve_public_image(url: str) -> dict[str, Any]:
+    """Télécharge une image publique contrôlée, jamais une URL locale ou privée."""
+    if len(url) > 2000 or not url.startswith("https://") or not _host_is_public(url):
+        raise ValueError("L'image doit venir d'une URL HTTPS publique.")
+
+    parsed = urlparse(url)
+    host = parsed.hostname
+    if not host:
+        raise ValueError("Hôte image invalide.")
+
+    # Refuser les domaines dont la résolution DNS pointe vers un réseau privé.
+    try:
+        infos = await asyncio.wait_for(
+            asyncio.to_thread(__import__("socket").getaddrinfo, host, parsed.port or 443, 0, __import__("socket").SOCK_STREAM),
+            timeout=5,
+        )
+    except Exception as exc:
+        raise ValueError("Impossible de vérifier l'adresse du serveur image.") from exc
+    addresses = {item[4][0] for item in infos if item and item[4]}
+    if not addresses or any(not ipaddress.ip_address(address.split("%", 1)[0]).is_global for address in addresses):
+        raise ValueError("L'image pointe vers un réseau non public et a été refusée.")
+
+    timeout = httpx.Timeout(18.0, connect=6.0)
+    headers = {"User-Agent": "LlinkWorkImages/1.0", "Accept": "image/png,image/jpeg,image/webp"}
+    chunks: list[bytes] = []
+    total = 0
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client:
+        async with client.stream("GET", url, headers=headers) as response:
+            if response.is_redirect:
+                raise ValueError("La source image redirige ; cette URL n'est pas acceptée.")
+            if response.status_code != 200:
+                raise ValueError(f"La source image répond HTTP {response.status_code}.")
+            mime = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if mime not in {"image/png", "image/jpeg", "image/webp"}:
+                raise ValueError("Le serveur n'a pas renvoyé une image PNG, JPEG ou WebP.")
+            content_length = response.headers.get("content-length")
+            if content_length and content_length.isdigit() and int(content_length) > 4_000_000:
+                raise ValueError("L'image dépasse la limite de 4 Mo.")
+            async for chunk in response.aiter_bytes():
+                total += len(chunk)
+                if total > 4_000_000:
+                    raise ValueError("L'image dépasse la limite de 4 Mo.")
+                chunks.append(chunk)
+
+    from PIL import Image, UnidentifiedImageError
+    raw = b"".join(chunks)
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            if image.width * image.height > 20_000_000:
+                raise ValueError("La résolution de l'image dépasse la limite.")
+            image.load()
+            converted = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+            output = io.BytesIO()
+            converted.save(output, format="PNG", optimize=True)
+            normalized = output.getvalue()
+    except ValueError:
+        raise
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ValueError("Le fichier reçu n'est pas une image exploitable.") from exc
+
+    if len(normalized) > 4_000_000:
+        raise ValueError("L'image normalisée dépasse la limite de 4 Mo.")
+    data_url = "data:image/png;base64," + base64.b64encode(normalized).decode("ascii")
+    return {"data_url": data_url, "size_bytes": len(normalized), "mime_type": "image/png"}
+
+
+async def _search_work_images(query: str, max_images: int, state: AgentState) -> dict[str, Any]:
+    import os
+
+    api_key = os.getenv("TAVILY_API_KEY", "").strip()
+    if not api_key:
+        raise PermissionError("La recherche d'images nécessite TAVILY_API_KEY sur le serveur.")
+    if len(query) < 3 or len(query) > 400:
+        raise ValueError("La recherche d'images doit contenir entre 3 et 400 caractères.")
+    max_images = max(1, min(int(max_images or 3), 4))
+    timeout = httpx.Timeout(28.0, connect=8.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            "https://api.tavily.com/search",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "query": query,
+                "search_depth": "basic",
+                "max_results": 5,
+                "include_images": True,
+                "include_image_descriptions": True,
+                "include_answer": False,
+                "include_raw_content": False,
+            },
+        )
+    if response.status_code != 200:
+        raise ValueError(f"Le service image a répondu HTTP {response.status_code}.")
+    data = response.json()
+    candidates: list[dict[str, Any]] = []
+    for image in data.get("images") or []:
+        if isinstance(image, dict):
+            candidates.append(image)
+    for result in data.get("results") or []:
+        if not isinstance(result, dict):
+            continue
+        for image in result.get("images") or []:
+            if isinstance(image, dict):
+                candidates.append({**image, "source_url": result.get("url"), "source_title": result.get("title")})
+    stored: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        image_url = str(candidate.get("url") or candidate.get("image_url") or "")
+        if not image_url or image_url in seen:
+            continue
+        seen.add(image_url)
+        try:
+            validated = await _resolve_public_image(image_url)
+        except Exception as exc:
+            logger.info("Image Work ignorée après validation (%s).", str(exc)[:180])
+            continue
+        image_id = uuid.uuid4().hex
+        description = str(candidate.get("description") or candidate.get("alt") or query)[:350]
+        source_url = str(candidate.get("source_url") or candidate.get("page_url") or "")[:1500]
+        source_title = str(candidate.get("source_title") or "")[:300]
+        state.images[image_id] = {
+            **validated,
+            "description": description,
+            "source_url": source_url,
+            "source_title": source_title,
+        }
+        stored.append({
+            "image_id": image_id,
+            "description": description,
+            "source_url": source_url,
+            "source_title": source_title,
+            "mime_type": validated["mime_type"],
+            "size_bytes": validated["size_bytes"],
+        })
+        if len(stored) >= max_images:
+            break
+    return {"query": query, "images": stored, "count": len(stored), "note": "Les images ont été téléchargées, contrôlées et conservées côté serveur pour insertion dans le document."}
+
+
 async def _dispatch_tool(
     name: str,
     args: dict[str, Any],
@@ -366,6 +517,15 @@ async def _dispatch_tool(
         )
         return result
 
+    if name == "image_search":
+        if uid == "anonymous":
+            raise PermissionError("Connecte-toi pour rechercher et intégrer des images.")
+        return await _search_work_images(
+            str(args.get("query") or ""),
+            int(args.get("max_images") or 3),
+            state,
+        )
+
     if name == "web_open":
         return await _open_public_page(str(args.get("url") or ""))
 
@@ -407,7 +567,23 @@ async def _dispatch_tool(
         for block in blocks:
             if not isinstance(block, dict):
                 raise ValueError("Chaque bloc doit être un objet.")
-            draft["blocks"].append(block)
+            normalized = dict(block)
+            if normalized.get("type") == "image" and normalized.get("image_id"):
+                image = state.images.get(str(normalized.get("image_id")))
+                if not image:
+                    raise ValueError("Référence d'image inconnue ou expirée.")
+                normalized["data_url"] = image["data_url"]
+                normalized.pop("image_id", None)
+                normalized["alt"] = str(normalized.get("alt") or image["description"])[:500]
+                draft["blocks"].append(normalized)
+                # The source is retained as a visible caption for attribution.
+                source = image.get("source_url")
+                description = image.get("description")
+                caption_parts = [part for part in (description, ("Source : " + source) if source else None) if part]
+                if caption_parts:
+                    draft["blocks"].append({"type": "caption", "text": " — ".join(caption_parts)[:1200]})
+            else:
+                draft["blocks"].append(normalized)
         return {"document_id": document_id, "blocks_added": len(blocks), "total_blocks": len(draft["blocks"]), "status": "draft_updated"}
 
     if name == "document_finalize":
@@ -427,6 +603,9 @@ async def _dispatch_tool(
             "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "data": raw,
             "verification": verification,
+            "verified_by_agent": False,
+            "kind": "docx",
+            "expected_blocks": list(draft["blocks"]),
         }
         state.artifacts[artifact_id] = artifact
         return {
@@ -443,12 +622,51 @@ async def _dispatch_tool(
         artifact = state.artifacts.get(artifact_id)
         if not artifact:
             raise ValueError("Fichier généré introuvable.")
+        data = artifact["data"]
+        kind = artifact.get("kind", "binary")
+        if kind == "docx":
+            verification = await asyncio.to_thread(_verify_docx, data, artifact.get("expected_blocks", []))
+        elif kind == "pdf":
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(data))
+            verification = {
+                "passed": len(reader.pages) > 0,
+                "pages": len(reader.pages),
+                "bytes_read_back": len(data),
+                "parser": "pypdf",
+            }
+        elif kind == "xlsx":
+            from openpyxl import load_workbook
+            workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=False)
+            verification = {
+                "passed": bool(workbook.sheetnames),
+                "sheets": workbook.sheetnames,
+                "bytes_read_back": len(data),
+                "parser": "openpyxl",
+            }
+            workbook.close()
+        elif kind == "text":
+            decoded = data.decode("utf-8")
+            verification = {
+                "passed": len(decoded.encode("utf-8")) == len(data),
+                "utf8_valid": True,
+                "bytes_read_back": len(data),
+                "characters_read_back": len(decoded),
+            }
+        else:
+            verification = {
+                "passed": bool(data) and len(data) == artifact.get("size_bytes"),
+                "bytes_read_back": len(data),
+            }
+        artifact["verification"] = verification
+        artifact["verified_by_agent"] = bool(verification.get("passed"))
         return {
             "artifact_id": artifact_id,
             "filename": artifact["filename"],
-            "size_bytes": len(artifact["data"]),
-            "verification": artifact["verification"],
-            "verified": bool(artifact["verification"].get("passed")),
+            "size_bytes": len(data),
+            "verification": verification,
+            "verified": artifact["verified_by_agent"],
+            "verified_by_agent": artifact["verified_by_agent"],
         }
 
     if name == "create_text_file":
@@ -460,7 +678,9 @@ async def _dispatch_tool(
         artifact = {
             "artifact_id": artifact_id, "filename": filename,
             "mime_type": "text/plain; charset=utf-8", "data": raw,
-            "verification": {"passed": True, "bytes_read_back": len(raw), "utf8_valid": True},
+            "verification": {"passed": False, "bytes_read_back": len(raw), "utf8_valid": True},
+            "verified_by_agent": False,
+            "kind": "text",
         }
         state.artifacts[artifact_id] = artifact
         return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": True}
@@ -490,6 +710,8 @@ async def _dispatch_tool(
         artifact = {
             "artifact_id": artifact_id, "filename": filename, "mime_type": mime_type,
             "data": raw, "verification": verification,
+            "verified_by_agent": False,
+            "kind": file_format,
         }
         state.artifacts[artifact_id] = artifact
         return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": verification["passed"], "verification": verification}
@@ -783,7 +1005,7 @@ async def _run_agent(
             final_answer = "La tâche est terminée, mais le modèle n'a pas fourni de texte final."
         artifacts = []
         for artifact in state.artifacts.values():
-            if not artifact["verification"].get("passed"):
+            if not artifact.get("verified_by_agent") or not artifact["verification"].get("passed"):
                 continue
             artifacts.append({
                 "artifact_id": artifact["artifact_id"],
