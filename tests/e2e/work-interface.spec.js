@@ -250,6 +250,7 @@ test("Work affiche et conserve le plan, les décisions et les actions réelles",
       { label: "Présenter le résultat", status: "done" }
     ],
     decisions: ["Je sépare les faits vérifiés des hypothèses."],
+    acceptance_criteria: ["Les actions sont confirmées par leurs retours d'outils."],
     limitations: ["Aucune source externe n'a été consultée pour ce test."],
     events: [
       { label: "Recherche sur le Web", status: "done", detail: "3 résultats vérifiés.", tool: "web_search" }
