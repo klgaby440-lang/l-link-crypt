@@ -150,3 +150,155 @@ def test_agent_tool_registry_is_general_and_uses_native_function_schemas():
 )
 def test_web_open_rejects_local_and_non_http_urls(url):
     assert work_agent._host_is_public(url) is False
+
+
+def test_openai_compatible_native_tool_calls_are_parsed(monkeypatch):
+    import asyncio
+    import json
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "choices": [{
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{
+                            "id": "call-native-1",
+                            "type": "function",
+                            "function": {
+                                "name": "web_search",
+                                "arguments": json.dumps({"query": "Pinaceae distribution"}),
+                            },
+                        }],
+                    }
+                }],
+                "usage": {"prompt_tokens": 40, "completion_tokens": 12},
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, json, headers):
+            assert url.endswith("/chat/completions")
+            assert json["stream"] is False
+            assert any(item["function"]["name"] == "web_search" for item in json["tools"])
+            return FakeResponse()
+
+    async def run():
+        monkeypatch.setattr(work_agent.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+        text, calls, usage, assistant = await work_agent._openai_turn(
+            model=resolve_model("auren"),
+            base_url="https://provider.example/v1",
+            api_key="test",
+            system="Work agent",
+            messages=[{"role": "user", "content": "Find Pinaceae distribution."}],
+            effort="normal",
+            timeout_seconds=10,
+        )
+        assert text == ""
+        assert calls == [{
+            "id": "call-native-1",
+            "name": "web_search",
+            "arguments": {"query": "Pinaceae distribution"},
+        }]
+        assert usage.prompt_tokens == 40
+        assert assistant["tool_calls"][0]["id"] == "call-native-1"
+
+    asyncio.run(run())
+
+
+def test_agent_can_embed_a_searched_image_and_verify_it_in_docx():
+    import asyncio
+    import base64
+
+    from PIL import Image
+
+    async def run():
+        output = io.BytesIO()
+        Image.new("RGB", (20, 20), (25, 110, 60)).save(output, format="PNG")
+        data_url = "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
+        state = work_agent.AgentState()
+        state.images["image-test-1"] = {
+            "data_url": data_url,
+            "size_bytes": len(output.getvalue()),
+            "mime_type": "image/png",
+            "description": "Branche de pin",
+            "source_url": "https://example.org/pine-photo",
+            "source_title": "Photographie botanique",
+        }
+        user = {"uid": "anonymous"}
+
+        begin = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "pinaceae-image-test.docx", "title": "Pinaceae illustrées"},
+            state=state, request=None, user=user, db=None,
+        )
+        document_id = begin["document_id"]
+        add = await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "blocks": [
+                {"type": "heading", "level": 1, "text": "Le pin"},
+                {"type": "image", "image_id": "image-test-1", "alt": "Aiguilles de pin"},
+            ]},
+            state=state, request=None, user=user, db=None,
+        )
+        assert add["total_blocks"] == 3
+        assert state.drafts[document_id]["blocks"][1]["data_url"] == data_url
+        assert "https://example.org/pine-photo" in state.drafts[document_id]["blocks"][2]["text"]
+
+        built = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": document_id},
+            state=state, request=None, user=user, db=None,
+        )
+        assert built["verified"] is True
+        verify = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": built["artifact_id"]},
+            state=state, request=None, user=user, db=None,
+        )
+        assert verify["verified_by_agent"] is True
+        raw = state.artifacts[built["artifact_id"]]["data"]
+        document = Document(io.BytesIO(raw))
+        assert len(document.inline_shapes) == 1
+
+    asyncio.run(run())
+
+
+def test_artifact_is_not_delivered_without_explicit_independent_verification(monkeypatch):
+    import asyncio
+
+    async def no_budget(**_kwargs):
+        return None
+
+    async def no_settlement(**_kwargs):
+        return None
+
+    async def run():
+        monkeypatch.setattr(work_agent, "reserve_usage_budget", no_budget)
+        monkeypatch.setattr(work_agent, "finalize_usage", no_settlement)
+        state_events = []
+
+        async def fake_openai_turn(**_kwargs):
+            return "Le fichier est terminé.", [], None, {"role": "assistant", "content": "Le fichier est terminé."}
+
+        async def emit(event):
+            if event is not None:
+                state_events.append(event)
+
+        monkeypatch.setattr(work_agent, "_openai_turn", fake_openai_turn)
+        payload = ChatPayload(message="Bonjour", model="gemini-1.5-flash", level="velora", mode="work")
+        await work_agent._run_agent(
+            payload=payload, request=None, user={"uid": "anonymous"}, db=None,
+            model=resolve_model("velora"), api_key="test", base_url="https://provider.example/v1",
+            emit=emit,
+        )
+        final = next(event for event in state_events if event["type"] == "final")
+        assert final["artifacts"] == []
+
+    asyncio.run(run())
