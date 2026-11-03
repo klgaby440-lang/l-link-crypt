@@ -101,6 +101,19 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "image_generate",
+            "description": "Generate an original illustration with GLM-Image. Use for original diagrams, educational illustrations or visuals that cannot be obtained from suitable existing images. The generated PNG is retained as an image reference for document insertion and as a downloadable artifact that must be independently verified.",
+            "parameters": {"type": "object", "properties": {
+                "prompt": {"type": "string", "minLength": 10, "maxLength": 1800},
+                "filename": {"type": "string", "maxLength": 120},
+                "size": {"type": "string", "enum": ["1280x1280", "1568x1056", "1056x1568", "1472x1088", "1088x1472", "1728x960", "960x1728"]},
+                "quality": {"type": "string", "enum": ["standard", "hd"]}
+            }, "required": ["prompt"]}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "python",
             "description": "Run Python in a temporary isolated sandbox for calculations, data analysis, transformations and verification. Never claim execution unless a result is returned.",
             "parameters": {"type": "object", "properties": {
@@ -483,6 +496,73 @@ async def _search_work_images(query: str, max_images: int, state: AgentState) ->
     return {"query": query, "images": stored, "count": len(stored), "note": "Les images ont été téléchargées, contrôlées et conservées côté serveur pour insertion dans le document."}
 
 
+async def _generate_work_image(prompt: str, filename: str, size: str, quality: str, state: AgentState) -> dict[str, Any]:
+    settings = get_settings()
+    if not settings.zai_api_key:
+        raise PermissionError("La génération d'images nécessite ZAI_API_KEY sur le serveur.")
+    prompt = str(prompt or "").strip()
+    if len(prompt) < 10 or len(prompt) > 1800:
+        raise ValueError("La description de l'image doit contenir entre 10 et 1 800 caractères.")
+    allowed_sizes = {"1280x1280", "1568x1056", "1056x1568", "1472x1088", "1088x1472", "1728x960", "960x1728"}
+    if size not in allowed_sizes:
+        size = "1280x1280"
+    if quality not in {"standard", "hd"}:
+        quality = "hd"
+
+    timeout = httpx.Timeout(75.0, connect=10.0)
+    endpoint = settings.zai_base_url.rstrip("/") + "/images/generations"
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+        response = await client.post(
+            endpoint,
+            headers={"Authorization": f"Bearer {settings.zai_api_key}", "Content-Type": "application/json"},
+            json={"model": "glm-image", "prompt": prompt, "size": size, "quality": quality},
+        )
+    if response.status_code != 200:
+        logger.warning("GLM-Image a répondu HTTP %s.", response.status_code)
+        raise ValueError(f"Le service GLM-Image a répondu HTTP {response.status_code}.")
+    payload = response.json()
+    data = payload.get("data") or []
+    image_url = str((data[0] or {}).get("url") or "") if data and isinstance(data[0], dict) else ""
+    if not image_url:
+        raise ValueError("GLM-Image n'a pas retourné de lien de téléchargement.")
+    validated = await _resolve_public_image(image_url)
+    if len(state.images) >= MAX_AGENT_IMAGES or state.image_bytes + validated["size_bytes"] > MAX_AGENT_IMAGE_BYTES:
+        raise ValueError("La limite de stockage des illustrations de cette tâche est atteinte.")
+
+    image_id = uuid.uuid4().hex
+    artifact_id = uuid.uuid4().hex
+    filename = _safe_filename(filename or "illustration.png", "illustration.png")
+    if not filename.lower().endswith(".png"):
+        filename = re.sub(r"\.[^.]+$", "", filename) + ".png"
+    image_description = prompt[:350]
+    state.image_bytes += validated["size_bytes"]
+    state.images[image_id] = {
+        **validated,
+        "description": image_description,
+        "source_url": "",
+        "source_title": "Illustration originale générée avec GLM-Image",
+    }
+    state.artifacts[artifact_id] = {
+        "artifact_id": artifact_id,
+        "filename": filename,
+        "mime_type": "image/png",
+        "data": base64.b64decode(validated["data_url"].split(",", 1)[1]),
+        "verification": {"passed": False, "precheck": "Image PNG reçue et normalisée par le serveur."},
+        "verified_by_agent": False,
+        "kind": "image",
+    }
+    return {
+        "image_id": image_id,
+        "artifact_id": artifact_id,
+        "filename": filename,
+        "mime_type": "image/png",
+        "size_bytes": validated["size_bytes"],
+        "status": "image_ready_pending_independent_verification",
+        "verified": False,
+        "note": "Image générée et téléchargée. Utilise image_id pour l'insérer dans un document et artifact_verify pour autoriser sa livraison.",
+    }
+
+
 async def _dispatch_tool(
     name: str,
     args: dict[str, Any],
@@ -537,6 +617,18 @@ async def _dispatch_tool(
         return await _search_work_images(
             str(args.get("query") or ""),
             int(args.get("max_images") or 3),
+            state,
+        )
+
+    if name == "image_generate":
+        if uid == "anonymous":
+            raise PermissionError("Connecte-toi pour générer et intégrer des images.")
+        await enforce_endpoint_quota(request=request, user=user, db=db, scope="work_tool_read")
+        return await _generate_work_image(
+            str(args.get("prompt") or ""),
+            str(args.get("filename") or "illustration.png"),
+            str(args.get("size") or "1280x1280"),
+            str(args.get("quality") or "hd"),
             state,
         )
 
@@ -670,6 +762,19 @@ async def _dispatch_tool(
                 "parser": "openpyxl",
             }
             workbook.close()
+        elif kind == "image":
+            from PIL import Image
+            with Image.open(io.BytesIO(data)) as image:
+                image.verify()
+            with Image.open(io.BytesIO(data)) as image:
+                verification = {
+                    "passed": image.format == "PNG" and image.width > 0 and image.height > 0 and image.width * image.height <= 20_000_000,
+                    "format": image.format,
+                    "width": image.width,
+                    "height": image.height,
+                    "bytes_read_back": len(data),
+                    "parser": "Pillow",
+                }
         elif kind == "text":
             decoded = data.decode("utf-8")
             verification = {
