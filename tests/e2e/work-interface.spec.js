@@ -236,6 +236,8 @@ test("Work affiche et conserve le plan, les décisions et les actions réelles",
   };
   await mockAgentEvents(page, [
     plan(summary, ["Analyser la demande", "Vérifier les informations", "Présenter le résultat"]),
+    { type: "model_start", detail: "Le modèle analyse le contexte et choisit la prochaine action." },
+    { type: "model_done", detail: "Analyse terminée ; 1 action sélectionnée.", tool_calls: 1 },
     toolEvent("tool_start", "web_search", "Recherche sur le Web", "in_progress"),
     toolEvent("tool_result", "web_search", "Recherche sur le Web", "done", "3 résultats vérifiés."),
     finalEvent("Voici le résultat de démonstration.", null, reasoning)
@@ -250,6 +252,8 @@ test("Work affiche et conserve le plan, les décisions et les actions réelles",
   await expect(panel).toContainText("Analyser la demande");
   await expect(panel).toContainText("Terminé");
   await expect(panel).toContainText("Je sépare les faits vérifiés");
+  await expect(panel).toContainText("Analyse et planification");
+  await expect(panel).toContainText("Analyse terminée ; 1 action sélectionnée.");
   await expect(panel).toContainText("Recherche sur le Web");
   await expect(message.locator(".work-message-body")).toContainText("résultat de démonstration");
 
