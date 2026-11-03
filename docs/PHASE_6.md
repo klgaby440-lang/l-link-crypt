@@ -66,6 +66,7 @@ Le mode Work utilise désormais un orchestrateur serveur dédié (llink_api/serv
 - L'orchestrateur exécute les fonctions dans le serveur, renvoie leurs résultats au modèle et poursuit jusqu'à une réponse finale ou une limite de sécurité.
 - Budget maximal par tâche : 24 tours du modèle, 32 appels d'outils et 240 secondes.
 - Les messages d'assistant des fournisseurs compatibles sont conservés tels quels entre les tours, notamment reasoning_content lorsque le fournisseur l'exige.
+- Work utilise Extra par défaut si l'utilisateur n'a jamais réglé l'intensité ; une préférence enregistrée Normal, Extra ou Ultime est respectée.
 - Le panneau Work expose le plan, les critères de réussite, les décisions résumées, les outils exécutés et leurs résultats confirmés. Il ne révèle pas de chaîne de pensée interne privée.
 
 ### Outils disponibles
