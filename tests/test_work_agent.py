@@ -257,7 +257,8 @@ def test_agent_can_embed_a_searched_image_and_verify_it_in_docx():
             "document_finalize", {"document_id": document_id},
             state=state, request=None, user=user, db=None,
         )
-        assert built["verified"] is True
+        assert built["precheck_passed"] is True
+        assert built["verified"] is False
         verify = await work_agent._dispatch_tool(
             "artifact_verify", {"artifact_id": built["artifact_id"]},
             state=state, request=None, user=user, db=None,
