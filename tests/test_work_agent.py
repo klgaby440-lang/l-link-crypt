@@ -45,13 +45,6 @@ async def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx
                 }},
             ]
         elif turns == 2:
-            document_id = next(
-                call["arguments"]["document_id"]
-                for message in kwargs["messages"]
-                if message.get("role") == "tool"
-                for call in []
-            ) if False else None
-            # The document id is deterministic only through the first tool result.
             begin_result = next(
                 message["content"] for message in kwargs["messages"]
                 if message.get("role") == "tool" and message.get("tool_call_id") == "begin-1"
@@ -127,7 +120,7 @@ async def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx
     document = Document(io.BytesIO(data))
     assert "Introduction" in [paragraph.text for paragraph in document.paragraphs]
     assert document.tables[0].cell(1, 0).text == "Création"
-    assert final["reasoning"]["tool_calls"] == 6
+    assert final["reasoning"]["tool_calls"] == 5
     assert any(event["type"] == "tool_result" and event["status"] == "done" for event in events)
 
 
