@@ -1321,7 +1321,9 @@ async def _run_agent(
                     if call.get("native_id"):
                         response_kwargs["id"] = str(call["native_id"])
                     gemini_function_responses.append(
-                        types.Part.from_function_response(**response_kwargs)
+                        types.Part(
+                            function_response=types.FunctionResponse(**response_kwargs)
+                        )
                     )
                 else:
                     messages.append({
