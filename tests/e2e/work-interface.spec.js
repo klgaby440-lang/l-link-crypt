@@ -10,6 +10,21 @@ const CORS_HEADERS = {
 };
 
 async function openWork(page) {
+  await page.route(API + "/api/work/tools", async route => {
+    if (route.request().method() === "OPTIONS") {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
+    return route.fulfill({
+      status: 200,
+      headers: { ...CORS_HEADERS, "content-type": "application/json" },
+      body: JSON.stringify({
+        tools: {
+          web_search: false, python: false, exports: true,
+          document_create: true, file_attachments: true
+        }
+      })
+    });
+  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     () => typeof window.Dexie === "function"
@@ -22,11 +37,13 @@ async function openWork(page) {
   await expect(page.locator("#work-list")).toBeVisible();
 }
 
-async function mockChatResponse(page, text) {
-  await page.route(`${API}/api/chat`, async route => {
+async function mockAgentEvents(page, events, verifyRequest = null) {
+  await page.route(API + "/api/work/agent", async route => {
     if (route.request().method() === "OPTIONS") {
       return route.fulfill({ status: 204, headers: CORS_HEADERS });
     }
+    if (verifyRequest) verifyRequest(route.request().postDataJSON());
+    const body = events.map(event => "data: " + JSON.stringify(event) + "\n\n").join("");
     return route.fulfill({
       status: 200,
       headers: {
@@ -34,81 +51,110 @@ async function mockChatResponse(page, text) {
         "content-type": "text/event-stream; charset=utf-8",
         "cache-control": "no-cache"
       },
-      body: text
+      body
     });
   });
 }
 
-async function askWorkToCreate(page, responseText) {
-  await mockChatResponse(page, responseText);
-  await page.locator("#work-prompt").fill("Prépare un document de test et retourne son contenu.");
-  await page.locator("#work-send").click();
-  const message = page.locator(".work-message.assistant").last();
-  await expect(message.locator(".work-message-body")).toContainText("Contenu de test");
-  await message.locator('[data-act="create-code"]').click();
-  await expect(page.locator("#work-input-dialog")).toBeVisible();
+function plan(summary, steps) {
+  return {
+    type: "plan",
+    summary,
+    steps: steps.map(label => ({ label, status: "done" })),
+    decisions: ["Les actions sont exécutées par des outils natifs côté serveur."],
+    limitations: []
+  };
 }
 
-test("Work crée, enregistre et télécharge un fichier Markdown", async ({ page }) => {
-  const relevantErrors = [];
-  page.on("pageerror", error => {
-    if (/createFile is not defined|saveFile is not defined|setEditorValue is not defined/i.test(error.message)) {
-      relevantErrors.push(error.message);
-    }
-  });
+function toolEvent(type, tool, label, status, detail) {
+  return { type, tool, label, status, detail };
+}
 
+function finalEvent(answer, artifact = null, reasoningOverride = null) {
+  const reasoning = reasoningOverride || {
+    summary: "La tâche a été exécutée et le résultat contrôlé.",
+    steps: [
+      { label: "Analyser la demande", status: "done" },
+      { label: "Exécuter l'outil", status: "done" },
+      { label: "Vérifier le résultat", status: "done" }
+    ],
+    decisions: ["Le fichier est remis uniquement après vérification."],
+    limitations: [],
+    events: [],
+    status: "completed",
+    tool_calls: artifact ? 3 : 0
+  };
+  return { type: "final", answer, reasoning, artifacts: artifact ? [artifact] : [] };
+}
+
+test("Work crée et télécharge un fichier Markdown éditable par l'agent serveur", async ({ page }) => {
   await openWork(page);
-  await askWorkToCreate(
-    page,
-    "Voici le document demandé.\n\n```markdown\n# Contenu de test\n\nCréé depuis une réponse de Llink Work.\n```"
-  );
-
-  await page.locator("#work-dialog-value").fill("rapport-ci.md");
-  await page.locator("#work-input-dialog button[type='submit']").click();
-
-  await expect(page.locator("#work-file-name")).toHaveText("rapport-ci.md");
-  const savedMarkdown = await page.evaluate(async () => {
-    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
-    return files.find(file => file.name === "rapport-ci.md")?.content ?? null;
+  const text = "# Rapport CI\n\nContenu créé par le nouvel agent.";
+  const artifact = {
+    artifact_id: "artifact-md",
+    filename: "rapport-agent-ci.md",
+    mime_type: "text/markdown",
+    size_bytes: Buffer.byteLength(text),
+    content_base64: Buffer.from(text).toString("base64"),
+    verification: { passed: true, utf8_valid: true }
+  };
+  await mockAgentEvents(page, [
+    plan("Je vais créer puis vérifier le fichier demandé.", ["Comprendre la demande", "Créer le fichier", "Contrôler son contenu"]),
+    toolEvent("tool_start", "create_text_file", "Création d'un fichier", "in_progress"),
+    toolEvent("tool_result", "create_text_file", "Création d'un fichier", "done", "rapport-agent-ci.md · vérifié"),
+    finalEvent("Le fichier Markdown a été créé et vérifié.", artifact)
+  ], payload => {
+    expect(payload.mode).toBe("work");
+    expect(payload.message).toContain("fichier Markdown");
   });
-  expect(savedMarkdown).toContain("Contenu de test");
 
+  await page.locator("#work-prompt").fill("Crée un fichier Markdown nommé rapport-agent-ci.md.");
   const downloadPromise = page.waitForEvent("download");
-  await page.locator('[data-act="download"]').first().click();
+  await page.locator("#work-send").click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("rapport-ci.md");
-  expect(relevantErrors).toEqual([]);
+  expect(download.suggestedFilename()).toBe("rapport-agent-ci.md");
+  await expect(page.locator("#work-file-name")).toHaveText("rapport-agent-ci.md");
+
+  const saved = await page.evaluate(async () => {
+    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
+    const file = files.find(item => item.name === "rapport-agent-ci.md");
+    return file ? { isBinary: file.isBinary, content: file.content } : null;
+  });
+  expect(saved).toEqual({ isBinary: false, content: text });
 });
 
-test("Work génère et télécharge un PDF depuis une réponse", async ({ page }) => {
+test("Work livre un PDF vérifié comme fichier binaire", async ({ page }) => {
   await openWork(page);
-  await askWorkToCreate(
-    page,
-    "Voici le document demandé.\n\n```text\nContenu de test pour le PDF.\n```"
-  );
+  const pdf = Buffer.from("%PDF-1.4\n% Llink agent test\n1 0 obj <<>> endobj\n%%EOF\n");
+  const artifact = {
+    artifact_id: "artifact-pdf",
+    filename: "analyse-agent-ci.pdf",
+    mime_type: "application/pdf",
+    size_bytes: pdf.length,
+    content_base64: pdf.toString("base64"),
+    verification: { passed: true, bytes_read_back: pdf.length, pages: 1 }
+  };
+  await mockAgentEvents(page, [
+    plan("Je prépare l'export et contrôle que le PDF est lisible.", ["Préparer le contenu", "Générer le PDF", "Vérifier le fichier"]),
+    toolEvent("tool_start", "export_file", "Export PDF", "in_progress"),
+    toolEvent("tool_result", "export_file", "Export PDF", "done", "1 page · vérification réussie"),
+    finalEvent("Le PDF a été généré et vérifié.", artifact)
+  ]);
 
-  await page.route(`${API}/api/work/exports/pdf`, async route => {
-    if (route.request().method() === "OPTIONS") {
-      return route.fulfill({ status: 204, headers: CORS_HEADERS });
-    }
-    return route.fulfill({
-      status: 200,
-      headers: {
-        ...CORS_HEADERS,
-        "content-type": "application/pdf",
-        "content-disposition": 'attachment; filename="rapport-ci.pdf"'
-      },
-      body: Buffer.from("%PDF-1.4\n% Llink Work CI smoke test\n%%EOF\n")
-    });
-  });
-
-  await page.locator("#work-dialog-value").fill("rapport-ci.pdf");
+  await page.locator("#work-prompt").fill("Crée un PDF de synthèse.");
   const downloadPromise = page.waitForEvent("download");
-  await page.locator("#work-input-dialog button[type='submit']").click();
+  await page.locator("#work-send").click();
   const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("analyse-agent-ci.pdf");
+  await expect(page.locator("#work-file-name")).toHaveText("analyse-agent-ci.pdf");
 
-  expect(download.suggestedFilename()).toBe("rapport-ci.pdf");
-  await expect(page.locator("#work-file-name")).toHaveText("rapport-ci.pdf");
+  const saved = await page.evaluate(async () => {
+    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
+    const file = files.find(item => item.name === "analyse-agent-ci.pdf");
+    return file ? { isBinary: file.isBinary, size: file.blob?.size ?? 0 } : null;
+  });
+  expect(saved?.isBinary).toBe(true);
+  expect(saved.size).toBeGreaterThan(0);
 });
 
 test("Work importe un fichier texte dans l'espace local", async ({ page }) => {
@@ -118,7 +164,6 @@ test("Work importe un fichier texte dans l'espace local", async ({ page }) => {
     mimeType: "text/plain",
     buffer: Buffer.from("Fichier importé par le test d'interface.")
   });
-
   await expect(page.locator(".work-file-item").filter({ hasText: "import-ci.txt" })).toBeVisible();
   await expect(page.locator("#work-file-name")).toHaveText("import-ci.txt");
   const importedText = await page.evaluate(async () => {
@@ -128,143 +173,90 @@ test("Work importe un fichier texte dans l'espace local", async ({ page }) => {
   expect(importedText).toContain("Fichier importé par le test");
 });
 
-test("Work répare une commande JSON et crée automatiquement un document Word", async ({ page }) => {
-  const headers = { ...CORS_HEADERS, "content-type": "application/json" };
-  const openTag = String.fromCharCode(60) + "llink_tool" + String.fromCharCode(62);
-  const closeTag = String.fromCharCode(60) + "/llink_tool" + String.fromCharCode(62);
-  let chatCalls = 0;
-
-  await page.route(API + "/api/work/tools", async route => {
-    if (route.request().method() === "OPTIONS") {
-      return route.fulfill({ status: 204, headers: CORS_HEADERS });
-    }
-    return route.fulfill({
-      status: 200,
-      headers,
-      body: JSON.stringify({ tools: {
-        web_search: false, python: false, exports: true,
-        document_create: true, file_attachments: true
-      }})
-    });
-  });
-
-  await page.route(API + "/api/work/tools/document", async route => {
-    if (route.request().method() === "OPTIONS") {
-      return route.fulfill({ status: 204, headers: CORS_HEADERS });
-    }
-    const payload = route.request().postDataJSON();
-    expect(payload.filename).toBe("rapport-docx-ci.docx");
-    expect(payload.blocks[0].text).toBe("Première ligne\nDeuxième ligne");
-    return route.fulfill({
-      status: 200,
-      headers: {
-        ...CORS_HEADERS,
-        "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "content-disposition": 'attachment; filename="rapport-docx-ci.docx"'
-      },
-      body: Buffer.from("PK\u0003\u0004Llink Work DOCX test")
-    });
-  });
-
-  await page.route(API + "/api/chat", async route => {
-    if (route.request().method() === "OPTIONS") {
-      return route.fulfill({ status: 204, headers: CORS_HEADERS });
-    }
-    chatCalls += 1;
-    const invalidJson = '{"name":"create_document","arguments":{"filename":"rapport-docx-ci.docx","title":"Rapport CI","blocks":[{"type":"paragraph","text":"Première ligne'
-      + String.fromCharCode(10) + 'Deuxième ligne"}]}}';
-    const responseText = chatCalls === 1
-      ? openTag + invalidJson + closeTag
-      : "Le document Word a été créé, enregistré localement et téléchargé.";
-    return route.fulfill({
-      status: 200,
-      headers: {
-        ...CORS_HEADERS,
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-cache"
-      },
-      body: responseText
-    });
-  });
-
+test("Work utilise le journal d'outils natifs pour créer et vérifier un DOCX", async ({ page }) => {
   await openWork(page);
-  await page.locator("#work-prompt").fill("Crée un document Word et remets-moi le fichier.");
+  const docx = Buffer.from("PK\u0003\u0004Llink Work DOCX native agent test");
+  const artifact = {
+    artifact_id: "artifact-docx",
+    filename: "rapport-docx-agent.docx",
+    mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size_bytes: docx.length,
+    content_base64: docx.toString("base64"),
+    verification: { passed: true, docx_reopened: true, paragraphs_checked: 2, tables_found: 1 }
+  };
+  await mockAgentEvents(page, [
+    plan("Je rédige le document par sections, puis je vérifie le fichier Word final.", ["Établir le plan", "Rédiger les sections", "Générer le DOCX", "Vérifier le DOCX"]),
+    toolEvent("tool_start", "document_begin", "Initialisation du document", "in_progress"),
+    toolEvent("tool_result", "document_begin", "Initialisation du document", "done", "Brouillon initialisé"),
+    toolEvent("tool_start", "document_add_blocks", "Rédaction d'une section", "in_progress"),
+    toolEvent("tool_result", "document_add_blocks", "Rédaction d'une section", "done", "6 blocs ajoutés"),
+    toolEvent("tool_start", "document_finalize", "Génération et vérification du fichier", "in_progress"),
+    toolEvent("tool_result", "document_finalize", "Génération et vérification du fichier", "done", "DOCX réouvert · tableaux et paragraphes vérifiés"),
+    toolEvent("tool_start", "artifact_verify", "Vérification indépendante du fichier", "in_progress"),
+    toolEvent("tool_result", "artifact_verify", "Vérification indépendante du fichier", "done", "Toutes les vérifications ont réussi"),
+    finalEvent("Le document Word est prêt. Il a été généré en plusieurs sections, rouvert et vérifié.", artifact)
+  ]);
+
+  await page.locator("#work-prompt").fill("Crée un document Word professionnel et vérifie-le.");
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#work-send").click();
   const download = await downloadPromise;
-
-  expect(download.suggestedFilename()).toBe("rapport-docx-ci.docx");
-  await expect(page.locator("#work-file-name")).toHaveText("rapport-docx-ci.docx");
-  await expect(page.locator(".work-message.assistant").last()).toContainText("créé");
-  expect(chatCalls).toBe(2);
+  expect(download.suggestedFilename()).toBe("rapport-docx-agent.docx");
+  await expect(page.locator("#work-file-name")).toHaveText("rapport-docx-agent.docx");
+  await expect(page.locator(".work-reasoning")).toContainText("Vérification indépendante du fichier");
+  await expect(page.locator(".work-reasoning")).toContainText("vérifiées");
+  await expect(page.locator(".work-message-body").last()).toContainText("généré en plusieurs sections");
 
   const saved = await page.evaluate(async () => {
     const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
-    const file = files.find(item => item.name === "rapport-docx-ci.docx");
+    const file = files.find(item => item.name === "rapport-docx-agent.docx");
     return file ? { isBinary: file.isBinary, size: file.blob?.size ?? 0 } : null;
   });
   expect(saved?.isBinary).toBe(true);
   expect(saved.size).toBeGreaterThan(0);
 });
 
-test("Work affiche et conserve la démarche structurée du modèle", async ({ page }) => {
-  await page.route(API + "/api/work/tools", async route => {
-    if (route.request().method() === "OPTIONS") {
-      return route.fulfill({ status: 204, headers: CORS_HEADERS });
-    }
-    return route.fulfill({
-      status: 200,
-      headers: { ...CORS_HEADERS, "content-type": "application/json" },
-      body: JSON.stringify({
-        tools: {
-          web_search: false,
-          python: false,
-          exports: true,
-          document_create: true,
-          file_attachments: true
-        }
-      })
-    });
-  });
-
+test("Work affiche et conserve le plan, les décisions et les actions réelles", async ({ page }) => {
+  await openWork(page);
+  const summary = "Je vérifie la demande, sélectionne les outils utiles et contrôle le résultat.";
   const reasoning = {
-    summary: "Je vérifie la demande, organise les étapes et contrôle le résultat.",
+    summary,
     steps: [
       { label: "Analyser la demande", status: "done" },
-      { label: "Vérifier les informations", status: "in_progress" },
-      { label: "Présenter le résultat", status: "planned" }
+      { label: "Vérifier les informations", status: "done" },
+      { label: "Présenter le résultat", status: "done" }
     ],
     decisions: ["Je sépare les faits vérifiés des hypothèses."],
-    limitations: ["Aucune source externe n'a été consultée pour ce test."]
+    limitations: ["Aucune source externe n'a été consultée pour ce test."],
+    events: [
+      { label: "Recherche sur le Web", status: "done", detail: "3 résultats vérifiés.", tool: "web_search" }
+    ],
+    status: "completed",
+    tool_calls: 1
   };
-  const openTag = String.fromCharCode(60) + "llink_reasoning" + String.fromCharCode(62);
-  const closeTag = String.fromCharCode(60) + "/llink_reasoning" + String.fromCharCode(62);
+  await mockAgentEvents(page, [
+    plan(summary, ["Analyser la demande", "Vérifier les informations", "Présenter le résultat"]),
+    toolEvent("tool_start", "web_search", "Recherche sur le Web", "in_progress"),
+    toolEvent("tool_result", "web_search", "Recherche sur le Web", "done", "3 résultats vérifiés."),
+    finalEvent("Voici le résultat de démonstration.", null, reasoning)
+  ]);
 
-  await mockChatResponse(
-    page,
-    openTag + JSON.stringify(reasoning) + closeTag
-      + "\nVoici le résultat de démonstration."
-  );
-
-  await openWork(page);
-  await page.locator("#work-prompt").fill("Explique ta démarche avant de répondre.");
+  await page.locator("#work-prompt").fill("Explique ta démarche et vérifie les faits.");
   await page.locator("#work-send").click();
-
   const message = page.locator(".work-message.assistant").last();
   const panel = message.locator(".work-reasoning");
   await expect(panel).toBeVisible();
   await expect(panel).toContainText("Démarche de Llink");
-  await expect(panel).toContainText("Je vérifie la demande");
   await expect(panel).toContainText("Analyser la demande");
   await expect(panel).toContainText("Terminé");
   await expect(panel).toContainText("Je sépare les faits vérifiés");
+  await expect(panel).toContainText("Recherche sur le Web");
   await expect(message.locator(".work-message-body")).toContainText("résultat de démonstration");
-  await expect(message.locator(".work-message-body")).not.toContainText("llink_reasoning");
 
   const saved = await page.evaluate(async () => {
     const messages = await db.msgs.toArray();
     return messages.find(item => item.role === "bot" && item.reasoning)?.reasoning ?? null;
   });
-  expect(saved?.summary).toContain("Je vérifie la demande");
-  expect(saved?.steps).toHaveLength(3);
+  expect(saved?.summary).toBe(summary);
+  expect(saved?.events).toHaveLength(1);
 });
