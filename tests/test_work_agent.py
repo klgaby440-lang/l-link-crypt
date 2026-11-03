@@ -296,7 +296,7 @@ def test_artifact_is_not_delivered_without_explicit_independent_verification(mon
         payload = ChatPayload(message="Bonjour", model="gemini-1.5-flash", level="velora", mode="work")
         await work_agent._run_agent(
             payload=payload, request=None, user={"uid": "anonymous"}, db=None,
-            model=resolve_model("velora"), api_key="test", base_url="https://provider.example/v1",
+            model=resolve_model("auren"), api_key="test", base_url="https://provider.example/v1",
             emit=emit,
         )
         final = next(event for event in state_events if event["type"] == "final")
