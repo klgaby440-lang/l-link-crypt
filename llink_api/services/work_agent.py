@@ -1033,8 +1033,10 @@ async def _run_agent(
         if not final_answer:
             final_answer = "La tâche est terminée, mais le modèle n'a pas fourni de texte final."
         artifacts = []
+        unverified_names = []
         for artifact in state.artifacts.values():
             if not artifact.get("verified_by_agent") or not artifact["verification"].get("passed"):
+                unverified_names.append(artifact.get("filename", "fichier inconnu"))
                 state.plan["limitations"].append(
                     f"Le fichier {artifact.get('filename', 'inconnu')} n'a pas passé la vérification indépendante et n'a pas été remis."
                 )
@@ -1047,6 +1049,9 @@ async def _run_agent(
                 "content_base64": base64.b64encode(artifact["data"]).decode("ascii"),
                 "verification": artifact["verification"],
             })
+        if unverified_names:
+            final_answer += "\n\nJe n'ai pas remis les fichiers suivants, car leur vérification indépendante n'a pas réussi : " + ", ".join(unverified_names) + "."
+
         reasoning = {
             "summary": state.plan["summary"],
             "steps": state.plan["steps"],
