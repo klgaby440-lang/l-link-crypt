@@ -259,7 +259,7 @@ def test_agent_can_embed_a_searched_image_and_verify_it_in_docx():
             state=state, request=None, user=user, db=None,
         )
         assert built["precheck_passed"] is True
-        assert built["status"] == "artifact_ready_pending_independent_verification"
+        assert built["status"] == "pending_independent_verification"
         verify = await work_agent._dispatch_tool(
             "artifact_verify", {"artifact_id": built["artifact_id"]},
             state=state, request=None, user=user, db=None,
