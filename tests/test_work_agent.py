@@ -579,3 +579,103 @@ def test_document_begin_persists_user_quality_contract_and_blocks_failed_deliver
         assert state.artifacts[built["artifact_id"]]["verified_by_agent"] is False
 
     asyncio.run(run())
+
+
+def test_work_agent_infers_document_requirements_from_the_user_request():
+    quality = work_agent._infer_document_quality(
+        "Fais des recherches et crée un rapport de 5 pages avec des images et un tableau."
+    )
+
+    assert quality["minimum_words"] == 1500
+    assert quality["minimum_images"] == 1
+    assert quality["minimum_tables"] == 1
+    assert quality["minimum_source_urls"] == 3
+    assert quality["require_bibliography"] is True
+    assert "Bibliographie" in quality["required_headings"]
+    assert work_agent._request_requires_artifact(
+        "Fais des recherches et crée un rapport de 5 pages."
+    ) is True
+    assert work_agent._request_requires_artifact(
+        "Explique-moi la reproduction des Pinaceae."
+    ) is False
+
+
+def test_document_begin_cannot_lower_inferred_quality_requirements():
+    async def run():
+        state = work_agent.AgentState(
+            user_request="Fais des recherches et crée un rapport de 5 pages avec des images et un tableau."
+        )
+        result = await work_agent._dispatch_tool(
+            "document_begin",
+            {
+                "filename": "rapport-qualite.docx",
+                "title": "Rapport de systématique",
+                "quality": {
+                    "minimum_words": 100,
+                    "minimum_images": 0,
+                    "minimum_tables": 0,
+                    "minimum_source_urls": 0,
+                    "require_bibliography": False,
+                },
+            },
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        quality = state.drafts[result["document_id"]]["quality"]
+        assert quality["minimum_words"] == 1500
+        assert quality["minimum_images"] == 1
+        assert quality["minimum_tables"] == 1
+        assert quality["minimum_source_urls"] == 3
+        assert quality["require_bibliography"] is True
+
+    asyncio.run(run())
+
+
+def test_requested_file_is_not_reported_as_delivered_when_no_verified_artifact_exists(monkeypatch):
+    async def no_budget(**_kwargs):
+        return None
+
+    async def no_settlement(**_kwargs):
+        return None
+
+    async def run():
+        monkeypatch.setattr(work_agent, "reserve_usage_budget", no_budget)
+        monkeypatch.setattr(work_agent, "finalize_usage", no_settlement)
+        events = []
+
+        async def fake_openai_turn(**_kwargs):
+            return "Le rapport Word est terminé.", [], None, {
+                "role": "assistant",
+                "content": "Le rapport Word est terminé.",
+            }
+
+        async def emit(event):
+            if event is not None:
+                events.append(event)
+
+        monkeypatch.setattr(work_agent, "_openai_turn", fake_openai_turn)
+        payload = ChatPayload(
+            message="Crée un rapport Word professionnel et remets le fichier.",
+            model="deepseek-flash",
+            level="auren",
+            mode="work",
+        )
+        await work_agent._run_agent(
+            payload=payload,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+            model=resolve_model("auren"),
+            api_key="test",
+            base_url="https://provider.example/v1",
+            emit=emit,
+        )
+        final = next(event for event in events if event["type"] == "final")
+        assert final["artifacts"] == []
+        assert "Je n'ai pas remis de fichier" in final["answer"]
+        assert final["reasoning"]["status"] == "completed_with_limitations"
+        assert any("aucun fichier vérifié" in item for item in final["reasoning"]["limitations"])
+
+    asyncio.run(run())
