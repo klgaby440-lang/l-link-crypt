@@ -57,7 +57,7 @@ async function openWork(page, savedEffort = null) {
   await expect(page.locator(".work-brand-title")).toHaveText("Llink Work");
   await expect(page.locator("#work-list")).toBeVisible();
   await expect(page.locator("#work-tool-status")).toContainText("Agent natif native-functions-v1");
-  await expect(page.locator("#work-tool-status")).toContainText("Réflexion extra");
+  await expect(page.locator("#work-tool-status")).toContainText("Réflexion " + (savedEffort || "extra"));
 }
 
 async function mockAgentEvents(page, events, verifyRequest = null) {
