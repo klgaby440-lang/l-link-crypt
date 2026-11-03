@@ -19,7 +19,7 @@
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" onerror="this.onerror=null;this.src=\'https://cdn.jsdelivr.net/npm/marked@18.1.2/lib/marked.umd.js\'"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js"></script>
-    <link rel="stylesheet" href="./workspace.css?v=native-agent-20261103-1">
+    <link rel="stylesheet" href="./workspace.css?v=native-agent-20261103-2">
     
     <script>
         tailwind.config = {
@@ -5457,10 +5457,10 @@ function initMode(){
   var LV=[['velora','VELORA','0.1',true,'zap','gemini-1.5-flash','',0],['satori','SATORI','1',false,'sparkles','deepseek-v3','bronze',30],['noetra','NOETRA','',false,'brain','deepseek-v3','silver',80],['auren','AUREN','2.0',false,'atom','deepseek-v3','gold',150],['omnis','OMNIS','1.1',false,'infinity','deepseek-v3','diamant',250]];
   var TN={bronze:'Bronze',silver:'Silver',gold:'Gold',diamant:'Diamant'},RK={bronze:1,silver:2,gold:3,diamant:4};
   var EF=[['normal','Normal','Réflexion équilibrée'],['extra','Extra','Réflexion poussée'],['ultime','Ultime','Réflexion au maximum']];
-  var lv='velora',eff='normal';
+  var lv='velora',eff='normal',effortExplicit=false;
   function rank(){try{return RK[localStorage.getItem('llink_plan')]||0;}catch(e){return 0;}}
   function ok(l){return l[3]||rank()>=RK[l[6]];}
-  try{var a=localStorage.getItem('llink_level'),e0=localStorage.getItem('llink_effort');if(a&&LV.some(function(l){return l[0]===a;}))lv=a;if(e0&&EF.some(function(x){return x[0]===e0;}))eff=e0;}catch(_){}
+  try{var a=localStorage.getItem('llink_level'),e0=localStorage.getItem('llink_effort');if(a&&LV.some(function(l){return l[0]===a;}))lv=a;if(e0&&EF.some(function(x){return x[0]===e0;})){eff=e0;effortExplicit=true;}}catch(_){}
   function cur(){var l=LV.filter(function(x){return x[0]===lv;})[0]||LV[0];return ok(l)?l:LV[0];}
   function sync(){var l=cur();lv=l[0];s.value=l[5];}
   var b=document.createElement('button');b.type='button';b.id='ll-mode-btn';b.setAttribute('aria-haspopup','dialog');b.setAttribute('aria-expanded','false');
@@ -5482,7 +5482,7 @@ function initMode(){
   o.addEventListener('click',function(e){
     if(e.target===o||e.target.closest('[data-act="close"]')){close();return;}
     var ev=e.target.closest('[data-e]');
-    if(ev){eff=ev.dataset.e;try{localStorage.setItem('llink_effort',eff);}catch(_){}render();return;}
+    if(ev){eff=ev.dataset.e;effortExplicit=true;try{localStorage.setItem('llink_effort',eff);}catch(_){}render();return;}
     var it=e.target.closest('[data-v]');if(!it)return;
     var l=LV.filter(function(x){return x[0]===it.dataset.v;})[0];
     if(!ok(l)){close();if(window.openSubscriptionWindow)openSubscriptionWindow(l[6]);return;}
@@ -5490,7 +5490,7 @@ function initMode(){
     sync();s.dispatchEvent(new Event('change',{bubbles:true}));render();close();});
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&o.classList.contains('open'))close();});
   new MutationObserver(function(){b.disabled=s.disabled;b.style.opacity=s.disabled?.5:'';}).observe(s,{attributes:true,attributeFilter:['disabled']});
-  window.llThink={level:function(){return cur()[0];},effort:function(){return eff;},refresh:render};
+  window.llThink={level:function(){return cur()[0];},effort:function(){return eff;},agentEffort:function(){return effortExplicit?eff:"extra";},refresh:render};
   render();
 }
 /* ---------- Choix des langues ---------- */
@@ -5536,5 +5536,5 @@ function init(){initMode();initLang();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
 </script>
-<script src="./workspace.js?v=native-agent-20261103-1"></script>
+<script src="./workspace.js?v=native-agent-20261103-2"></script>
 </html>
