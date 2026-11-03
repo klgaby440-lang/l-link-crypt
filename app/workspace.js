@@ -401,7 +401,7 @@ if(!ans.reasoning.status||ans.reasoning.status==="in_progress")ans.reasoning.sta
 await db.msgs.add({chatId:S.chatId,role:"bot",text:ans.text,reasoning:ans.reasoning});
 const c=await db.chats.get(S.chatId);
 if(c&&window.isLoggedIn&&typeof syncChatToServer==="function"){c.messages=(await db.msgs.where("chatId").equals(S.chatId).toArray()).slice(-200);await syncChatToServer(c);}
-}catch(e){ans.text="❌ "+e.message;if(ans.reasoning)ans.reasoning.status="failed";toast(ans.text);}
+}catch(e){ans.text="❌ "+e.message;if(ans.reasoning){recordWorkEvent(ans,"agent_preflight","blocked",e.message);ans.reasoning.status="failed";updateReasoningSlot(ans);}toast(ans.text);}
 finally{S.busy=false;$("work-send").disabled=false;renderMessages();}
 }
 async function showVersions(){if(!S.file)return toast("Ouvre un fichier d’abord.");let a=[];if(S.file.cloudId&&connected()&&navigator.onLine){try{a=(await api("/api/work/files/"+encodeURIComponent(S.file.cloudId)+"/versions")).versions||[];}catch(e){toast(e.message);}}else a=await db.workFileVersions.where("fileId").equals(S.file.id).toArray();$("work-dialog-root").innerHTML='<div class="work-dialog-backdrop"><div class="work-dialog"><h3>Historique des versions</h3><p>Restaurer une version crée une nouvelle version courante.</p><div id="work-ver-list"></div><div class="work-dialog-actions"><button data-act="close-dialog">Fermer</button></div></div></div>';$("work-dialog-root").querySelector("#work-ver-list").innerHTML=a.length?a.map(v=>'<div class="work-version-row"><div><b>Version '+v.version+'</b><small>'+esc(v.created_at||v.createdAt||"")+'</small></div><button data-act="restore" data-version="'+v.version+'">Restaurer</button></div>').join(""):"Aucune version précédente.";}
