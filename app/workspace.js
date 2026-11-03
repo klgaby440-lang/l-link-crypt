@@ -279,7 +279,13 @@ const binary=atob(artifact.content_base64);
 const bytesArray=new Uint8Array(binary.length);
 for(let i=0;i<binary.length;i++)bytesArray[i]=binary.charCodeAt(i);
 const blob=new Blob([bytesArray],{type:artifact.mime_type||"application/octet-stream"});
-const file=await createBinaryFile(uniqueBinaryName(artifact.filename||"llink-artifact.bin"),blob,artifact.mime_type);
+const filename=uniqueBinaryName(artifact.filename||"llink-artifact.bin");
+let file;
+if((artifact.mime_type||"").startsWith("text/")||["json","md","markdown","txt","csv","py","js","ts","html","css","xml","yaml","yml","sql"].includes(ext(filename))){
+const textContent=await blob.text();
+if(bytes(textContent)<=LIMIT)file=await createFile(filename,textContent);
+else file=await createBinaryFile(filename,blob,artifact.mime_type);
+}else file=await createBinaryFile(filename,blob,artifact.mime_type);
 if(file){
 downloaded++;
 recordWorkEvent(ans,"artifact","done",file.name+" · "+size(blob.size)+" · vérification réussie.");
