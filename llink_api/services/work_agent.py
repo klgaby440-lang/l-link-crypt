@@ -1052,6 +1052,12 @@ async def _run_agent(
         for model_turn in range(MAX_MODEL_TURNS):
             if asyncio.get_running_loop().time() - started > MAX_AGENT_SECONDS:
                 raise TimeoutError("La durée maximale de la tâche Work est dépassée.")
+            await emit({
+                "type": "model_start",
+                "turn": model_turn + 1,
+                "label": "Analyse et planification",
+                "detail": "Le modèle examine le contexte, les résultats précédents et choisit la prochaine action.",
+            })
             prompt_for_budget = system + "\n" + _json_safe(messages if model.provider != "gemini" else gemini_contents, 120_000)
             reservation = await reserve_usage_budget(
                 db=db, uid=str(user.get("uid") or "anonymous"), level=model.level,
@@ -1086,6 +1092,15 @@ async def _run_agent(
                     level=model.level, model=model, usage=usage, status=status,
                 )
 
+            await emit({
+                "type": "model_done",
+                "turn": model_turn + 1,
+                "tool_calls": len(calls),
+                "detail": (
+                    f"Analyse terminée ; {len(calls)} action(s) sélectionnée(s)."
+                    if calls else "Analyse terminée ; réponse finale préparée."
+                ),
+            })
             if not calls:
                 final_answer = text.strip()
                 break
