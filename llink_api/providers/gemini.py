@@ -64,7 +64,7 @@ class GeminiModelAdapter:
     def _config(self) -> types.GenerateContentConfig:
         return types.GenerateContentConfig(
             system_instruction=self.system_instruction,
-            max_output_tokens=2048,
+            max_output_tokens=4096,
             thinking_config=types.ThinkingConfig(
                 thinking_level=EFFORT_TO_THINKING_LEVEL[self.effort]
             ),
