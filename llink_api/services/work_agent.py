@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
 from fastapi import HTTPException, Request
@@ -83,7 +83,7 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "web_open",
-            "description": "Open and extract the readable text of a public HTTP(S) page found by web_search. Do not use for private or local addresses.",
+            "description": "Open a public HTTP(S) page and extract its title, readable text and up to 20 direct links. Follow relevant returned links with additional web_open calls to navigate across pages. Text-only: no JavaScript execution, login, form submission or downloads. Private/local addresses are rejected.",
             "parameters": {"type": "object", "properties": {
                 "url": {"type": "string", "maxLength": 2000},
             }, "required": ["url"]},
@@ -278,26 +278,85 @@ TOOLS: list[dict[str, Any]] = [
 
 
 class _ReadableHTML(HTMLParser):
+    """Extrait le texte, le titre et les liens utiles sans exécuter le JavaScript."""
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
+        self.title_parts: list[str] = []
+        self.links: list[dict[str, str]] = []
         self.hidden = 0
+        self.in_title = False
+        self.active_link: dict[str, Any] | None = None
 
     def handle_starttag(self, tag: str, attrs: Any) -> None:
-        if tag.lower() in {"script", "style", "noscript", "svg"}:
+        tag = tag.lower()
+        if tag in {"script", "style", "noscript", "svg"}:
             self.hidden += 1
-        elif tag.lower() in {"p", "div", "li", "br", "h1", "h2", "h3", "h4", "tr"} and not self.hidden:
+            return
+        if self.hidden:
+            return
+        attributes = dict(attrs)
+        if tag == "title":
+            self.in_title = True
+        elif tag == "a":
+            href = str(attributes.get("href") or "").strip()
+            if href and len(href) <= 2000:
+                self.active_link = {"href": href, "text": []}
+        if tag in {"p", "div", "li", "br", "h1", "h2", "h3", "h4", "tr"}:
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() in {"script", "style", "noscript", "svg"} and self.hidden:
-            self.hidden -= 1
-        elif tag.lower() in {"p", "div", "li", "tr"} and not self.hidden:
+        tag = tag.lower()
+        if tag in {"script", "style", "noscript", "svg"}:
+            if self.hidden:
+                self.hidden -= 1
+            return
+        if self.hidden:
+            return
+        if tag == "a" and self.active_link is not None:
+            self.links.append({
+                "href": str(self.active_link.get("href") or ""),
+                "text": " ".join(self.active_link.get("text") or [])[:240],
+            })
+            self.active_link = None
+        elif tag == "title":
+            self.in_title = False
+        elif tag in {"p", "div", "li", "tr"}:
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
-        if not self.hidden and data.strip():
-            self.parts.append(data.strip())
+        if self.hidden or not data.strip():
+            return
+        value = data.strip()
+        self.parts.append(value)
+        if self.in_title:
+            self.title_parts.append(value)
+        if self.active_link is not None:
+            self.active_link["text"].append(value)
+
+
+def _public_navigation_links(raw_links: list[dict[str, str]], base_url: str) -> list[dict[str, str]]:
+    """Résout les liens relatifs et élimine les schémas non HTTP avant toute navigation."""
+    output: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in raw_links[:60]:
+        href = str(item.get("href") or "").strip()
+        if not href:
+            continue
+        target = urljoin(base_url, href)
+        target, _fragment = urldefrag(target)
+        parsed = urlparse(target)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+            continue
+        if target in seen or target.rstrip("/") == base_url.rstrip("/"):
+            continue
+        seen.add(target)
+        label = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()[:160]
+        output.append({"label": label or parsed.hostname, "url": target[:2000]})
+        if len(output) >= 20:
+            break
+    return output
 
 
 @dataclass
@@ -494,8 +553,10 @@ async def _open_public_page(url: str) -> dict[str, Any]:
     if len(response.content) > 2_000_000:
         raise ValueError("La page dépasse la limite de lecture de 2 Mo.")
     content_type = response.headers.get("content-type", "").lower()
-    if not any(kind in content_type for kind in ("text/html", "application/xhtml+xml", "text/plain")):
+    if not any(kind in content_type for kind in ("text/html", "text/plain", "application/xhtml+xml")):
         raise ValueError("Cette URL ne renvoie pas une page HTML ou du texte lisible.")
+    links: list[dict[str, str]] = []
+    title = response.url.host if hasattr(response.url, "host") else url
     if "text/plain" in content_type:
         text = response.text
     else:
@@ -503,9 +564,17 @@ async def _open_public_page(url: str) -> dict[str, Any]:
         parser.feed(response.text)
         parser.close()
         text = "\n".join(parser.parts)
+        title = " ".join(parser.title_parts).strip()[:300] or title
+        links = _public_navigation_links(parser.links, str(response.url))
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    return {"url": str(response.url), "status": response.status_code, "title": response.url.host if hasattr(response.url, "host") else url, "text": text[:18000]}
-
+    return {
+        "url": str(response.url),
+        "status": response.status_code,
+        "title": title,
+        "text": text[:18000],
+        "links": links,
+        "navigation_note": "Pour continuer la navigation, ouvrir les URL pertinentes de links avec web_open. Les pages JavaScript, formulaires, connexions et téléchargements ne sont pas exécutés.",
+    }
 
 def _verify_docx(
     data: bytes,
@@ -1511,8 +1580,11 @@ def _agent_system(preferences: str | None, available_tools: list[str] | None = N
         "After each tool result, interpret it and decide the next action. Do not stop after one tool if "
         "the task still needs verification. For any multi-step task, use update_plan early and record explicit "
         "acceptance_criteria derived from the user's request; mark steps done only after evidence exists. "
-        "For research tasks, use web_search and inspect several relevant sources with web_open; never invent "
-        "searches, quotations, references or dates. For requested illustrations, use image_search or image_generate "
+        "For web research, search with web_search, inspect several sources with web_open, then follow relevant "
+        "official-documentation, citation or source links returned by web_open using further web_open calls. "
+        "This is safe text navigation only: do not claim to execute JavaScript, sign in, submit forms, click interactive "
+        "controls or download arbitrary files. Never invent searches, quotations, references or dates. "
+        "For requested illustrations, use image_search or image_generate "
         "when available, then insert the returned image_id into the relevant artifact and report any unavailable images. "
         "For a long Word document, call document_begin once, then write sections with multiple small "
         "document_add_blocks calls, and only then call document_finalize. Translate explicit requirements into "
