@@ -769,6 +769,16 @@ def test_work_agent_infers_document_requirements_from_the_user_request():
         "Explique-moi la reproduction des Pinaceae."
     ) is False
 
+    course = work_agent._infer_document_quality(
+        "Étoffe ce document pour créer un cours complet de biochimie détaillé sur le Cycle de Krebs au format Word."
+    )
+    assert course["minimum_words"] >= 1500
+    assert course["minimum_source_urls"] >= 3
+    assert course["minimum_tables"] >= 1
+    assert course["require_bibliography"] is True
+    assert "Étapes enzymatiques" in course["required_headings"]
+    assert "Rôle amphibolique" in course["required_headings"]
+
 
 def test_document_begin_cannot_lower_inferred_quality_requirements():
     async def run():

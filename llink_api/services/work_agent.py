@@ -412,6 +412,29 @@ def _infer_document_quality(message: str) -> dict[str, Any]:
         quality["require_bibliography"] = True
         if "Bibliographie" not in quality["required_headings"]:
             quality["required_headings"].append("Bibliographie")
+
+    science_course = (
+        re.search(r"\b(?:cours|module|chapitre|le[cç]on)\b", text)
+        and re.search(r"\b(?:biochimie|biologie|chimie|physiologie|anatomie|cycle de krebs|acide citrique)\b", text)
+    )
+    if science_course:
+        quality["minimum_words"] = max(quality["minimum_words"], 1500)
+        quality["minimum_source_urls"] = max(quality["minimum_source_urls"], 3)
+        quality["minimum_tables"] = max(quality["minimum_tables"], 1)
+        quality["require_bibliography"] = True
+        course_headings = [
+            "Introduction",
+            "Localisation et fonction",
+            "Étapes enzymatiques",
+            "Régulation",
+            "Bilan énergétique",
+            "Rôle amphibolique",
+            "Pathologies et implications cliniques",
+            "Bibliographie",
+        ]
+        quality["required_headings"] = list(dict.fromkeys(
+            quality["required_headings"] + course_headings
+        ))[:20]
     return quality
 
 
