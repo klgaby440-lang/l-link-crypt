@@ -130,7 +130,7 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
 def test_agent_tool_registry_is_general_and_uses_native_function_schemas():
     names = {item["function"]["name"] for item in work_agent.TOOLS}
     assert {
-        "update_plan", "web_search", "web_open", "image_search", "python",
+        "update_plan", "web_search", "web_open", "image_search", "image_generate", "python",
         "document_begin", "document_add_blocks", "document_finalize",
         "artifact_verify", "create_text_file", "export_file",
     }.issubset(names)
