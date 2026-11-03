@@ -360,25 +360,9 @@ def _verify_docx(data: bytes, expected_blocks: list[dict[str, Any]]) -> dict[str
 
 async def _resolve_public_image(url: str) -> dict[str, Any]:
     """Télécharge une image publique contrôlée, jamais une URL locale ou privée."""
-    if len(url) > 2000 or not url.startswith("https://") or not _host_is_public(url):
+    if not str(url).startswith("https://"):
         raise ValueError("L'image doit venir d'une URL HTTPS publique.")
-
-    parsed = urlparse(url)
-    host = parsed.hostname
-    if not host:
-        raise ValueError("Hôte image invalide.")
-
-    # Refuser les domaines dont la résolution DNS pointe vers un réseau privé.
-    try:
-        infos = await asyncio.wait_for(
-            asyncio.to_thread(__import__("socket").getaddrinfo, host, parsed.port or 443, 0, __import__("socket").SOCK_STREAM),
-            timeout=5,
-        )
-    except Exception as exc:
-        raise ValueError("Impossible de vérifier l'adresse du serveur image.") from exc
-    addresses = {item[4][0] for item in infos if item and item[4]}
-    if not addresses or any(not ipaddress.ip_address(address.split("%", 1)[0]).is_global for address in addresses):
-        raise ValueError("L'image pointe vers un réseau non public et a été refusée.")
+    await _assert_public_host_resolves(url)
 
     timeout = httpx.Timeout(18.0, connect=6.0)
     headers = {"User-Agent": "LlinkWorkImages/1.0", "Accept": "image/png,image/jpeg,image/webp"}
@@ -473,10 +457,13 @@ async def _search_work_images(query: str, max_images: int, state: AgentState) ->
         except Exception as exc:
             logger.info("Image Work ignorée après validation (%s).", str(exc)[:180])
             continue
+        if len(state.images) >= MAX_AGENT_IMAGES or state.image_bytes + validated["size_bytes"] > MAX_AGENT_IMAGE_BYTES:
+            break
         image_id = uuid.uuid4().hex
         description = str(candidate.get("description") or candidate.get("alt") or query)[:350]
         source_url = str(candidate.get("source_url") or candidate.get("page_url") or "")[:1500]
         source_title = str(candidate.get("source_title") or "")[:300]
+        state.image_bytes += validated["size_bytes"]
         state.images[image_id] = {
             **validated,
             "description": description,
