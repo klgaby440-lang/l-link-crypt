@@ -262,5 +262,7 @@ test("Work affiche et conserve le plan, les décisions et les actions réelles",
     return messages.find(item => item.role === "bot" && item.reasoning)?.reasoning ?? null;
   });
   expect(saved?.summary).toBe(summary);
-  expect(saved?.events).toHaveLength(1);
+  expect(saved?.events).toHaveLength(2);
+  expect(saved?.events.some(event => event.tool === "model_reasoning")).toBe(true);
+  expect(saved?.events.some(event => event.tool === "web_search")).toBe(true);
 });
