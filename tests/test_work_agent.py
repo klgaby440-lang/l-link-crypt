@@ -764,3 +764,151 @@ def test_corrected_docx_supersedes_failed_version_and_can_be_delivered():
         assert [artifact["artifact_id"] for artifact in active_artifacts] == [second["artifact_id"]]
 
     asyncio.run(run())
+
+
+def test_gemini_parallel_function_results_are_batched_in_order_with_ids(monkeypatch):
+    import asyncio
+    from google.genai import types
+
+    async def no_budget(**_kwargs):
+        return None
+
+    async def no_settlement(**_kwargs):
+        return None
+
+    async def run():
+        monkeypatch.setattr(work_agent, "reserve_usage_budget", no_budget)
+        monkeypatch.setattr(work_agent, "finalize_usage", no_settlement)
+        turns = 0
+
+        async def fake_gemini_turn(**kwargs):
+            nonlocal turns
+            turns += 1
+            if turns == 1:
+                calls = [
+                    {
+                        "id": "gemini-id-1",
+                        "native_id": "gemini-id-1",
+                        "name": "update_plan",
+                        "arguments": {
+                            "summary": "Première mise à jour.",
+                            "steps": [{"label": "Étape A", "status": "done"}],
+                        },
+                    },
+                    {
+                        "id": "gemini-id-2",
+                        "native_id": "gemini-id-2",
+                        "name": "update_plan",
+                        "arguments": {
+                            "summary": "Deuxième mise à jour.",
+                            "steps": [{"label": "Étape B", "status": "done"}],
+                        },
+                    },
+                ]
+                assistant_state = types.Content(
+                    role="model",
+                    parts=[
+                        types.Part.from_function_call(
+                            name=call["name"],
+                            args=call["arguments"],
+                            id=call["native_id"],
+                        )
+                        for call in calls
+                    ],
+                )
+                return "", calls, None, assistant_state
+
+            response_content = kwargs["contents"][-1]
+            assert response_content.role == "user"
+            assert len(response_content.parts) == 2
+            responses = [part.function_response for part in response_content.parts]
+            assert [item.name for item in responses] == ["update_plan", "update_plan"]
+            assert [item.id for item in responses] == ["gemini-id-1", "gemini-id-2"]
+            return "Les deux actions ont été exécutées.", [], None, None
+
+        monkeypatch.setattr(work_agent, "_gemini_turn", fake_gemini_turn)
+        events = []
+
+        async def emit(event):
+            if event is not None:
+                events.append(event)
+
+        payload = ChatPayload(
+            message="Prépare un court plan.",
+            model="gemini-3.5-flash-lite",
+            level="velora",
+            mode="work",
+        )
+        await work_agent._run_agent(
+            payload=payload,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+            model=resolve_model("velora"),
+            api_key="test-gemini-key",
+            base_url="",
+            emit=emit,
+        )
+
+        final = next(event for event in events if event["type"] == "final")
+        assert final["answer"] == "Les deux actions ont été exécutées."
+        assert final["reasoning"]["tool_calls"] == 2
+        assert turns == 2
+
+    asyncio.run(run())
+
+
+def test_gemini_turn_preserves_native_function_call_ids(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from google.genai import types
+
+    function_content = types.Content(
+        role="model",
+        parts=[
+            types.Part.from_function_call(
+                name="web_search",
+                args={"query": "Pinaceae"},
+                id="native-google-call-42",
+            )
+        ],
+    )
+    fake_response = SimpleNamespace(
+        candidates=[SimpleNamespace(content=function_content)],
+        usage_metadata=None,
+        text="",
+    )
+
+    class FakeModels:
+        def generate_content(self, **_kwargs):
+            return fake_response
+
+    class FakeClientContext:
+        def __enter__(self):
+            return SimpleNamespace(models=FakeModels())
+
+        def __exit__(self, *_args):
+            return None
+
+    fake_adapter = SimpleNamespace(_client=lambda: FakeClientContext())
+
+    async def run():
+        monkeypatch.setattr(work_agent, "get_gemini_model", lambda *_args, **_kwargs: fake_adapter)
+        text, calls, usage, assistant_state = await work_agent._gemini_turn(
+            model=resolve_model("velora"),
+            system="Work agent",
+            contents=["Research Pinaceae."],
+            effort="extra",
+            timeout_seconds=10,
+            tool_definitions=[],
+        )
+        assert text == ""
+        assert calls == [{
+            "id": "native-google-call-42",
+            "native_id": "native-google-call-42",
+            "name": "web_search",
+            "arguments": {"query": "Pinaceae"},
+        }]
+        assert assistant_state is function_content
+
+    asyncio.run(run())
