@@ -808,10 +808,12 @@ def test_gemini_parallel_function_results_are_batched_in_order_with_ids(monkeypa
                 assistant_state = types.Content(
                     role="model",
                     parts=[
-                        types.Part.from_function_call(
-                            name=call["name"],
-                            args=call["arguments"],
-                            id=call["native_id"],
+                        types.Part(
+                            function_call=types.FunctionCall(
+                                name=call["name"],
+                                args=call["arguments"],
+                                id=call["native_id"],
+                            )
                         )
                         for call in calls
                     ],
@@ -866,10 +868,12 @@ def test_gemini_turn_preserves_native_function_call_ids(monkeypatch):
     function_content = types.Content(
         role="model",
         parts=[
-            types.Part.from_function_call(
-                name="web_search",
-                args={"query": "Pinaceae"},
-                id="native-google-call-42",
+            types.Part(
+                function_call=types.FunctionCall(
+                    name="web_search",
+                    args={"query": "Pinaceae"},
+                    id="native-google-call-42",
+                )
             )
         ],
     )
