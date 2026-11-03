@@ -845,13 +845,20 @@ async def _dispatch_tool(
             raise ValueError("Le document dépasse la limite de livraison de 8 Mo.")
         verification = await asyncio.to_thread(_verify_docx, raw, draft["blocks"], draft.get("quality"))
         artifact_id = uuid.uuid4().hex
+        # Une nouvelle version du même brouillon remplace les livrables DOCX précédents.
+        # Un ancien fichier qui a échoué aux contrôles ne doit pas bloquer une correction réussie.
+        for previous in state.artifacts.values():
+            if previous.get("draft_id") == document_id:
+                previous["superseded"] = True
         artifact = {
             "artifact_id": artifact_id,
+            "draft_id": document_id,
             "filename": draft["filename"],
             "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "data": raw,
             "verification": verification,
             "verified_by_agent": False,
+            "superseded": False,
             "kind": "docx",
             "expected_blocks": list(draft["blocks"]),
             "quality": dict(draft.get("quality") or {}),
@@ -1327,6 +1334,8 @@ async def _run_agent(
         artifacts = []
         unverified_names = []
         for artifact in state.artifacts.values():
+            if artifact.get("superseded"):
+                continue
             if not artifact.get("verified_by_agent") or not artifact["verification"].get("passed"):
                 unverified_names.append(artifact.get("filename", "fichier inconnu"))
                 state.plan["limitations"].append(
