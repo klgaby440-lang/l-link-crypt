@@ -728,10 +728,10 @@ async def _dispatch_tool(
             "artifact_id": artifact_id,
             "filename": artifact["filename"],
             "size_bytes": len(raw),
-            "verified": False,
             "precheck_passed": verification["passed"],
             "verification": verification,
-            "status": "artifact_ready_pending_independent_verification",
+            "status": "pending_independent_verification",
+            "next_action": "Call artifact_verify. The file is not delivered until that succeeds.",
         }
 
     if name == "artifact_verify":
@@ -846,7 +846,7 @@ async def _dispatch_tool(
             "kind": file_format,
         }
         state.artifacts[artifact_id] = artifact
-        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": False, "precheck_passed": verification["passed"], "verification": verification, "status": "pending_independent_verification"}
+        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "precheck_passed": verification["passed"], "verification": verification, "status": "pending_independent_verification", "next_action": "Call artifact_verify before delivery."}
 
     raise ValueError(f"Outil inconnu : {name}")
 
