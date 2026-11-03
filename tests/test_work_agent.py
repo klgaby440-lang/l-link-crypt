@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import io
+import json
 
 import pytest
 from docx import Document
@@ -50,7 +51,6 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                     message["content"] for message in kwargs["messages"]
                     if message.get("role") == "tool" and message.get("tool_call_id") == "begin-1"
                 )
-                import json
                 document_id = json.loads(begin_result)["result"]["document_id"]
                 calls = [
                     {"id": "blocks-1", "name": "document_add_blocks", "arguments": {
@@ -64,7 +64,6 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                     {"id": "finish-1", "name": "document_finalize", "arguments": {"document_id": document_id}},
                 ]
             elif turns == 3:
-                import json
                 finish_result = next(
                     message["content"] for message in kwargs["messages"]
                     if message.get("role") == "tool" and message.get("tool_call_id") == "finish-1"
@@ -93,8 +92,8 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
 
         payload = ChatPayload(
             message="Crée un document Word et vérifie-le.",
-            model="gemini-1.5-flash",
-            level="velora",
+            model="deepseek-flash",
+            level="auren",
             effort="normal",
             mode="work",
         )
