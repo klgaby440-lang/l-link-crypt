@@ -102,7 +102,7 @@ if(slot)slot.innerHTML=renderWorkReasoning(ans.reasoning);
 function recordWorkEvent(ans,name,status,detail){
 if(!ans.reasoning)ans.reasoning={summary:"J'exécute les étapes nécessaires à la tâche.",steps:[],decisions:[],limitations:[],events:[],status:"in_progress"};
 if(!Array.isArray(ans.reasoning.events))ans.reasoning.events=[];
-const labels={web_search:"Recherche sur le Web",web_open:"Lecture d'une source",image_search:"Recherche et validation d'images",image_generate:"Génération d'une illustration",python:"Exécution Python isolée",document_begin:"Initialisation du document",document_add_blocks:"Rédaction d'une section",document_finalize:"Génération du document Word",artifact_verify:"Vérification indépendante du fichier",create_text_file:"Création d'un fichier",create_document:"Création du document Word",export_file:"Export du fichier",artifact:"Livraison du fichier"};
+const labels={model_reasoning:"Analyse et planification",web_search:"Recherche sur le Web",web_open:"Lecture d'une source",image_search:"Recherche et validation d'images",image_generate:"Génération d'une illustration",python:"Exécution Python isolée",document_begin:"Initialisation du document",document_add_blocks:"Rédaction d'une section",document_finalize:"Génération du document Word",artifact_verify:"Vérification indépendante du fichier",create_text_file:"Création d'un fichier",create_document:"Création du document Word",export_file:"Export du fichier",artifact:"Livraison du fichier"};
 const label=labels[name]||("Outil "+String(name||"Work"));
 const normalizedStatus=status==="running"?"in_progress":status;
 const existing=ans.reasoning.events.slice().reverse().find(event=>(event.tool===name||(!event.tool&&event.label===label))&&event.status==="in_progress");
@@ -256,6 +256,14 @@ status:"in_progress",
 modelProvided:true
 };
 updateReasoningSlot(ans);
+return;
+}
+if(event.type==="model_start"){
+recordWorkEvent(ans,"model_reasoning","running",event.detail||"Le modèle analyse le contexte et choisit la prochaine action.");
+return;
+}
+if(event.type==="model_done"){
+recordWorkEvent(ans,"model_reasoning","done",event.detail||"Analyse du modèle terminée.");
 return;
 }
 if(event.type==="tool_start"){
