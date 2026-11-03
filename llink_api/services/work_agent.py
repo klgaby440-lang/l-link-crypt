@@ -19,13 +19,11 @@ import httpx
 from fastapi import HTTPException, Request
 
 from llink_api.config import get_settings
-from llink_api.database import get_db
 from llink_api.providers.gemini import EFFORT_TO_THINKING_LEVEL, build_gemini_contents, get_gemini_model
 from llink_api.providers.openai_compatible import TokenUsage, _reasoning_parameters, parse_usage
 from llink_api.schemas import ChatPayload
-from llink_api.security import get_optional_user
 from llink_api.services.ai_slots import reserve_ai_slot
-from llink_api.services.document_engine import build_structured_docx, verify_structured_docx
+from llink_api.services.document_engine import build_structured_docx
 from llink_api.services.entitlements import resolve_entitled_level
 from llink_api.services.model_registry import ModelDefinition, resolve_model, user_can_access_level
 from llink_api.services.security_limits import enforce_endpoint_quota
