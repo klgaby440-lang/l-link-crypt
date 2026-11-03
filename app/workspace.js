@@ -32,7 +32,15 @@ S.root.innerHTML='<div class="work-topbar"><div class="work-brand"><span class="
 '<div class="work-mobile-tabs"><button class="active" data-act="mobile" data-panel="files">Fichiers</button><button data-act="mobile" data-panel="chat">Assistant</button><button data-act="mobile" data-panel="editor">Éditeur</button></div><div id="work-dialog-root"></div>';
 const m=document.getElementById("model-selector"),s=$("work-model");if(m&&s){s.innerHTML=[...m.options].map(o=>'<option value="'+esc(o.value)+'">'+esc(o.textContent)+'</option>').join("");s.value=m.value;}if(window.lucide)lucide.createIcons();
 }
-function renderToolStatus(){const el=$("work-tool-status");if(!el)return;const labels=[];if(S.tools.web_search)labels.push("Web");if(S.tools.image_search)labels.push("Images");if(S.tools.image_generate)labels.push("Image Gen");if(S.tools.python)labels.push("Python");if(S.tools.document_create)labels.push("Word structuré");if(S.tools.exports)labels.push("PDF · Excel");const agent=S.agentVersion?"Agent natif "+S.agentVersion:(S.agentStatusError?"Agent à actualiser":"Agent Work");const depth=S.agentEffort?" · Réflexion "+S.agentEffort:"";el.textContent=agent+depth+(labels.length?" · "+labels.join(" · "):"");el.title=S.agentTools.length?"Protocole natif confirmé. Outils actifs : "+S.agentTools.join(", "):"Impossible de confirmer la version du moteur natif Work. Actualise l'application et vérifie le déploiement Render.";}
+function renderToolStatus(){
+const el=$("work-tool-status");if(!el)return;
+const names={web_search:"Recherche Web",web_open:"Lecture Web",image_search:"Images",image_generate:"Image Gen",python:"Python isolé",document_begin:"DOCX",document_add_blocks:"Rédaction DOCX",document_finalize:"Export DOCX",artifact_verify:"Vérification",create_text_file:"Fichiers texte",export_file:"PDF/Excel",workspace_list_projects:"Projets",workspace_list_files:"Fichiers",workspace_read_file:"Lecture fichiers",workspace_search_files:"Recherche fichiers",workspace_create_project:"Créer projet",workspace_create_file:"Créer fichier",workspace_update_file:"Modifier fichier"};
+const active=S.agentTools.map(name=>names[name]||name);
+const agent=S.agentVersion?"Agent natif "+S.agentVersion:(S.agentStatusError?"Agent à actualiser":"Agent Work");
+const depth=S.agentEffort?" · Réflexion "+S.agentEffort:"";
+el.textContent=agent+depth+(active.length?" · "+active.join(" · "):"");
+el.title=S.agentTools.length?"Outils activés réellement par le serveur : "+S.agentTools.join(", "):"Impossible de confirmer les outils disponibles. Actualise l'application et vérifie le déploiement Render.";
+}
 async function loadTools(){S.agentEffort=window.llThink?.agentEffort?window.llThink.agentEffort():"extra";S.tools=Object.assign({web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}try{const agent=await api("/api/work/agent/status");if(agent.protocol==="native_function_calling"){S.agentVersion=String(agent.version||"");S.agentTools=Array.isArray(agent.tools)?agent.tools:[];S.agentStatusError=false;}else{S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}}catch(e){S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}renderToolStatus();}
 async function ensureChat(){if(S.chatId==null)S.chatId=await db.chats.add({title:"Espace Work",time:Date.now(),mode:"work",syncId:crypto.randomUUID().replace(/-/g,""),ownerUid:S.owner});}
 async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null}));renderMessages();}
@@ -104,7 +112,7 @@ if(slot)slot.innerHTML=renderWorkReasoning(ans.reasoning);
 function recordWorkEvent(ans,name,status,detail){
 if(!ans.reasoning)ans.reasoning={summary:"J'exécute les étapes nécessaires à la tâche.",steps:[],decisions:[],limitations:[],events:[],status:"in_progress"};
 if(!Array.isArray(ans.reasoning.events))ans.reasoning.events=[];
-const labels={model_reasoning:"Analyse et planification",web_search:"Recherche sur le Web",web_open:"Lecture d'une source",image_search:"Recherche et validation d'images",image_generate:"Génération d'une illustration",python:"Exécution Python isolée",document_begin:"Initialisation du document",document_add_blocks:"Rédaction d'une section",document_finalize:"Génération du document Word",artifact_verify:"Vérification indépendante du fichier",create_text_file:"Création d'un fichier",create_document:"Création du document Word",export_file:"Export du fichier",artifact:"Livraison du fichier"};
+const labels={model_reasoning:"Analyse et planification",web_search:"Recherche sur le Web",web_open:"Lecture d'une source",image_search:"Recherche et validation d'images",image_generate:"Génération d'une illustration",python:"Exécution Python isolée",document_begin:"Initialisation du document",document_add_blocks:"Rédaction d'une section",document_finalize:"Génération du document Word",artifact_verify:"Vérification indépendante du fichier",create_text_file:"Création d'un artefact texte",create_document:"Création du document Word",export_file:"Export du fichier",workspace_list_projects:"Exploration des projets",workspace_list_files:"Exploration des fichiers",workspace_read_file:"Lecture d'un fichier",workspace_search_files:"Recherche dans les fichiers",workspace_create_project:"Création d'un projet",workspace_create_file:"Création d'un fichier",workspace_update_file:"Modification d'un fichier",workspace_sync:"Synchronisation du workspace",artifact:"Livraison du fichier"};
 const label=labels[name]||("Outil "+String(name||"Work"));
 const normalizedStatus=status==="running"?"in_progress":status;
 const existing=ans.reasoning.events.slice().reverse().find(event=>(event.tool===name||(!event.tool&&event.label===label))&&event.status==="in_progress");
@@ -221,6 +229,38 @@ if(invocation.name==="create_document"){if(!S.tools.document_create)throw new Er
 if(invocation.name==="export_file"){const format=String(args.format||"").toLowerCase();if(!["pdf","xlsx"].includes(format))throw new Error("Le format d'exportation doit être pdf ou xlsx.");if(!S.tools.exports)throw new Error("Le moteur d'exportation est indisponible.");const name=uniqueBinaryName(args.filename||("document."+format));return await fetchWorkBinary("/api/work/exports/"+format,{filename:name,content:String(args.content||"")},name);}
 throw new Error("Outil Work inconnu : "+String(invocation.name||""));
 }
+function downloadWorkArtifact(blob,filename){
+const url=URL.createObjectURL(blob),link=document.createElement("a");
+link.href=url;link.download=filename;link.rel="noopener";
+document.body.appendChild(link);link.click();link.remove();
+setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+async function applyAgentWorkspaceFiles(items,ans){
+const changed=[];
+for(const item of items||[]){
+if(!item||!item.id||typeof item.content!=="string")continue;
+const all=await filesLocal();
+let file=all.find(f=>String(f.cloudId||"")===String(item.id));
+if(file&&S.file?.id===file.id&&S.file.dirty){
+ans.reasoning.limitations=[...(ans.reasoning.limitations||[]),"Le fichier "+item.path+" a été modifié dans Work, mais des changements locaux non enregistrés ont été conservés à l'écran. Recharge-le après avoir sauvegardé ou comparé tes modifications."];
+continue;
+}
+const project=S.projects.find(p=>String(p.cloudId||"")===String(item.project_id||""));
+const values={cloudId:String(item.id),ownerUid:S.owner,name:item.name,folder:item.folder||"",path:item.path||item.name,language:item.language||"plaintext",projectId:item.project_id||null,projectLocalId:project?.id||null,content:item.content,savedContent:item.content,isBinary:false,contentLoaded:true,version:Number(item.version||1),localRevision:Number(item.version||1),sizeBytes:Number(item.size_bytes||bytes(item.content)),updatedAt:item.updated_at||new Date().toISOString(),pendingSync:false,dirty:false};
+if(file){Object.assign(file,values);await db.workFiles.put(file);}
+else{file=values;file.id=await db.workFiles.add(file);}
+changed.push(file);
+}
+if(changed.length){
+S.files=await filesLocal();renderFiles();
+const active=changed[changed.length-1];
+if(S.editor)S.editor.destroy();S.editor=null;S.file=active;
+await mount();setTab("edit");meta();
+recordWorkEvent(ans,"workspace_sync","done",changed.length+" fichier(s) du workspace actualisé(s) depuis le serveur.");
+}
+return changed.length;
+}
+
 async function streamWorkAgent(payload,uploads,ans){
 const status=await api("/api/work/agent/status").catch(error=>{throw new Error("Le backend Render n'expose pas encore l'agent Work natif. Redéploie le dernier commit backend puis réessaie. Détail : "+error.message);});
 if(status.protocol!=="native_function_calling")throw new Error("Le backend Work utilise un protocole ancien. Le mode agent natif n'est pas actif.");
@@ -294,6 +334,11 @@ if(!mergedEvents.some(item=>JSON.stringify([item.tool||item.label,item.status,it
 }
 ans.reasoning={...finalReasoning,events:mergedEvents};
 ans.reasoning.status=finalReasoning.status||"completed";
+const workspaceFiles=Array.isArray(event.workspace_files)?event.workspace_files:[];
+if(workspaceFiles.length){
+try{await applyAgentWorkspaceFiles(workspaceFiles,ans);}
+catch(error){ans.reasoning.limitations=[...(ans.reasoning.limitations||[]),"Le serveur a enregistré des changements, mais leur synchronisation locale a échoué : "+String(error.message||error).slice(0,180)];}
+}
 const artifacts=Array.isArray(event.artifacts)?event.artifacts:[];
 for(const artifact of artifacts){
 if(!artifact.content_base64)continue;
@@ -311,7 +356,7 @@ else file=await createBinaryFile(filename,blob,artifact.mime_type);
 if(file){
 downloaded++;
 recordWorkEvent(ans,"artifact","done",file.name+" · "+size(blob.size)+" · vérification réussie.");
-if(downloaded===1)await download();
+if(downloaded===1)downloadWorkArtifact(blob,filename);
 }
 }
 if(artifacts.length&&!downloaded)ans.reasoning.limitations=[...(ans.reasoning.limitations||[]),"Un fichier généré n'a pas pu être ajouté à l'espace local (nom déjà utilisé ou quota local)."];
@@ -338,35 +383,12 @@ if(!finalReceived)throw new Error("L'agent s'est arrêté sans envoyer de résul
 return ans.text;
 }
 
-async function streamWorkResponse(payload,uploads,ans){
-let url="/api/chat",body,hd;
-if(uploads?.length){url="/api/chat/attachments";body=new FormData();Object.entries(payload).forEach(([k,v])=>body.append(k,k==="history"?JSON.stringify(v):String(v??"")));uploads.forEach(f=>body.append("files",f,f.name));hd=await headers(false);}
-else{body=JSON.stringify(payload);hd=await headers(true);}
-const r=await fetch(SERVER+url,{method:"POST",headers:hd,body});
-if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(typeof d.detail==="string"?d.detail:(d.detail?.message||"HTTP "+r.status));}
-const reader=r.body.getReader(),decoder=new TextDecoder(),host=$("work-messages");
-let full="";
-while(true){
-const {value,done}=await reader.read();if(done)break;
-full+=decoder.decode(value,{stream:true});
-const marker=full.indexOf("<llink_tool>");
-let visible=marker>=0?full.slice(0,marker):full.slice(0,Math.max(0,full.length-16));
-const reasoning=updateWorkReasoning(visible,ans);
-visible=reasoning.visible;
-ans.text=visible;
-const article=host.querySelector('[data-mid="'+ans.id+'"]');
-const slot=article?.querySelector(".work-reasoning-slot");
-if(slot)slot.innerHTML=renderWorkReasoning(ans.reasoning);
-const el=article?.querySelector(".work-message-body");
-if(el)el.innerHTML=typeof parseMarkdown==="function"?parseMarkdown(ans.text):esc(ans.text).replace(/\\n/g,"<br>");
-host.scrollTop=host.scrollHeight;
-}
-full+=decoder.decode();
-return full;
-}
-
 async function sendWork(){
 if(S.busy)return;
+if(S.file?.dirty){
+await saveFile();
+if(S.file?.pendingSync)return toast("Le fichier ouvert n'a pas pu être synchronisé. Résous la synchronisation avant de demander à l'agent de le modifier.");
+}
 const input=$("work-prompt"),typed=input.value.trim(),uploads=S.uploads.slice();
 if(S.file&&!uploads.some(f=>f.name===S.file.name)){
 if(S.file.isBinary&&S.file.blob instanceof Blob){

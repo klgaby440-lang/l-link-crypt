@@ -163,6 +163,109 @@ def test_web_open_rejects_local_and_non_http_urls(url):
     assert work_agent._host_is_public(url) is False
 
 
+
+def test_workspace_tools_are_native_and_are_only_advertised_to_authenticated_users(monkeypatch):
+    expected = {
+        "workspace_list_projects", "workspace_list_files", "workspace_read_file",
+        "workspace_search_files", "workspace_create_project",
+        "workspace_create_file", "workspace_update_file",
+    }
+    names = {item["function"]["name"] for item in work_agent.TOOLS}
+    assert expected.issubset(names)
+    assert all("parameters" in item["function"] for item in work_agent.TOOLS
+               if item["function"]["name"] in expected)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("E2B_API_KEY", raising=False)
+    monkeypatch.delenv("ZAI_API_KEY", raising=False)
+    authenticated = {item["function"]["name"] for item in work_agent._available_tool_definitions({"uid": "work-user"})}
+    anonymous = {item["function"]["name"] for item in work_agent._available_tool_definitions({"uid": "anonymous"})}
+    assert expected.issubset(authenticated)
+    assert not (expected & anonymous)
+
+
+def test_workspace_dispatch_creates_reads_and_updates_real_workspace_files(monkeypatch):
+    from llink_api.api.routes import work as work_routes
+
+    store = {
+        "id": "a" * 32, "name": "main.py", "folder": "src", "path": "src/main.py",
+        "language": "python", "project_id": None, "content": "print('hello')",
+        "size_bytes": 14, "version": 1, "updated_at": "2026-11-03T12:00:00Z",
+    }
+
+    async def fake_create_file(payload, request, user, db):
+        store.update({"name": payload.name, "folder": payload.folder,
+                      "path": (payload.folder + "/" if payload.folder else "") + payload.name,
+                      "language": payload.language, "content": payload.content,
+                      "size_bytes": len(payload.content.encode("utf-8")),
+                      "project_id": payload.project_id, "version": 1})
+        return {"id": store["id"], **store}
+
+    async def fake_get_file(file_id, request, user, db):
+        assert file_id == store["id"]
+        return dict(store)
+
+    async def fake_update_file(file_id, payload, request, user, db):
+        assert payload.expected_version == store["version"]
+        store.update({"content": payload.content, "size_bytes": len(payload.content.encode("utf-8")),
+                      "version": store["version"] + 1})
+        if payload.name is not None:
+            store["name"] = payload.name
+        if payload.folder is not None:
+            store["folder"] = payload.folder
+        store["path"] = (store["folder"] + "/" if store["folder"] else "") + store["name"]
+        if payload.language is not None:
+            store["language"] = payload.language
+        return {"id": store["id"], **store}
+
+    monkeypatch.setattr(work_routes, "create_file", fake_create_file)
+    monkeypatch.setattr(work_routes, "get_file", fake_get_file)
+    monkeypatch.setattr(work_routes, "update_file", fake_update_file)
+
+    async def run():
+        state = work_agent.AgentState(user_request="Crée et modifie un fichier Python dans Work.")
+        user = {"uid": "work-user"}
+        created = await work_agent._dispatch_tool(
+            "workspace_create_file",
+            {"path": "src/main.py", "content": "print('hello')", "language": "python"},
+            state=state, request=None, user=user, db=object(),
+        )
+        assert created["saved"] is True
+        assert created["file_id"] == "a" * 32
+        assert state.workspace_changes["a" * 32]["content"] == "print('hello')"
+
+        read = await work_agent._dispatch_tool(
+            "workspace_read_file", {"file_id": "a" * 32},
+            state=state, request=None, user=user, db=object(),
+        )
+        assert read["version"] == 1
+        assert "print('hello')" in read["content"]
+
+        updated = await work_agent._dispatch_tool(
+            "workspace_update_file",
+            {"file_id": "a" * 32, "expected_version": 1, "content": "print('hello world')"},
+            state=state, request=None, user=user, db=object(),
+        )
+        assert updated["saved"] is True
+        assert updated["version"] == 2
+        assert state.workspace_changes["a" * 32]["content"] == "print('hello world')"
+
+        with pytest.raises(PermissionError):
+            await work_agent._dispatch_tool("workspace_list_projects", {}, state=state,
+                                            request=None, user={"uid": "anonymous"}, db=None)
+
+    asyncio.run(run())
+
+
+def test_academic_document_requests_require_substantial_content_and_sources():
+    quality = work_agent._infer_document_quality(
+        "Prépare un travail pratique de systématique sur les Pinaceae."
+    )
+    assert quality["minimum_words"] >= 900
+    assert quality["minimum_source_urls"] >= 3
+    assert quality["require_bibliography"] is True
+    assert "Bibliographie" in quality["required_headings"]
+
+
 def test_openai_compatible_native_tool_calls_are_parsed(monkeypatch):
     import asyncio
     import json

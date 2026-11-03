@@ -211,6 +211,62 @@ TOOLS: list[dict[str, Any]] = [
             }, "required": ["filename", "format", "content"]},
         },
     },
+    {
+        "type": "function",
+        "function": {"name": "workspace_list_projects", "description": "List the authenticated user's real Work projects before creating or changing project files.", "parameters": {"type": "object", "properties": {}}},
+    },
+    {
+        "type": "function",
+        "function": {"name": "workspace_list_files", "description": "List real files in the authenticated user's Work workspace, optionally scoped to a project or filtered by path/name. Returns IDs and versions.", "parameters": {"type": "object", "properties": {
+            "project_id": {"type": "string", "maxLength": 32},
+            "query": {"type": "string", "maxLength": 240},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100}
+        }}},
+    },
+    {
+        "type": "function",
+        "function": {"name": "workspace_read_file", "description": "Read a real text file from the user's Work workspace by file_id or exact relative path. Read before editing. Supports bounded 1-based line ranges.", "parameters": {"type": "object", "properties": {
+            "file_id": {"type": "string", "maxLength": 32},
+            "path": {"type": "string", "maxLength": 400},
+            "start_line": {"type": "integer", "minimum": 1},
+            "end_line": {"type": "integer", "minimum": 1}
+        }}},
+    },
+    {
+        "type": "function",
+        "function": {"name": "workspace_search_files", "description": "Search real text inside the user's Work workspace files. Returns matching paths, line numbers and short snippets.", "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "minLength": 2, "maxLength": 240},
+            "project_id": {"type": "string", "maxLength": 32},
+            "max_results": {"type": "integer", "minimum": 1, "maximum": 20}
+        }, "required": ["query"]}},
+    },
+    {
+        "type": "function",
+        "function": {"name": "workspace_create_project", "description": "Create a real project in the authenticated user's Work workspace.", "parameters": {"type": "object", "properties": {
+            "name": {"type": "string", "minLength": 1, "maxLength": 100},
+            "description": {"type": "string", "maxLength": 500}
+        }, "required": ["name"]}},
+    },
+    {
+        "type": "function",
+        "function": {"name": "workspace_create_file", "description": "Create and persist a real text/code file in the user's Work workspace. Check that the path does not already exist. Paths are relative to the selected project.", "parameters": {"type": "object", "properties": {
+            "path": {"type": "string", "minLength": 1, "maxLength": 400},
+            "content": {"type": "string", "maxLength": 700000},
+            "project_id": {"type": "string", "maxLength": 32},
+            "language": {"type": "string", "maxLength": 40}
+        }, "required": ["path", "content"]}},
+    },
+    {
+        "type": "function",
+        "function": {"name": "workspace_update_file", "description": "Modify and persist an existing real Work workspace text/code file. MUST read it first, preserve unrelated content, and pass its current expected_version. Conflicts are rejected.", "parameters": {"type": "object", "properties": {
+            "file_id": {"type": "string", "minLength": 32, "maxLength": 32},
+            "content": {"type": "string", "maxLength": 700000},
+            "expected_version": {"type": "integer", "minimum": 1},
+            "name": {"type": "string", "maxLength": 180},
+            "folder": {"type": "string", "maxLength": 300},
+            "language": {"type": "string", "maxLength": 40}
+        }, "required": ["file_id", "content", "expected_version"]}},
+    },
 ]
 
 
@@ -257,6 +313,7 @@ class AgentState:
     call_signatures: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_calls: int = 0
     user_request: str = ""
+    workspace_changes: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def _json_safe(value: Any, limit: int = MAX_TOOL_RESULT_CHARS) -> str:
@@ -265,6 +322,35 @@ def _json_safe(value: Any, limit: int = MAX_TOOL_RESULT_CHARS) -> str:
     except (TypeError, ValueError):
         result = json.dumps({"error": "Le résultat de l'outil n'est pas sérialisable."})
     return result[:limit]
+
+
+def _record_workspace_change(state: AgentState, file_data: dict[str, Any]) -> None:
+    """Keep authoritative cloud writes for the Work client to reconcile locally."""
+    file_id = str(file_data.get("id") or "")
+    if not file_id:
+        raise ValueError("Le serveur n'a pas retourné l'identifiant du fichier Work.")
+    content = str(file_data.get("content") or "")
+    previous = state.workspace_changes.get(file_id)
+    used = sum(len(str(item.get("content") or "").encode("utf-8")) for item in state.workspace_changes.values())
+    old_size = len(str(previous.get("content") or "").encode("utf-8")) if previous else 0
+    new_size = len(content.encode("utf-8"))
+    if previous is None and len(state.workspace_changes) >= 12:
+        raise ValueError("Une tâche Work ne peut modifier que 12 fichiers au maximum.")
+    if used - old_size + new_size > 2_000_000:
+        raise ValueError("Les changements de fichiers dépassent la limite de synchronisation de 2 Mo par tâche.")
+    updated_at = file_data.get("updated_at")
+    if hasattr(updated_at, "isoformat"):
+        updated_at = updated_at.isoformat()
+    state.workspace_changes[file_id] = {
+        "id": file_id, "name": str(file_data.get("name") or ""),
+        "folder": str(file_data.get("folder") or ""),
+        "path": str(file_data.get("path") or file_data.get("name") or ""),
+        "language": str(file_data.get("language") or "plaintext"),
+        "project_id": file_data.get("project_id"),
+        "version": int(file_data.get("version") or 1),
+        "size_bytes": int(file_data.get("size_bytes") or new_size),
+        "updated_at": updated_at, "content": content,
+    }
 
 
 def _event(label: str, status: str, detail: str = "", tool: str = "") -> dict[str, Any]:
@@ -307,6 +393,16 @@ def _infer_document_quality(message: str) -> dict[str, Any]:
         quality["minimum_tables"] = 1
     if re.search(r"\b(?:images?|illustrations?|photographies?|photos?|figures?)\b", text):
         quality["minimum_images"] = 1
+    academic_request = re.search(
+        r"\b(?:travail\s+pratique|devoir|expos[eé]|rapport\s+scientifique|[eé]tude\s+scientifique|syst[eé]matique|botanique|recherche\s+scientifique)\b",
+        text,
+    )
+    if academic_request:
+        quality["minimum_words"] = max(quality["minimum_words"], 900)
+        quality["minimum_source_urls"] = max(quality["minimum_source_urls"], 3)
+        quality["require_bibliography"] = True
+        if "Bibliographie" not in quality["required_headings"]:
+            quality["required_headings"].append("Bibliographie")
     return quality
 
 
@@ -749,6 +845,130 @@ async def _dispatch_tool(
             request, user, db,
         )
 
+
+    if name.startswith("workspace_") and uid == "anonymous":
+        raise PermissionError("Connecte-toi pour accéder aux projets et fichiers Work.")
+    if name == "workspace_list_projects":
+        from llink_api.api.routes import work as work_routes
+        result = await work_routes.list_projects(request=request, user=user, db=db)
+        return {"projects": result.get("projects", [])}
+    if name == "workspace_list_files":
+        from llink_api.api.routes import work as work_routes
+        result = await work_routes.list_files(request=request, project_id=args.get("project_id"), user=user, db=db)
+        items = result.get("files", [])
+        query = str(args.get("query") or "").strip().casefold()
+        if query:
+            items = [item for item in items if query in str(item.get("path") or item.get("name") or "").casefold()]
+        limit = max(1, min(int(args.get("limit") or 50), 100))
+        return {"files": items[:limit], "total_matches": len(items), "truncated": len(items) > limit}
+    if name == "workspace_read_file":
+        from llink_api.api.routes import work as work_routes
+        file_id = str(args.get("file_id") or "").strip()
+        requested_path = str(args.get("path") or "").strip().replace("\\", "/")
+        if not file_id and not requested_path:
+            raise ValueError("Indique file_id ou path pour lire un fichier.")
+        if not file_id:
+            listing = await work_routes.list_files(request=request, user=user, db=db)
+            found = next((item for item in listing.get("files", []) if str(item.get("path") or "").casefold() == requested_path.casefold()), None)
+            if not found:
+                raise ValueError(f"Fichier Work introuvable : {requested_path}")
+            file_id = str(found["id"])
+        data = await work_routes.get_file(file_id=file_id, request=request, user=user, db=db)
+        content = str(data.get("content") or "")
+        lines = content.splitlines(keepends=True)
+        total_lines = max(1, len(lines))
+        start_line = max(1, int(args.get("start_line") or 1))
+        end_line = max(start_line, int(args.get("end_line") or min(total_lines, start_line + 399)))
+        selected = "".join(lines[start_line - 1:min(end_line, total_lines)])
+        return {
+            "file_id": data["id"], "name": data.get("name"), "path": data.get("path"),
+            "language": data.get("language"), "project_id": data.get("project_id"),
+            "version": data.get("version"), "size_bytes": data.get("size_bytes"),
+            "total_lines": total_lines, "start_line": start_line,
+            "end_line": min(end_line, total_lines), "content": selected[:28000],
+            "truncated": len(selected) > 28000,
+        }
+    if name == "workspace_search_files":
+        from llink_api.api.routes import work as work_routes
+        query = str(args.get("query") or "").strip()
+        if len(query) < 2:
+            raise ValueError("La recherche doit contenir au moins deux caractères.")
+        listing = await work_routes.list_files(request=request, project_id=args.get("project_id"), user=user, db=db)
+        candidates = listing.get("files", [])
+        result_limit = max(1, min(int(args.get("max_results") or 10), 20))
+        scan_limit = min(max(result_limit * 3, 10), 30)
+        matches = []
+        scanned = 0
+        for item in candidates[:scan_limit]:
+            scanned += 1
+            data = await work_routes.get_file(file_id=str(item["id"]), request=request, user=user, db=db)
+            for line_number, line in enumerate(str(data.get("content") or "").splitlines(), 1):
+                if query.casefold() in line.casefold():
+                    matches.append({"file_id": data["id"], "path": data.get("path"),
+                                    "version": data.get("version"), "line": line_number,
+                                    "snippet": line.strip()[:500]})
+                    if len(matches) >= result_limit:
+                        break
+            if len(matches) >= result_limit:
+                break
+        return {"query": query, "matches": matches, "files_scanned": scanned,
+                "files_available": len(candidates),
+                "scan_limit_reached": scanned < len(candidates) and scanned >= scan_limit}
+    if name == "workspace_create_project":
+        from llink_api.api.routes import work as work_routes
+        result = await work_routes.create_project(
+            payload=work_routes.ProjectCreate(name=str(args.get("name") or ""), description=str(args.get("description") or "")),
+            request=request, user=user, db=db,
+        )
+        return {"created": True, "project": result}
+    if name == "workspace_create_file":
+        from llink_api.api.routes import work as work_routes
+        raw_path = str(args.get("path") or "").strip().replace("\\", "/")
+        parts = raw_path.split("/")
+        if not raw_path or raw_path.startswith("/") or any(part in {"", ".", ".."} for part in parts):
+            raise ValueError("Le chemin doit être relatif et ne peut contenir . ou ..")
+        filename, folder = parts[-1], "/".join(parts[:-1])
+        created = await work_routes.create_file(
+            payload=work_routes.WorkFileCreate(
+                name=filename, folder=folder, content=str(args.get("content") or ""),
+                language=str(args.get("language") or "plaintext"),
+                project_id=str(args.get("project_id") or "") or None,
+            ),
+            request=request, user=user, db=db,
+        )
+        _record_workspace_change(state, created)
+        return {"saved": True, "file_id": created["id"], "path": created["path"],
+                "version": created["version"], "size_bytes": created["size_bytes"],
+                "project_id": created.get("project_id"),
+                "next": "Le fichier est déjà enregistré dans le workspace."}
+    if name == "workspace_update_file":
+        from llink_api.api.routes import work as work_routes
+        file_id = str(args.get("file_id") or "")
+        expected_version = int(args.get("expected_version") or 0)
+        if expected_version < 1:
+            raise ValueError("Lis le fichier et fournis sa version courante avant toute modification.")
+        current = await work_routes.get_file(file_id=file_id, request=request, user=user, db=db)
+        if int(current.get("version") or 1) != expected_version:
+            raise HTTPException(status_code=409, detail={
+                "message": "Le fichier a changé depuis sa lecture. Relis-le avant de réessayer.",
+                "current_version": current.get("version"),
+            })
+        updated = await work_routes.update_file(
+            file_id=file_id,
+            payload=work_routes.WorkFileUpdate(
+                content=str(args.get("content") or ""), expected_version=expected_version,
+                name=str(args["name"]) if args.get("name") is not None else None,
+                folder=str(args["folder"]) if args.get("folder") is not None else None,
+                language=str(args["language"]) if args.get("language") is not None else None,
+            ),
+            request=request, user=user, db=db,
+        )
+        _record_workspace_change(state, updated)
+        return {"saved": True, "file_id": updated["id"], "path": updated["path"],
+                "version": updated["version"], "size_bytes": updated["size_bytes"],
+                "project_id": updated.get("project_id"),
+                "next": "Les modifications sont enregistrées. Relis le fichier pour contrôler le résultat."}
+
     if name == "document_begin":
         document_id = uuid.uuid4().hex
         filename = _safe_filename(str(args.get("filename") or "rapport.docx"), "rapport.docx")
@@ -998,6 +1218,7 @@ def _available_tool_definitions(user: dict[str, Any]) -> list[dict[str, Any]]:
     e2b_ready = bool(__import__("os").getenv("E2B_API_KEY", "").strip())
     allowed = {"update_plan", "document_begin", "document_add_blocks", "document_finalize", "artifact_verify", "create_text_file", "export_file"}
     if authenticated:
+        allowed.update({"workspace_list_projects", "workspace_list_files", "workspace_read_file", "workspace_search_files", "workspace_create_project", "workspace_create_file", "workspace_update_file"})
         allowed.add("web_open")
         if tavily_ready:
             allowed.update({"web_search", "image_search"})
@@ -1136,7 +1357,14 @@ def _agent_system(preferences: str | None, available_tools: list[str] | None = N
         "steps using the supplied native function tools. "
         "Use web_search for research and web_open to inspect source pages; use Python for calculations, "
         "data analysis and independent checks; use document tools only when the user requests a document; "
-        "create_text_file and export_file for requested artifacts. Select the smallest useful set of tools. "
+        "create_text_file and export_file for standalone downloadable artifacts. Use workspace_list_projects, "
+        "workspace_list_files, workspace_read_file and workspace_search_files to inspect real user files; "
+        "use workspace_create_project, workspace_create_file and workspace_update_file to persist project changes. "
+        "For source-code tasks, inspect the existing project and relevant files before editing; preserve unrelated "
+        "content, use the returned expected_version, and reread changed files to verify the saved result. "
+        "Do not delete files or projects: no destructive workspace deletion tool is exposed. "
+        "A standalone requested report is an artifact; a change to a project file belongs in the workspace. "
+        "Select the smallest useful set of tools. "
         "After each tool result, interpret it and decide the next action. Do not stop after one tool if "
         "the task still needs verification. For any multi-step task, use update_plan early and record explicit "
         "acceptance_criteria derived from the user's request; mark steps done only after evidence exists. "
@@ -1282,8 +1510,15 @@ async def _run_agent(
                         "artifact_verify": "Vérification indépendante du fichier",
                         "image_search": "Recherche d'illustrations",
                         "image_generate": "Génération d'illustration",
-                        "create_text_file": "Création d'un fichier",
+                        "create_text_file": "Création d'un artefact texte",
                         "export_file": "Export du fichier",
+                        "workspace_list_projects": "Exploration des projets Work",
+                        "workspace_list_files": "Exploration des fichiers Work",
+                        "workspace_read_file": "Lecture d'un fichier Work",
+                        "workspace_search_files": "Recherche dans les fichiers Work",
+                        "workspace_create_project": "Création d'un projet Work",
+                        "workspace_create_file": "Création d'un fichier dans Work",
+                        "workspace_update_file": "Modification d'un fichier dans Work",
                     }.get(name, name)
                     await emit({"type": "tool_start", "tool": name, "label": label, "call_id": call_id})
                     try:
@@ -1397,6 +1632,7 @@ async def _run_agent(
             "answer": final_answer,
             "reasoning": reasoning,
             "artifacts": artifacts,
+            "workspace_files": list(state.workspace_changes.values()),
         })
         if payload.data_collection_consent:
             try:
