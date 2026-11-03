@@ -44,7 +44,7 @@ const steps=Array.isArray(reasoning.steps)?reasoning.steps.slice(0,10):[];
 const events=Array.isArray(reasoning.events)?reasoning.events.slice(0,12):[];
 const decisions=Array.isArray(reasoning.decisions)?reasoning.decisions.slice(0,5):[];
 const statusLabel={planned:"À faire",in_progress:"En cours",done:"Terminé",blocked:"Bloqué",failed:"Échec"};
-const state=reasoning.status==="failed"?"Interrompue":reasoning.status==="completed"?"Terminée":"En cours";
+const state=reasoning.status==="failed"?"Interrompue":reasoning.status==="completed_with_limitations"?"Terminée avec réserves":reasoning.status==="completed"?"Terminée":"En cours";
 const stepHtml=steps.length?'<ol class="work-reasoning-steps">'+steps.map(step=>{
 const item=typeof step==="string"?{label:step,status:"planned"}:step||{};
 const status=["planned","in_progress","done","blocked","failed"].includes(item.status)?item.status:"planned";
@@ -293,7 +293,7 @@ const key=JSON.stringify([entry.tool||entry.label,entry.status,entry.detail]);
 if(!mergedEvents.some(item=>JSON.stringify([item.tool||item.label,item.status,item.detail])===key))mergedEvents.push(entry);
 }
 ans.reasoning={...finalReasoning,events:mergedEvents};
-ans.reasoning.status="completed";
+ans.reasoning.status=finalReasoning.status||"completed";
 const artifacts=Array.isArray(event.artifacts)?event.artifacts:[];
 for(const artifact of artifacts){
 if(!artifact.content_base64)continue;
@@ -397,7 +397,7 @@ mode:"work",source:"llink_work",
 preferences:""
 };
 await streamWorkAgent(payload,uploads,ans);
-ans.reasoning.status="completed";
+if(!ans.reasoning.status||ans.reasoning.status==="in_progress")ans.reasoning.status="completed";
 await db.msgs.add({chatId:S.chatId,role:"bot",text:ans.text,reasoning:ans.reasoning});
 const c=await db.chats.get(S.chatId);
 if(c&&window.isLoggedIn&&typeof syncChatToServer==="function"){c.messages=(await db.msgs.where("chatId").equals(S.chatId).toArray()).slice(-200);await syncChatToServer(c);}
