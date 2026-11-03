@@ -314,5 +314,7 @@ test("Work refuse d'exécuter une tâche si Render utilise encore l'ancien proto
   await page.locator("#work-send").click();
 
   await expect(page.locator(".work-message.assistant").last()).toContainText("protocole ancien");
+  await expect(page.locator(".work-message.assistant").last().locator(".work-reasoning")).toContainText("Interrompue");
+  await expect(page.locator(".work-message.assistant").last().locator(".work-reasoning")).toContainText("agent_preflight");
   expect(agentCalls).toBe(0);
 });
