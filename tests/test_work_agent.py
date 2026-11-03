@@ -1097,3 +1097,26 @@ def test_gemini_turn_preserves_native_function_call_ids(monkeypatch):
         assert assistant_state is function_content
 
     asyncio.run(run())
+
+def test_readable_html_exposes_page_title_and_safe_navigation_links():
+    parser = work_agent._ReadableHTML()
+    parser.feed(
+        "<html><head><title>Official Documentation</title></head><body>"
+        '<a href="/guide"> User Guide </a>'
+        '<a href="https://docs.example.org/api#top">API Reference</a>'
+        '<a href="javascript:alert(1)">Unsafe Link</a>'
+        '<a href="mailto:help@example.org">Email</a>'
+        '<a href="//example.com/current">Same Page</a>'
+        "</body></html>"
+    )
+    parser.close()
+
+    assert " ".join(parser.title_parts) == "Official Documentation"
+    links = work_agent._public_navigation_links(
+        parser.links,
+        "https://example.com/current",
+    )
+    assert links == [
+        {"label": "User Guide", "url": "https://example.com/guide"},
+        {"label": "API Reference", "url": "https://docs.example.org/api"},
+    ]
