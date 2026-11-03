@@ -34,9 +34,9 @@ from llink_api.services.training_data import record_exchange_if_consented
 logger = logging.getLogger(__name__)
 
 AGENT_PROTOCOL_VERSION = "native-functions-v1"
-MAX_MODEL_TURNS = 16
-MAX_TOOL_CALLS = 24
-MAX_AGENT_SECONDS = 180
+MAX_MODEL_TURNS = 24
+MAX_TOOL_CALLS = 32
+MAX_AGENT_SECONDS = 240
 MAX_TOOL_RESULT_CHARS = 12_000
 MAX_ARTIFACT_BYTES = 8_000_000
 MAX_AGENT_IMAGE_BYTES = 6_000_000
@@ -717,6 +717,21 @@ async def _dispatch_tool(
     if name == "document_begin":
         document_id = uuid.uuid4().hex
         filename = _safe_filename(str(args.get("filename") or "rapport.docx"), "rapport.docx")
+        quality_args = args.get("quality") or {}
+        if not isinstance(quality_args, dict):
+            raise ValueError("Les critères de qualité du document doivent être un objet.")
+        required_headings = quality_args.get("required_headings", [])
+        if not isinstance(required_headings, list):
+            raise ValueError("required_headings doit être une liste de titres.")
+        def bounded_quality_int(key: str, maximum: int) -> int:
+            raw_value = quality_args.get(key, 0)
+            if isinstance(raw_value, bool):
+                raise ValueError(f"Le critère {key} doit être un entier.")
+            try:
+                number = int(raw_value or 0)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Le critère {key} doit être un entier.") from exc
+            return max(0, min(number, maximum))
         state.drafts[document_id] = {
             "filename": filename,
             "title": str(args.get("title") or "")[:300],
@@ -724,16 +739,16 @@ async def _dispatch_tool(
             "author": str(args.get("author") or "")[:160],
             "institution": str(args.get("institution") or "")[:200],
             "quality": {
-                "minimum_words": max(0, min(int((args.get("quality") or {}).get("minimum_words", 0) or 0), 20_000)),
-                "minimum_images": max(0, min(int((args.get("quality") or {}).get("minimum_images", 0) or 0), 12)),
-                "minimum_tables": max(0, min(int((args.get("quality") or {}).get("minimum_tables", 0) or 0), 20)),
-                "minimum_source_urls": max(0, min(int((args.get("quality") or {}).get("minimum_source_urls", 0) or 0), 20)),
+                "minimum_words": bounded_quality_int("minimum_words", 20_000),
+                "minimum_images": bounded_quality_int("minimum_images", 12),
+                "minimum_tables": bounded_quality_int("minimum_tables", 20),
+                "minimum_source_urls": bounded_quality_int("minimum_source_urls", 20),
                 "required_headings": [
                     str(item).strip()[:180]
-                    for item in (args.get("quality") or {}).get("required_headings", [])[:20]
+                    for item in required_headings[:20]
                     if isinstance(item, str) and item.strip()
                 ],
-                "require_bibliography": bool((args.get("quality") or {}).get("require_bibliography", False)),
+                "require_bibliography": bool(quality_args.get("require_bibliography", False)),
             },
             "blocks": [],
         }
@@ -1298,7 +1313,7 @@ async def _run_agent(
             "acceptance_criteria": state.plan.get("acceptance_criteria", []),
             "limitations": state.plan["limitations"],
             "events": state.events,
-            "status": "completed",
+            "status": "completed_with_limitations" if state.plan["limitations"] or unverified_names else "completed",
             "tool_calls": state.tool_calls,
         }
         await emit({
