@@ -10,6 +10,7 @@ const CORS_HEADERS = {
 };
 
 async function openWork(page) {
+  await page.addInitScript(() => localStorage.removeItem("llink_effort"));
   await page.route(API + "/api/work/tools", async route => {
     if (route.request().method() === "OPTIONS") {
       return route.fulfill({ status: 204, headers: CORS_HEADERS });
@@ -53,6 +54,7 @@ async function openWork(page) {
   await expect(page.locator(".work-brand-title")).toHaveText("Llink Work");
   await expect(page.locator("#work-list")).toBeVisible();
   await expect(page.locator("#work-tool-status")).toContainText("Agent natif native-functions-v1");
+  await expect(page.locator("#work-tool-status")).toContainText("Réflexion extra");
 }
 
 async function mockAgentEvents(page, events, verifyRequest = null) {
@@ -125,6 +127,7 @@ test("Work crée et télécharge un fichier Markdown éditable par l'agent serve
     finalEvent("Le fichier Markdown a été créé et vérifié.", artifact)
   ], payload => {
     expect(payload.mode).toBe("work");
+    expect(payload.effort).toBe("extra");
     expect(payload.message).toContain("fichier Markdown");
   });
 
