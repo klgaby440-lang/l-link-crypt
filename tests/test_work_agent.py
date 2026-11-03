@@ -51,7 +51,7 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                     message["content"] for message in kwargs["messages"]
                     if message.get("role") == "tool" and message.get("tool_call_id") == "begin-1"
                 )
-                document_id = json.loads(begin_result)["result"]["document_id"]
+                document_id = json.loads(begin_result)["document_id"]
                 calls = [
                     {"id": "blocks-1", "name": "document_add_blocks", "arguments": {
                         "document_id": document_id,
@@ -68,7 +68,7 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                     message["content"] for message in kwargs["messages"]
                     if message.get("role") == "tool" and message.get("tool_call_id") == "finish-1"
                 )
-                artifact_id = json.loads(finish_result)["result"]["artifact_id"]
+                artifact_id = json.loads(finish_result)["artifact_id"]
                 calls = [{"id": "verify-1", "name": "artifact_verify", "arguments": {"artifact_id": artifact_id}}]
             else:
                 return "Le document a été créé et vérifié.", [], None, {"role": "assistant", "content": "Le document a été créé et vérifié."}
@@ -257,7 +257,7 @@ def test_agent_can_embed_a_searched_image_and_verify_it_in_docx():
             state=state, request=None, user=user, db=None,
         )
         assert built["precheck_passed"] is True
-        assert built["verified"] is False
+        assert built["status"] == "artifact_ready_pending_independent_verification"
         verify = await work_agent._dispatch_tool(
             "artifact_verify", {"artifact_id": built["artifact_id"]},
             state=state, request=None, user=user, db=None,
