@@ -256,6 +256,7 @@ class AgentState:
     image_bytes: int = 0
     call_signatures: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_calls: int = 0
+    user_request: str = ""
 
 
 def _json_safe(value: Any, limit: int = MAX_TOOL_RESULT_CHARS) -> str:
@@ -273,6 +274,40 @@ def _event(label: str, status: str, detail: str = "", tool: str = "") -> dict[st
         "detail": str(detail)[:500],
         "tool": str(tool)[:80],
     }
+
+
+def _request_requires_artifact(message: str) -> bool:
+    """Détecte les demandes explicites de livrables sans assimiler toute rédaction à un fichier."""
+    text = str(message or "").casefold()
+    action = r"\b(?:cr[eé]e?r?|g[eé]n[eè]re?r?|produi[st]re?|r[eé]dige?r?|pr[eé]pare?r?|exporte?r?|enregistre?r?|t[eé]l[eé]charge?r?|livre?r?|remets?|make|create|generate|export|save|download|deliver|produce|draft)\b"
+    artifact = r"\b(?:fichier|document|rapport|compte[- ]rendu|travail pratique|pr[eé]sentation|diaporama|tableur|classeur|word|docx|pdf|xlsx|pptx|zip|file|report|spreadsheet|workbook|slides|presentation)\b"
+    return bool(re.search(action + r".{0,120}" + artifact, text, flags=re.DOTALL))
+
+
+def _infer_document_quality(message: str) -> dict[str, Any]:
+    """Convertit les attentes mesurables courantes en critères serveur minimaux."""
+    text = str(message or "").casefold()
+    quality: dict[str, Any] = {
+        "minimum_words": 0,
+        "minimum_images": 0,
+        "minimum_tables": 0,
+        "minimum_source_urls": 0,
+        "required_headings": [],
+        "require_bibliography": False,
+    }
+    page_match = re.search(r"\b(\d{1,2})\s*pages?\b", text)
+    if page_match:
+        # Approximation de densité : environ 300 mots par page de contenu.
+        quality["minimum_words"] = min(int(page_match.group(1)) * 300, 20_000)
+    if re.search(r"\b(?:recherche|recherches|recherche documentaire|sources|source scientifique|bibliographie|références|research|references|bibliography)\b", text):
+        quality["minimum_source_urls"] = 3
+        quality["require_bibliography"] = True
+        quality["required_headings"].append("Bibliographie")
+    if re.search(r"\b(?:tableau|tableaux|comparatif|comparison table)\b", text):
+        quality["minimum_tables"] = 1
+    if re.search(r"\b(?:images?|illustrations?|photographies?|photos?|figures?)\b", text):
+        quality["minimum_images"] = 1
+    return quality
 
 
 def _safe_filename(value: str, fallback: str) -> str:
@@ -732,6 +767,13 @@ async def _dispatch_tool(
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"Le critère {key} doit être un entier.") from exc
             return max(0, min(number, maximum))
+        inferred_quality = _infer_document_quality(state.user_request)
+        requested_headings = [
+            str(item).strip()[:180]
+            for item in required_headings[:20]
+            if isinstance(item, str) and item.strip()
+        ]
+        all_headings = list(dict.fromkeys(inferred_quality["required_headings"] + requested_headings))
         state.drafts[document_id] = {
             "filename": filename,
             "title": str(args.get("title") or "")[:300],
@@ -739,16 +781,12 @@ async def _dispatch_tool(
             "author": str(args.get("author") or "")[:160],
             "institution": str(args.get("institution") or "")[:200],
             "quality": {
-                "minimum_words": bounded_quality_int("minimum_words", 20_000),
-                "minimum_images": bounded_quality_int("minimum_images", 12),
-                "minimum_tables": bounded_quality_int("minimum_tables", 20),
-                "minimum_source_urls": bounded_quality_int("minimum_source_urls", 20),
-                "required_headings": [
-                    str(item).strip()[:180]
-                    for item in required_headings[:20]
-                    if isinstance(item, str) and item.strip()
-                ],
-                "require_bibliography": bool(quality_args.get("require_bibliography", False)),
+                "minimum_words": max(inferred_quality["minimum_words"], bounded_quality_int("minimum_words", 20_000)),
+                "minimum_images": max(inferred_quality["minimum_images"], bounded_quality_int("minimum_images", 12)),
+                "minimum_tables": max(inferred_quality["minimum_tables"], bounded_quality_int("minimum_tables", 20)),
+                "minimum_source_urls": max(inferred_quality["minimum_source_urls"], bounded_quality_int("minimum_source_urls", 20)),
+                "required_headings": all_headings[:20],
+                "require_bibliography": inferred_quality["require_bibliography"] or bool(quality_args.get("require_bibliography", False)),
             },
             "blocks": [],
         }
@@ -1130,7 +1168,7 @@ async def _run_agent(
     base_url: str,
     emit: Any,
 ) -> None:
-    state = AgentState()
+    state = AgentState(user_request=payload.message)
     tool_definitions = _available_tool_definitions(user)
     available_tool_names = [(item.get("function") or {}).get("name", "") for item in tool_definitions]
     system = _agent_system(payload.preferences, available_tool_names)
@@ -1305,6 +1343,17 @@ async def _run_agent(
             })
         if unverified_names:
             final_answer += "\n\nJe n'ai pas remis les fichiers suivants, car leur vérification indépendante n'a pas réussi : " + ", ".join(unverified_names) + "."
+
+        requires_artifact = _request_requires_artifact(payload.message)
+        if requires_artifact and not artifacts:
+            if not unverified_names:
+                state.plan["limitations"].append(
+                    "Un livrable téléchargeable était explicitement demandé, mais aucun fichier vérifié n'a été produit."
+                )
+            final_answer = (
+                "Je n'ai pas remis de fichier : aucun livrable n'a passé les vérifications requises. "
+                "Les résultats confirmés et les limites sont indiqués dans la démarche ci-dessus."
+            )
 
         reasoning = {
             "summary": state.plan["summary"],
