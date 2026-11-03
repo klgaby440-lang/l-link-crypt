@@ -13,7 +13,7 @@ from llink_api.services.model_registry import resolve_model
 
 
 def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monkeypatch):
-        async def run_test():
+    async def run_test():
         async def no_budget(**_kwargs):
             return None
 
