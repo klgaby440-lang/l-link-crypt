@@ -425,3 +425,145 @@ def test_glm_image_tool_generates_and_prepares_an_image_artifact(monkeypatch):
         assert verify["verification"]["format"] == "PNG"
 
     asyncio.run(run())
+
+
+def test_docx_quality_gate_checks_word_count_images_tables_sources_and_headings():
+    from PIL import Image
+    from llink_api.services.document_engine import build_structured_docx
+
+    picture = io.BytesIO()
+    Image.new("RGB", (18, 18), (30, 100, 60)).save(picture, format="PNG")
+    image_data = "data:image/png;base64," + base64.b64encode(picture.getvalue()).decode("ascii")
+    long_text = (
+        "Les Pinacées présentent des caractères morphologiques et reproductifs qui varient selon les genres. "
+        "Leur étude compare les feuilles, les cônes, les graines, les habitats et les interactions écologiques. "
+        "La pollinisation par le vent favorise la dispersion du pollen sur de longues distances. "
+        "Les graines peuvent être ailées et sont libérées à maturité par les cônes femelles. "
+        "Les espèces occupent des milieux boréaux, tempérés et montagnards, où elles influencent les sols, "
+        "les cycles du carbone et les communautés animales. "
+    ) * 5
+    blocks = [
+        {"type": "heading", "level": 1, "text": "Introduction"},
+        {"type": "paragraph", "text": long_text + "Source principale : https://example.org/pinaceae"},
+        {"type": "heading", "level": 1, "text": "Reproduction"},
+        {"type": "image", "data_url": image_data, "alt": "Cône de pin"},
+        {"type": "caption", "text": "Figure 1 — Cône de pin"},
+        {"type": "table", "rows": [["Genre", "Caractère"], ["Pinus", "Aiguilles en faisceaux"]]},
+        {"type": "heading", "level": 1, "text": "Bibliographie"},
+        {"type": "paragraph", "text": "Ressource botanique : https://example.org/pinaceae"},
+    ]
+    raw = build_structured_docx({"title": "Pinaceae", "blocks": blocks})
+    checks = work_agent._verify_docx(
+        raw,
+        blocks,
+        {
+            "minimum_words": 100,
+            "minimum_images": 1,
+            "minimum_tables": 1,
+            "minimum_source_urls": 1,
+            "required_headings": ["Introduction", "Reproduction"],
+            "require_bibliography": True,
+        },
+    )
+
+    assert checks["passed"] is True
+    assert checks["word_count"] >= 100
+    assert checks["images_found"] == 1
+    assert checks["tables_found"] == 1
+    assert checks["unique_source_urls"] == 1
+    assert checks["bibliography_found"] is True
+
+
+def test_docx_quality_gate_rejects_incomplete_document():
+    from llink_api.services.document_engine import build_structured_docx
+
+    blocks = [
+        {"type": "heading", "level": 1, "text": "Introduction"},
+        {"type": "paragraph", "text": "Texte trop court."},
+    ]
+    raw = build_structured_docx({"title": "Document incomplet", "blocks": blocks})
+    checks = work_agent._verify_docx(
+        raw,
+        blocks,
+        {
+            "minimum_words": 1200,
+            "minimum_images": 3,
+            "minimum_tables": 2,
+            "minimum_source_urls": 4,
+            "required_headings": ["Reproduction", "Répartition géographique"],
+            "require_bibliography": True,
+        },
+    )
+
+    assert checks["passed"] is False
+    assert checks["minimum_words_met"] is False
+    assert checks["minimum_images_met"] is False
+    assert checks["minimum_tables_met"] is False
+    assert checks["minimum_source_urls_met"] is False
+    assert "Reproduction" in checks["missing_required_headings"]
+    assert checks["bibliography_required"] is True
+    assert checks["bibliography_found"] is False
+
+
+def test_document_begin_persists_user_quality_contract_and_blocks_failed_delivery():
+    async def run():
+        state = work_agent.AgentState()
+        result = await work_agent._dispatch_tool(
+            "document_begin",
+            {
+                "filename": "rapport-incomplet.docx",
+                "title": "Rapport incomplet",
+                "quality": {
+                    "minimum_words": 1000,
+                    "minimum_images": 2,
+                    "minimum_tables": 1,
+                    "minimum_source_urls": 3,
+                    "required_headings": ["Reproduction"],
+                    "require_bibliography": True,
+                },
+            },
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        draft = state.drafts[result["document_id"]]
+        assert draft["quality"]["minimum_words"] == 1000
+        assert draft["quality"]["minimum_images"] == 2
+        assert draft["quality"]["required_headings"] == ["Reproduction"]
+
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {
+                "document_id": result["document_id"],
+                "blocks": [
+                    {"type": "heading", "level": 1, "text": "Introduction"},
+                    {"type": "paragraph", "text": "Un paragraphe court."},
+                ],
+            },
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        built = await work_agent._dispatch_tool(
+            "document_finalize",
+            {"document_id": result["document_id"]},
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        assert built["precheck_passed"] is False
+        with pytest.raises(ValueError, match="vérification indépendante"):
+            await work_agent._dispatch_tool(
+                "artifact_verify",
+                {"artifact_id": built["artifact_id"]},
+                state=state,
+                request=None,
+                user={"uid": "anonymous"},
+                db=None,
+            )
+        assert state.artifacts[built["artifact_id"]]["verified_by_agent"] is False
+
+    asyncio.run(run())
