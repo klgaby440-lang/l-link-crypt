@@ -47,10 +47,15 @@ def test_work_xlsx_export_accepts_json_rows_and_neutralizes_formulas():
     assert sheet["A3"].data_type == "s"
 
 
-def test_work_registry_is_public_but_remote_tools_require_authentication(client):
+def test_work_registry_is_public_but_remote_tools_require_authentication(client, monkeypatch):
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("E2B_API_KEY", raising=False)
+    monkeypatch.delenv("ZAI_API_KEY", raising=False)
     registry = client.get("/api/work/tools")
     assert registry.status_code == 200
     assert registry.json()["tools"]["document_create"] is True
+    assert registry.json()["tools"]["image_search"] is False
+    assert registry.json()["tools"]["image_generate"] is False
     assert client.post(
         "/api/work/tools/search",
         json={"query": "actualité scientifique"},
