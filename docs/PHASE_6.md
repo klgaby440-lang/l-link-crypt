@@ -55,3 +55,38 @@ Les documents sont stockés dans \`users/{uid}/work_projects\` et \`users/{uid}/
 - Les documents binaires créés sont conservés localement dans IndexedDB ; ils ne sont pas encore synchronisés vers un stockage cloud d'objets.
 - La génération d'images originales utilise GLM-Image via `ZAI_API_KEY`. Les fichiers PNG générés sont stockés comme artefacts temporaires, insérables par `image_id`, puis relus par Pillow avant leur livraison. La clé Z.AI doit être configurée sur Render.
 - Les formats structurés pris en charge par le nouveau moteur sont DOCX ; PDF et XLSX utilisent encore le convertisseur de contenu existant.
+
+## Extension — Agent Work natif généraliste et contrôle des livrables
+
+Le mode Work utilise désormais un orchestrateur serveur dédié (llink_api/services/work_agent.py) et la route POST /api/work/agent. Le client vérifie d'abord GET /api/work/agent/status, qui retourne la version du protocole, les outils réellement actifs pour la session et les limites d'exécution. Le protocole courant est native-functions-v1 ; l'interface refuse d'envoyer une tâche à un backend qui expose encore l'ancien protocole textuel.
+
+### Boucle d'agent
+
+- Le modèle reçoit les schémas de fonctions natifs du fournisseur, choisit ses outils et renvoie des arguments structurés.
+- L'orchestrateur exécute les fonctions dans le serveur, renvoie leurs résultats au modèle et poursuit jusqu'à une réponse finale ou une limite de sécurité.
+- Budget maximal par tâche : 24 tours du modèle, 32 appels d'outils et 240 secondes.
+- Les messages d'assistant des fournisseurs compatibles sont conservés tels quels entre les tours, notamment reasoning_content lorsque le fournisseur l'exige.
+- Le panneau Work expose le plan, les critères de réussite, les décisions résumées, les outils exécutés et leurs résultats confirmés. Il ne révèle pas de chaîne de pensée interne privée.
+
+### Outils disponibles
+
+Le registre natif comprend la mise à jour du plan, la recherche et l'ouverture de sources Web, la recherche d'images, la génération d'images, Python isolé, la rédaction DOCX en lots, l'export PDF/XLSX, la création de fichiers texte et la vérification d'artefacts. Les outils distants ne sont annoncés que lorsque les clés serveur et l'authentification nécessaires sont présentes.
+
+### Critères de réussite et contrôle documentaire
+
+- Les demandes de documents peuvent déclarer un contrat de qualité : minimum de mots, images, tableaux, URL de sources, titres obligatoires et bibliographie.
+- Le serveur infère également certains critères depuis la demande. Un document demandé en cinq pages vise au moins 1 500 mots (approximation de contenu, pas une pagination calculée par moteur de rendu). Une demande de recherche impose au moins trois URL et une bibliographie.
+- Les critères inférés sont des planchers : le modèle peut les renforcer, mais pas les réduire.
+- Le moteur rouvre le DOCX généré et vérifie le texte, les tableaux, les images, les titres, le volume, les URL et la présence de la bibliographie.
+- Un artefact ne peut être remis que si artifact_verify a réussi. Lorsqu'un fichier est explicitement demandé, l'agent ne peut pas annoncer sa livraison si aucun artefact vérifié n'existe.
+
+### Version du frontend et compatibilité du backend
+
+Le client ajoute un paramètre de version aux ressources Work pour éviter de conserver l'ancien JavaScript en cache. Il contrôle le protocole natif avant chaque tâche. Si Render n'a pas encore déployé le backend correspondant, Work affiche une erreur explicite et n'envoie pas la tâche à l'ancien endpoint.
+
+### Limites opérationnelles
+
+- La recherche Web et d'images dépend de TAVILY_API_KEY ; Python isolé dépend de E2B_API_KEY ; la génération d'images dépend de ZAI_API_KEY.
+- Les fichiers générés sont renvoyés au navigateur et conservés dans l'espace de travail local. Une synchronisation cloud durable des binaires reste une évolution séparée.
+- Les contrôles de qualité documentaires vérifient le contenu et la structure du DOCX. Le seuil de mots pour estimer cinq pages n'est pas un rendu paginé réel ; un contrôle visuel via un moteur DOCX vers PDF devra compléter cette vérification pour garantir une pagination exacte.
+- Les tests CI valident les appels natifs simulés, les boucles multi-tours, les critères de qualité et les livraisons. Ils ne remplacent pas un essai en direct des clés et quotas de chaque fournisseur IA sur Render.
