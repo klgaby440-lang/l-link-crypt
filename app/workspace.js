@@ -270,7 +270,15 @@ return;
 }
 if(event.type==="final"){
 ans.text=String(event.answer||"La tâche est terminée.");
-ans.reasoning=event.reasoning||ans.reasoning;
+const liveEvents=Array.isArray(ans.reasoning?.events)?ans.reasoning.events:[];
+const finalReasoning=event.reasoning||ans.reasoning||{};
+const reportedEvents=Array.isArray(finalReasoning.events)?finalReasoning.events:[];
+const mergedEvents=[...liveEvents];
+for(const entry of reportedEvents){
+const key=JSON.stringify([entry.tool,entry.label,entry.status,entry.detail]);
+if(!mergedEvents.some(item=>JSON.stringify([item.tool,item.label,item.status,item.detail])===key))mergedEvents.push(entry);
+}
+ans.reasoning={...finalReasoning,events:mergedEvents};
 ans.reasoning.status="completed";
 const artifacts=Array.isArray(event.artifacts)?event.artifacts:[];
 for(const artifact of artifacts){
