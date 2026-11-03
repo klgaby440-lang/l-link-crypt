@@ -366,14 +366,14 @@ model:$("work-model").value||"gemini-1.5-flash",
 level:window.llThink?.level?window.llThink.level():"velora",
 effort:window.llThink?.effort?window.llThink.effort():"normal",
 mode:"work",source:"llink_work",
-preferences:"Tu es l'assistant de l'espace Work de Llink. Aide à rédiger, analyser, organiser des projets et modifier du code. Pour une demande de fichier final, utilise les outils de création/exportation disponibles au lieu de laisser seulement du texte. Pour chaque réponse Work, commence par un bloc <llink_reasoning> contenant un JSON strict avec summary (résumé bref de la démarche), steps (1 à 8 objets label/status: planned, in_progress, done ou blocked), decisions (choix importants et justification courte) et limitations (limites connues). Mets à jour les étapes après chaque outil. Explique les grandes étapes, critères et résultats utiles, sans exposer de monologue interne privé. N'invente jamais une action ou un résultat. Ne prétends pas qu'un fichier est enregistré ou qu'un outil a été exécuté sans preuve. Les changements de code restent soumis à validation. Outils réellement activés : web_search="+(S.tools.web_search?"oui":"non")+", python isolé="+(S.tools.python?"oui":"non")+", create_document DOCX="+(S.tools.document_create?"oui":"non")+", exports PDF/XLSX="+(S.tools.exports?"oui":"non")+". Utilise le protocole d'outil intégré uniquement lorsque nécessaire."
+preferences:""
 };
 await streamWorkAgent(payload,uploads,ans);
 ans.reasoning.status="completed";
 await db.msgs.add({chatId:S.chatId,role:"bot",text:ans.text,reasoning:ans.reasoning});
 const c=await db.chats.get(S.chatId);
 if(c&&window.isLoggedIn&&typeof syncChatToServer==="function"){c.messages=(await db.msgs.where("chatId").equals(S.chatId).toArray()).slice(-200);await syncChatToServer(c);}
-}catch(e){ans.text="❌ "+e.message;toast(ans.text);}
+}catch(e){ans.text="❌ "+e.message;if(ans.reasoning)ans.reasoning.status="failed";toast(ans.text);}
 finally{S.busy=false;$("work-send").disabled=false;renderMessages();}
 }
 async function showVersions(){if(!S.file)return toast("Ouvre un fichier d’abord.");let a=[];if(S.file.cloudId&&connected()&&navigator.onLine){try{a=(await api("/api/work/files/"+encodeURIComponent(S.file.cloudId)+"/versions")).versions||[];}catch(e){toast(e.message);}}else a=await db.workFileVersions.where("fileId").equals(S.file.id).toArray();$("work-dialog-root").innerHTML='<div class="work-dialog-backdrop"><div class="work-dialog"><h3>Historique des versions</h3><p>Restaurer une version crée une nouvelle version courante.</p><div id="work-ver-list"></div><div class="work-dialog-actions"><button data-act="close-dialog">Fermer</button></div></div></div>';$("work-dialog-root").querySelector("#work-ver-list").innerHTML=a.length?a.map(v=>'<div class="work-version-row"><div><b>Version '+v.version+'</b><small>'+esc(v.created_at||v.createdAt||"")+'</small></div><button data-act="restore" data-version="'+v.version+'">Restaurer</button></div>').join(""):"Aucune version précédente.";}
