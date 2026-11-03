@@ -143,12 +143,15 @@ def test_usage_route_is_authenticated(client):
 def test_work_tool_registry_is_discoverable_without_login(client, monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("E2B_API_KEY", raising=False)
+    monkeypatch.delenv("ZAI_API_KEY", raising=False)
 
     response = client.get("/api/work/tools")
 
     assert response.status_code == 200
     tools = response.json()["tools"]
     assert tools["web_search"] is False
+    assert tools["image_search"] is False
+    assert tools["image_generate"] is False
     assert tools["python"] is False
     assert tools["exports"] is True
     assert tools["document_create"] is True
