@@ -105,9 +105,9 @@ if(!Array.isArray(ans.reasoning.events))ans.reasoning.events=[];
 const labels={web_search:"Recherche Web",web_open:"Lecture d'une source",image_search:"Recherche et validation d'images",image_generate:"Génération d'une illustration",python:"Exécution Python isolée",document_begin:"Initialisation du document",document_add_blocks:"Rédaction d'une section",document_finalize:"Génération du document Word",artifact_verify:"Vérification indépendante du fichier",create_text_file:"Création d'un fichier",create_document:"Création du document Word",export_file:"Export du fichier",artifact:"Livraison du fichier"};
 const label=labels[name]||("Outil "+String(name||"Work"));
 const normalizedStatus=status==="running"?"in_progress":status;
-const existing=ans.reasoning.events.slice().reverse().find(event=>event.label===label&&event.status==="in_progress");
-if(existing){existing.status=normalizedStatus;existing.detail=String(detail||"").slice(0,260);}
-else ans.reasoning.events.push({label,status:normalizedStatus,detail:String(detail||"").slice(0,260)});
+const existing=ans.reasoning.events.slice().reverse().find(event=>(event.tool===name||(!event.tool&&event.label===label))&&event.status==="in_progress");
+if(existing){existing.status=normalizedStatus;existing.detail=String(detail||"").slice(0,260);existing.tool=name;}
+else ans.reasoning.events.push({label,status:normalizedStatus,detail:String(detail||"").slice(0,260),tool:name});
 ans.reasoning.events=ans.reasoning.events.slice(-12);
 updateReasoningSlot(ans);
 }
@@ -275,8 +275,8 @@ const finalReasoning=event.reasoning||ans.reasoning||{};
 const reportedEvents=Array.isArray(finalReasoning.events)?finalReasoning.events:[];
 const mergedEvents=[...liveEvents];
 for(const entry of reportedEvents){
-const key=JSON.stringify([entry.tool,entry.label,entry.status,entry.detail]);
-if(!mergedEvents.some(item=>JSON.stringify([item.tool,item.label,item.status,item.detail])===key))mergedEvents.push(entry);
+const key=JSON.stringify([entry.tool||entry.label,entry.status,entry.detail]);
+if(!mergedEvents.some(item=>JSON.stringify([item.tool||item.label,item.status,item.detail])===key))mergedEvents.push(entry);
 }
 ans.reasoning={...finalReasoning,events:mergedEvents};
 ans.reasoning.status="completed";
