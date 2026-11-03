@@ -103,3 +103,11 @@ Le client ajoute un paramètre de version aux ressources Work pour éviter de co
 - Les limites maximales par tâche sont de 36 tours du modèle, 48 appels d'outils et 360 secondes. Elles restent bornées et soumises au budget d'utilisation du compte.
 - Si un contrôle DOCX échoue, `artifact_verify` renvoie les critères manquants et les instructions de réparation. `document_begin` reprend le brouillon non vérifié du même nom par défaut. Un ancien artefact n'est marqué comme remplacé qu'après vérification réussie de la nouvelle version.
 - Le terminal exige `E2B_API_KEY` sur Render. Les tests simulés vérifient le contrat logiciel ; un essai avec cette clé réelle reste nécessaire pour confirmer la configuration, les limites et la facturation E2B.
+
+## Extension — navigation Web multipage textuelle
+
+- `web_open` extrait désormais le véritable titre de la page, son texte lisible et jusqu'à 20 liens directs HTTP(S) pertinents.
+- L'agent peut ouvrir les liens retournés par une page avec de nouveaux appels `web_open`, notamment pour suivre une documentation officielle, une référence ou une source citée.
+- Les liens relatifs sont résolus par rapport à l'URL de la page. Les fragments sont retirés, les doublons et schémas dangereux (`javascript:`, `mailto:`, etc.) sont ignorés.
+- Chaque nouvelle URL est soumise à la validation des hôtes publics avant ouverture ; les URL locales et réseaux privés restent refusés.
+- Cette navigation est textuelle et non interactive : aucun JavaScript n'est exécuté, aucun compte n'est connecté, aucun formulaire ni bouton n'est activé et aucun fichier arbitraire n'est téléchargé. Les redirections HTTP doivent être recherchées puis ouvertes explicitement.
