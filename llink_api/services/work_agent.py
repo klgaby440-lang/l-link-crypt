@@ -574,7 +574,10 @@ async def _dispatch_tool(
             raise ValueError("Chaque appel doit ajouter de 1 à 6 blocs.")
         if len(draft["blocks"]) + len(blocks) > 160:
             raise ValueError("Le document dépasse la limite de 160 blocs.")
-        batch_size = len(_json_safe(blocks, 1_000_000))
+        try:
+            batch_size = len(json.dumps(blocks, ensure_ascii=False).encode("utf-8"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Le lot de blocs n'est pas un JSON valide.") from exc
         if batch_size > 28_000:
             raise ValueError("Ce lot est trop volumineux. Sépare-le en plusieurs appels.")
         for block in blocks:
@@ -588,12 +591,16 @@ async def _dispatch_tool(
                 normalized["data_url"] = image["data_url"]
                 normalized.pop("image_id", None)
                 normalized["alt"] = str(normalized.get("alt") or image["description"])[:500]
+                if len(draft["blocks"]) + 1 > 160:
+                    raise ValueError("Le document dépasse la limite de 160 blocs.")
                 draft["blocks"].append(normalized)
                 # The source is retained as a visible caption for attribution.
                 source = image.get("source_url")
                 description = image.get("description")
                 caption_parts = [part for part in (description, ("Source : " + source) if source else None) if part]
                 if caption_parts:
+                    if len(draft["blocks"]) + 1 > 160:
+                        raise ValueError("Le document dépasse la limite de 160 blocs après ajout de l'image et de sa source.")
                     draft["blocks"].append({"type": "caption", "text": " — ".join(caption_parts)[:1200]})
             else:
                 draft["blocks"].append(normalized)
