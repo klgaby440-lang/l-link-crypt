@@ -636,9 +636,10 @@ async def _dispatch_tool(
             "artifact_id": artifact_id,
             "filename": artifact["filename"],
             "size_bytes": len(raw),
-            "verified": verification["passed"],
+            "verified": False,
+            "precheck_passed": verification["passed"],
             "verification": verification,
-            "status": "artifact_ready",
+            "status": "artifact_ready_pending_independent_verification",
         }
 
     if name == "artifact_verify":
@@ -684,13 +685,15 @@ async def _dispatch_tool(
             }
         artifact["verification"] = verification
         artifact["verified_by_agent"] = bool(verification.get("passed"))
+        if not artifact["verified_by_agent"]:
+            raise ValueError("La vérification indépendante a échoué. Le fichier ne sera pas livré ; corrige-le puis régénère-le.")
         return {
             "artifact_id": artifact_id,
             "filename": artifact["filename"],
             "size_bytes": len(data),
             "verification": verification,
-            "verified": artifact["verified_by_agent"],
-            "verified_by_agent": artifact["verified_by_agent"],
+            "verified": True,
+            "verified_by_agent": True,
         }
 
     if name == "create_text_file":
@@ -707,7 +710,7 @@ async def _dispatch_tool(
             "kind": "text",
         }
         state.artifacts[artifact_id] = artifact
-        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": False, "next": "Call artifact_verify before delivery."}
+        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": False, "status": "pending_independent_verification", "next": "Call artifact_verify before delivery."}
 
     if name == "export_file":
         from llink_api.api.routes.work_tools import create_export_bytes, safe_output_filename
@@ -738,7 +741,7 @@ async def _dispatch_tool(
             "kind": file_format,
         }
         state.artifacts[artifact_id] = artifact
-        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": verification["passed"], "verification": verification}
+        return {"artifact_id": artifact_id, "filename": filename, "size_bytes": len(raw), "verified": False, "precheck_passed": verification["passed"], "verification": verification, "status": "pending_independent_verification"}
 
     raise ValueError(f"Outil inconnu : {name}")
 
