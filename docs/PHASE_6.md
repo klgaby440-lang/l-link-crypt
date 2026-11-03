@@ -91,3 +91,15 @@ Le client ajoute un paramètre de version aux ressources Work pour éviter de co
 - Les fichiers générés sont renvoyés au navigateur et conservés dans l'espace de travail local. Une synchronisation cloud durable des binaires reste une évolution séparée.
 - Les contrôles de qualité documentaires vérifient le contenu et la structure du DOCX. Le seuil de mots pour estimer cinq pages n'est pas un rendu paginé réel ; un contrôle visuel via un moteur DOCX vers PDF devra compléter cette vérification pour garantir une pagination exacte.
 - Les tests CI valident les appels natifs simulés, les boucles multi-tours, les critères de qualité et les livraisons. Ils ne remplacent pas un essai en direct des clés et quotas de chaque fournisseur IA sur Render.
+
+## Extension — Terminal de projet isolé et reprise documentaire
+
+- Les outils `project_sandbox_open`, `project_run`, `project_list_files`, `project_read_file` et `project_sync_files` donnent à Work un véritable terminal Linux isolé E2B pour les projets authentifiés.
+- Le sandbox copie au maximum 30 fichiers texte sélectionnés, avec une limite totale de 2 Mo. Les secrets et répertoires sensibles (.env, clés privées, certificats, .git, node_modules, caches et environnements virtuels) sont exclus.
+- L'accès réseau est désactivé par défaut. Il ne peut être activé que lorsqu'une installation de dépendances le justifie. Aucun jeton Llink, secret fournisseur ou credential Firebase n'est transmis au sandbox.
+- Les commandes ont une durée maximale de 60 secondes et leurs sorties sont tronquées à 10 000 caractères. Le sandbox est détruit à la fin de la tâche Work.
+- Les fichiers modifiés ne sont pas synchronisés automatiquement. L'agent doit sélectionner explicitement les chemins après inspection et tests ; la synchronisation utilise les versions Firestore pour détecter les modifications concurrentes. Aucun outil de suppression n'est exposé.
+- Une erreur de test est renvoyée comme un résultat structuré (code de sortie, stdout, stderr) afin que l'agent puisse diagnostiquer, corriger et relancer.
+- Les limites maximales par tâche sont de 36 tours du modèle, 48 appels d'outils et 360 secondes. Elles restent bornées et soumises au budget d'utilisation du compte.
+- Si un contrôle DOCX échoue, `artifact_verify` renvoie les critères manquants et les instructions de réparation. `document_begin` reprend le brouillon non vérifié du même nom par défaut. Un ancien artefact n'est marqué comme remplacé qu'après vérification réussie de la nouvelle version.
+- Le terminal exige `E2B_API_KEY` sur Render. Les tests simulés vérifient le contrat logiciel ; un essai avec cette clé réelle reste nécessaire pour confirmer la configuration, les limites et la facturation E2B.

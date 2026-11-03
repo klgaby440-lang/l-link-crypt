@@ -266,6 +266,70 @@ def test_academic_document_requests_require_substantial_content_and_sources():
     assert "Bibliographie" in quality["required_headings"]
 
 
+
+def test_document_begin_resumes_unverified_draft_instead_of_starting_over():
+    async def run():
+        state = work_agent.AgentState()
+        first = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "cycle-krebs.docx", "title": "Cycle de Krebs", "quality": {"minimum_words": 50}},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": first["document_id"], "blocks": [
+                {"type": "heading", "level": 1, "text": "Introduction"},
+                {"type": "paragraph", "text": "Texte trop court."},
+            ]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        failed = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": first["document_id"]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert failed["precheck_passed"] is False
+        resumed = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "cycle-krebs.docx", "title": "Cycle de Krebs"},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert resumed["status"] == "existing_draft_resumed"
+        assert resumed["document_id"] == first["document_id"]
+        assert resumed["existing_blocks"] == 2
+        restarted = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "cycle-krebs.docx", "title": "Cycle de Krebs", "restart": True},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert restarted["document_id"] != first["document_id"]
+
+    asyncio.run(run())
+
+
+def test_project_sandbox_tools_require_e2b_and_are_not_advertised_to_anonymous(monkeypatch):
+    sandbox_tools = {
+        "project_sandbox_open", "project_run", "project_list_files",
+        "project_read_file", "project_sync_files",
+    }
+    monkeypatch.setenv("E2B_API_KEY", "sandbox-test")
+    authenticated = {
+        item["function"]["name"]
+        for item in work_agent._available_tool_definitions({"uid": "work-user"})
+    }
+    anonymous = {
+        item["function"]["name"]
+        for item in work_agent._available_tool_definitions({"uid": "anonymous"})
+    }
+    assert sandbox_tools.issubset(authenticated)
+    assert not (sandbox_tools & anonymous)
+    monkeypatch.delenv("E2B_API_KEY")
+    without_key = {
+        item["function"]["name"]
+        for item in work_agent._available_tool_definitions({"uid": "work-user"})
+    }
+    assert not (sandbox_tools & without_key)
+
+
 def test_openai_compatible_native_tool_calls_are_parsed(monkeypatch):
     import asyncio
     import json
@@ -670,15 +734,18 @@ def test_document_begin_persists_user_quality_contract_and_blocks_failed_deliver
             db=None,
         )
         assert built["precheck_passed"] is False
-        with pytest.raises(ValueError, match="vérification indépendante"):
-            await work_agent._dispatch_tool(
-                "artifact_verify",
-                {"artifact_id": built["artifact_id"]},
-                state=state,
-                request=None,
-                user={"uid": "anonymous"},
-                db=None,
-            )
+        failed_verify = await work_agent._dispatch_tool(
+            "artifact_verify",
+            {"artifact_id": built["artifact_id"]},
+            state=state,
+            request=None,
+            user={"uid": "anonymous"},
+            db=None,
+        )
+        assert failed_verify["verified"] is False
+        assert failed_verify["draft_id"] == result["document_id"]
+        assert failed_verify["repair_guidance"]
+        assert "Ne livre pas ce fichier" in failed_verify["next_action"]
         assert state.artifacts[built["artifact_id"]]["verified_by_agent"] is False
 
     asyncio.run(run())
@@ -846,7 +913,8 @@ def test_corrected_docx_supersedes_failed_version_and_can_be_delivered():
             db=None,
         )
         assert second["precheck_passed"] is True
-        assert state.artifacts[first["artifact_id"]]["superseded"] is True
+        # The previous failed artifact stays active until independent verification succeeds.
+        assert state.artifacts[first["artifact_id"]]["superseded"] is False
         assert state.artifacts[second["artifact_id"]]["superseded"] is False
 
         verified = await work_agent._dispatch_tool(

@@ -34,9 +34,9 @@ from llink_api.services.training_data import record_exchange_if_consented
 logger = logging.getLogger(__name__)
 
 AGENT_PROTOCOL_VERSION = "native-functions-v1"
-MAX_MODEL_TURNS = 24
-MAX_TOOL_CALLS = 32
-MAX_AGENT_SECONDS = 240
+MAX_MODEL_TURNS = 36
+MAX_TOOL_CALLS = 48
+MAX_AGENT_SECONDS = 360
 MAX_TOOL_RESULT_CHARS = 12_000
 MAX_ARTIFACT_BYTES = 8_000_000
 MAX_AGENT_IMAGE_BYTES = 6_000_000
@@ -127,9 +127,10 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "document_begin",
-            "description": "Start a Word document draft. Call this first, then add small groups of blocks in separate calls. Do not send the entire document in one tool call.",
+            "description": "Start a Word document draft. If the same filename already has an unverified draft in this task, resume it unless restart=true. Add small groups of blocks in separate calls.",
             "parameters": {"type": "object", "properties": {
                 "filename": {"type": "string", "maxLength": 160},
+                "restart": {"type": "boolean"},
                 "title": {"type": "string", "maxLength": 300},
                 "subtitle": {"type": "string", "maxLength": 500},
                 "author": {"type": "string", "maxLength": 160},
@@ -267,6 +268,12 @@ TOOLS: list[dict[str, Any]] = [
             "language": {"type": "string", "maxLength": 40}
         }, "required": ["file_id", "content", "expected_version"]}},
     },
+    {"type":"function","function":{"name":"project_sandbox_open","description":"Open an authenticated Work project in a fresh isolated E2B Linux sandbox. Loads at most 30 selected text files. Network is disabled by default; enable it only for dependency installation. No Llink secrets enter the sandbox.","parameters":{"type":"object","properties":{"project_id":{"type":"string","maxLength":32},"paths":{"type":"array","maxItems":30,"items":{"type":"string","maxLength":400}},"allow_internet_access":{"type":"boolean"}},"required":["project_id"]}}},
+    {"type":"function","function":{"name":"project_run","description":"Run a real Linux command inside an open E2B project sandbox, e.g. python -m pytest -q, npm test or npm run build. Returns actual exit code, stdout and stderr. Diagnose non-zero results, fix and rerun.","parameters":{"type":"object","properties":{"session_id":{"type":"string","minLength":12,"maxLength":32},"command":{"type":"string","minLength":1,"maxLength":1800},"timeout_seconds":{"type":"integer","minimum":1,"maximum":60}},"required":["session_id","command"]}}},
+    {"type":"function","function":{"name":"project_list_files","description":"List files in the isolated project sandbox, including generated outputs.","parameters":{"type":"object","properties":{"session_id":{"type":"string","minLength":12,"maxLength":32}},"required":["session_id"]}}},
+    {"type":"function","function":{"name":"project_read_file","description":"Read a text file or generated output from the isolated project sandbox.","parameters":{"type":"object","properties":{"session_id":{"type":"string","minLength":12,"maxLength":32},"path":{"type":"string","maxLength":400}},"required":["session_id","path"]}}},
+    {"type":"function","function":{"name":"project_sync_files","description":"Persist selected changed text files from the sandbox into the same Work project after review and tests where possible. Uses Firestore version checks; never deletes files.","parameters":{"type":"object","properties":{"session_id":{"type":"string","minLength":12,"maxLength":32},"paths":{"type":"array","minItems":1,"maxItems":12,"items":{"type":"string","maxLength":400}}},"required":["session_id","paths"]}}},
+
 ]
 
 
@@ -312,8 +319,10 @@ class AgentState:
     image_bytes: int = 0
     call_signatures: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_calls: int = 0
+    plan_updates: int = 0
     user_request: str = ""
     workspace_changes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    sandbox_sessions: dict[str, Any] = field(default_factory=dict)
 
 
 def _json_safe(value: Any, limit: int = MAX_TOOL_RESULT_CHARS) -> str:
@@ -760,6 +769,26 @@ async def _generate_work_image(prompt: str, filename: str, size: str, quality: s
     }
 
 
+def _document_repair_guidance(verification: dict[str, Any]) -> list[str]:
+    guidance: list[str] = []
+    if not verification.get("minimum_words_met", True):
+        missing = max(0, int(verification.get("minimum_words", 0)) - int(verification.get("word_count", 0)))
+        guidance.append(f"Ajouter environ {missing} mots de contenu substantiel, sans répétitions.")
+    if verification.get("missing_required_headings"):
+        guidance.append("Ajouter les sections manquantes : " + ", ".join(verification["missing_required_headings"][:8]) + ".")
+    if not verification.get("minimum_source_urls_met", True):
+        guidance.append(f"Ajouter des sources distinctes et vérifiables : {verification.get('unique_source_urls', 0)} actuellement, {verification.get('minimum_source_urls', 0)} requises.")
+    if verification.get("bibliography_required") and not verification.get("bibliography_found"):
+        guidance.append("Ajouter une Bibliographie avec les URL des sources réellement consultées.")
+    if not verification.get("minimum_tables_met", True):
+        guidance.append(f"Ajouter des tableaux pertinents : {verification.get('minimum_tables', 0)} requis.")
+    if not verification.get("minimum_images_met", True):
+        guidance.append(f"Ajouter des illustrations pertinentes : {verification.get('minimum_images', 0)} requises.")
+    if verification.get("missing_text_count"):
+        guidance.append("Contrôler les blocs absents du DOCX relu : " + "; ".join(verification.get("missing_text_examples", [])[:3]))
+    return guidance or ["Examiner les contrôles de structure retournés et compléter le même brouillon."]
+
+
 async def _dispatch_tool(
     name: str,
     args: dict[str, Any],
@@ -772,6 +801,9 @@ async def _dispatch_tool(
     uid = str(user.get("uid") or "anonymous")
 
     if name == "update_plan":
+        if state.plan_updates >= 3:
+            return {"updated": False, "error": "Le plan a déjà été publié et actualisé. Poursuis l'exécution des actions au lieu de le réécrire."}
+        state.plan_updates += 1
         summary = str(args.get("summary") or "").strip()[:500]
         steps = args.get("steps")
         if not isinstance(steps, list) or not steps:
@@ -969,9 +1001,66 @@ async def _dispatch_tool(
                 "project_id": updated.get("project_id"),
                 "next": "Les modifications sont enregistrées. Relis le fichier pour contrôler le résultat."}
 
+
+    if name.startswith("project_") and uid == "anonymous":
+        raise PermissionError("Connecte-toi pour exécuter un projet dans un sandbox isolé.")
+    if name.startswith("project_") and not __import__("os").getenv("E2B_API_KEY", "").strip():
+        raise RuntimeError("L'environnement de projet isolé n'est pas configuré. Ajoute E2B_API_KEY sur Render.")
+    if name == "project_sandbox_open":
+        from llink_api.services.project_sandbox import ProjectSandboxSession
+        session, result = await ProjectSandboxSession.open(
+            project_id=str(args.get("project_id") or ""),
+            paths=args.get("paths"),
+            allow_internet_access=bool(args.get("allow_internet_access", False)),
+            request=request, user=user, db=db,
+        )
+        state.sandbox_sessions[session.session_id] = session
+        return result
+    if name == "project_run":
+        session = state.sandbox_sessions.get(str(args.get("session_id") or ""))
+        if not session:
+            raise ValueError("Session sandbox introuvable ou expirée. Rouvre le projet.")
+        return await session.run_command(str(args.get("command") or ""), int(args.get("timeout_seconds") or 45))
+    if name == "project_list_files":
+        session = state.sandbox_sessions.get(str(args.get("session_id") or ""))
+        if not session:
+            raise ValueError("Session sandbox introuvable ou expirée.")
+        return await session.list_files()
+    if name == "project_read_file":
+        session = state.sandbox_sessions.get(str(args.get("session_id") or ""))
+        if not session:
+            raise ValueError("Session sandbox introuvable ou expirée.")
+        return await session.read_file(str(args.get("path") or ""))
+    if name == "project_sync_files":
+        session = state.sandbox_sessions.get(str(args.get("session_id") or ""))
+        if not session:
+            raise ValueError("Session sandbox introuvable ou expirée.")
+        return await session.sync_files(
+            paths=args.get("paths") or [], request=request, user=user, db=db,
+            record_change=lambda item: _record_workspace_change(state, item),
+        )
+
     if name == "document_begin":
-        document_id = uuid.uuid4().hex
         filename = _safe_filename(str(args.get("filename") or "rapport.docx"), "rapport.docx")
+        if not bool(args.get("restart", False)):
+            for existing_id, existing_draft in reversed(list(state.drafts.items())):
+                if str(existing_draft.get("filename") or "").casefold() != filename.casefold():
+                    continue
+                has_verified_version = any(
+                    artifact.get("draft_id") == existing_id
+                    and artifact.get("verified_by_agent")
+                    and not artifact.get("superseded")
+                    for artifact in state.artifacts.values()
+                )
+                if existing_draft.get("blocks") and not has_verified_version:
+                    return {
+                        "document_id": existing_id,
+                        "status": "existing_draft_resumed",
+                        "existing_blocks": len(existing_draft["blocks"]),
+                        "last_verification": existing_draft.get("last_verification"),
+                        "next": "Continue ce même brouillon avec document_add_blocks. Ne recommence pas le document après un contrôle échoué. Utilise restart=true seulement si un redémarrage complet est justifié.",
+                    }
+        document_id = uuid.uuid4().hex
         quality_args = args.get("quality") or {}
         if not isinstance(quality_args, dict):
             raise ValueError("Les critères de qualité du document doivent être un objet.")
@@ -1009,6 +1098,9 @@ async def _dispatch_tool(
                 "require_bibliography": inferred_quality["require_bibliography"] or bool(quality_args.get("require_bibliography", False)),
             },
             "blocks": [],
+            "last_verification": None,
+            "last_artifact_id": None,
+            "revision_count": 0,
         }
         return {"document_id": document_id, "status": "draft_created", "next": "Append content using document_add_blocks in small batches."}
 
@@ -1052,7 +1144,9 @@ async def _dispatch_tool(
                     draft["blocks"].append({"type": "caption", "text": " — ".join(caption_parts)[:1200]})
             else:
                 draft["blocks"].append(normalized)
-        return {"document_id": document_id, "blocks_added": len(blocks), "total_blocks": len(draft["blocks"]), "status": "draft_updated"}
+        draft["revision_count"] = int(draft.get("revision_count") or 0) + 1
+        draft["last_verification"] = None
+        return {"document_id": document_id, "blocks_added": len(blocks), "total_blocks": len(draft["blocks"]), "status": "draft_updated", "revision_count": draft["revision_count"]}
 
     if name == "document_finalize":
         document_id = str(args.get("document_id") or "")
@@ -1065,11 +1159,8 @@ async def _dispatch_tool(
             raise ValueError("Le document dépasse la limite de livraison de 8 Mo.")
         verification = await asyncio.to_thread(_verify_docx, raw, draft["blocks"], draft.get("quality"))
         artifact_id = uuid.uuid4().hex
-        # Une nouvelle version du même brouillon remplace les livrables DOCX précédents.
-        # Un ancien fichier qui a échoué aux contrôles ne doit pas bloquer une correction réussie.
-        for previous in state.artifacts.values():
-            if previous.get("draft_id") == document_id:
-                previous["superseded"] = True
+        draft["last_verification"] = verification
+        draft["last_artifact_id"] = artifact_id
         artifact = {
             "artifact_id": artifact_id,
             "draft_id": document_id,
@@ -1090,8 +1181,14 @@ async def _dispatch_tool(
             "size_bytes": len(raw),
             "precheck_passed": verification["passed"],
             "verification": verification,
-            "status": "pending_independent_verification",
-            "next_action": "Call artifact_verify. The file is not delivered until that succeeds.",
+            "status": "pending_independent_verification" if verification.get("passed") else "draft_needs_revision",
+            "draft_id": document_id,
+            "repair_guidance": _document_repair_guidance(verification),
+            "next_action": (
+                "Precheck failed. Continue the SAME draft_id with document_add_blocks to repair the listed criteria, then document_finalize again. Do not start a new document."
+                if not verification.get("passed")
+                else "Call artifact_verify. The file is not delivered until that succeeds."
+            ),
         }
 
     if name == "artifact_verify":
@@ -1150,15 +1247,28 @@ async def _dispatch_tool(
             }
         artifact["verification"] = verification
         artifact["verified_by_agent"] = bool(verification.get("passed"))
-        if not artifact["verified_by_agent"]:
-            raise ValueError("La vérification indépendante a échoué. Le fichier ne sera pas livré ; corrige-le puis régénère-le.")
+        draft = state.drafts.get(str(artifact.get("draft_id") or ""))
+        if draft is not None:
+            draft["last_verification"] = verification
+            draft["last_artifact_id"] = artifact_id
+        if artifact["verified_by_agent"]:
+            for previous in state.artifacts.values():
+                if previous.get("draft_id") == artifact.get("draft_id") and previous.get("artifact_id") != artifact_id:
+                    previous["superseded"] = True
         return {
             "artifact_id": artifact_id,
+            "draft_id": artifact.get("draft_id"),
             "filename": artifact["filename"],
             "size_bytes": len(data),
             "verification": verification,
-            "verified": True,
-            "verified_by_agent": True,
+            "verified": bool(artifact["verified_by_agent"]),
+            "verified_by_agent": bool(artifact["verified_by_agent"]),
+            "repair_guidance": [] if artifact["verified_by_agent"] else _document_repair_guidance(verification),
+            "next_action": (
+                "Document vérifié. Tu peux annoncer sa livraison."
+                if artifact["verified_by_agent"]
+                else "Ne livre pas ce fichier. Répare le brouillon existant avec document_add_blocks selon repair_guidance, puis relance document_finalize et artifact_verify."
+            ),
         }
 
     if name == "create_text_file":
@@ -1219,6 +1329,8 @@ def _available_tool_definitions(user: dict[str, Any]) -> list[dict[str, Any]]:
     allowed = {"update_plan", "document_begin", "document_add_blocks", "document_finalize", "artifact_verify", "create_text_file", "export_file"}
     if authenticated:
         allowed.update({"workspace_list_projects", "workspace_list_files", "workspace_read_file", "workspace_search_files", "workspace_create_project", "workspace_create_file", "workspace_update_file"})
+        if e2b_ready:
+            allowed.update({"project_sandbox_open", "project_run", "project_list_files", "project_read_file", "project_sync_files"})
         allowed.add("web_open")
         if tavily_ready:
             allowed.update({"web_search", "image_search"})
@@ -1362,9 +1474,17 @@ def _agent_system(preferences: str | None, available_tools: list[str] | None = N
         "use workspace_create_project, workspace_create_file and workspace_update_file to persist project changes. "
         "For source-code tasks, inspect the existing project and relevant files before editing; preserve unrelated "
         "content, use the returned expected_version, and reread changed files to verify the saved result. "
+        "When a runnable project exists, use project_sandbox_open to load source files into an isolated Linux "
+        "sandbox, project_run to execute tests/build commands, project_read_file/project_list_files to inspect "
+        "results, then project_sync_files to persist selected reviewed changes. Keep network disabled unless package "
+        "installation is necessary. No Llink keys, Firebase credentials or server secrets enter the sandbox. Never "
+        "sync sensitive or binary files. After a non-zero exit code, inspect stderr/stdout, fix the cause and rerun. "
         "Do not delete files or projects: no destructive workspace deletion tool is exposed. "
         "A standalone requested report is an artifact; a change to a project file belongs in the workspace. "
-        "Select the smallest useful set of tools. "
+        "For documents, never start a new document after a verification failure. Reuse the same draft_id, repair "
+        "the missing content, then finalize/verify again. Only claim delivery after verified=true. "
+        "Call update_plan once near the beginning; do not update it after every action. Group independent tool calls "
+        "in one response when possible. Select the smallest useful set of tools. "
         "After each tool result, interpret it and decide the next action. Do not stop after one tool if "
         "the task still needs verification. For any multi-step task, use update_plan early and record explicit "
         "acceptance_criteria derived from the user's request; mark steps done only after evidence exists. "
@@ -1519,11 +1639,16 @@ async def _run_agent(
                         "workspace_create_project": "Création d'un projet Work",
                         "workspace_create_file": "Création d'un fichier dans Work",
                         "workspace_update_file": "Modification d'un fichier dans Work",
+                        "project_sandbox_open": "Ouverture du terminal isolé",
+                        "project_run": "Exécution d'une commande dans le projet",
+                        "project_list_files": "Inspection des fichiers du projet",
+                        "project_read_file": "Lecture d'un résultat du terminal",
+                        "project_sync_files": "Enregistrement des modifications du projet",
                     }.get(name, name)
                     await emit({"type": "tool_start", "tool": name, "label": label, "call_id": call_id})
                     try:
                         result = await _dispatch_tool(name, args, state=state, request=request, user=user, db=db)
-                        status = "done"
+                        status = "failed" if result.get("verified") is False or result.get("precheck_passed") is False or result.get("passed") is False else "done"
                     except PermissionError as exc:
                         result = {"ok": False, "error": str(exc)}
                         status = "blocked"
@@ -1542,6 +1667,12 @@ async def _run_agent(
                         detail = f"{len(result.get('results') or [])} résultat(s) retourné(s)."
                     elif result.get("error"):
                         detail = str(result["error"])
+                    elif result.get("verified") is False and result.get("repair_guidance"):
+                        detail = "Vérification échouée : " + " ; ".join(result["repair_guidance"][:3])
+                    elif result.get("precheck_passed") is False and result.get("repair_guidance"):
+                        detail = "Contrôle préalable échoué : " + " ; ".join(result["repair_guidance"][:3])
+                    elif name == "project_run":
+                        detail = "Commande terminée (code " + str(result.get("exit_code", "inconnu")) + ")."
                     event = _event(label, status, detail, name)
                     state.events.append(event)
                     await emit({"type": "tool_result", **event, "result": {k: v for k, v in result.items() if k not in {"data", "base64"}}})
@@ -1650,6 +1781,12 @@ async def _run_agent(
         logger.exception("L'agent Work s'est arrêté.")
         await emit({"type": "error", "message": str(exc)[:1000]})
     finally:
+        for session in list(state.sandbox_sessions.values()):
+            try:
+                await session.close()
+            except Exception:
+                logger.warning("Impossible de fermer un sandbox E2B après la tâche Work.")
+        state.sandbox_sessions.clear()
         await emit(None)
 
 
