@@ -247,6 +247,7 @@ async def list_work_tools(user: dict = Depends(get_optional_user)):
         "tools": {
             "web_search": bool(os.getenv("TAVILY_API_KEY", "").strip()),
             "image_search": bool(os.getenv("TAVILY_API_KEY", "").strip()),
+            "image_generate": bool(os.getenv("ZAI_API_KEY", "").strip()),
             "python": bool(os.getenv("E2B_API_KEY", "").strip()),
             "exports": True,
             "document_create": True,
