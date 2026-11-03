@@ -33,6 +33,7 @@ from llink_api.services.training_data import record_exchange_if_consented
 
 logger = logging.getLogger(__name__)
 
+AGENT_PROTOCOL_VERSION = "native-functions-v1"
 MAX_MODEL_TURNS = 16
 MAX_TOOL_CALLS = 24
 MAX_AGENT_SECONDS = 180
@@ -1216,6 +1217,8 @@ async def _run_agent(
                         "document_add_blocks": "Rédaction d'une section",
                         "document_finalize": "Génération et vérification du fichier",
                         "artifact_verify": "Vérification indépendante du fichier",
+                        "image_search": "Recherche d'illustrations",
+                        "image_generate": "Génération d'illustration",
                         "create_text_file": "Création d'un fichier",
                         "export_file": "Export du fichier",
                     }.get(name, name)
