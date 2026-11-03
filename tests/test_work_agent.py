@@ -47,6 +47,11 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                     }},
                 ]
             elif turns == 2:
+                prior_tool_turn = next(
+                    message for message in kwargs["messages"]
+                    if message.get("role") == "assistant" and message.get("tool_calls")
+                )
+                assert prior_tool_turn.get("reasoning_content") == "Décision intermédiaire conservée pour DeepSeek."
                 begin_result = next(
                     message["content"] for message in kwargs["messages"]
                     if message.get("role") == "tool" and message.get("tool_call_id") == "begin-1"
@@ -80,7 +85,12 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                     "type": "function",
                     "function": {"name": call["name"], "arguments": json.dumps(call["arguments"])},
                 })
-            assistant_state = {"role": "assistant", "content": "", "tool_calls": assistant_tools}
+            assistant_state = {
+                "role": "assistant",
+                "content": "",
+                "reasoning_content": "Décision intermédiaire conservée pour DeepSeek.",
+                "tool_calls": assistant_tools,
+            }
             return "", calls, None, assistant_state
 
         monkeypatch.setattr(work_agent, "_openai_turn", fake_openai_turn)
@@ -166,6 +176,7 @@ def test_openai_compatible_native_tool_calls_are_parsed(monkeypatch):
                     "message": {
                         "role": "assistant",
                         "content": "",
+                        "reasoning_content": "Le modèle réfléchit à l'appel d'outil.",
                         "tool_calls": [{
                             "id": "call-native-1",
                             "type": "function",
@@ -211,6 +222,7 @@ def test_openai_compatible_native_tool_calls_are_parsed(monkeypatch):
         }]
         assert usage.prompt_tokens == 40
         assert assistant["tool_calls"][0]["id"] == "call-native-1"
+        assert assistant["reasoning_content"] == "Le modèle réfléchit à l'appel d'outil."
 
     asyncio.run(run())
 
