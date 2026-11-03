@@ -1,7 +1,7 @@
 
 (() => {
 "use strict";
-const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,python:false,exports:true,document_create:true},busy:false};
+const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,image_search:false,python:false,exports:true,document_create:true},busy:false};
 const SERVER=typeof SERVER_URL!=="undefined"?SERVER_URL:"https://llink-usz9.onrender.com";
 const $=id=>S.root?.querySelector("#"+id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -32,7 +32,7 @@ S.root.innerHTML='<div class="work-topbar"><div class="work-brand"><span class="
 '<div class="work-mobile-tabs"><button class="active" data-act="mobile" data-panel="files">Fichiers</button><button data-act="mobile" data-panel="chat">Assistant</button><button data-act="mobile" data-panel="editor">Éditeur</button></div><div id="work-dialog-root"></div>';
 const m=document.getElementById("model-selector"),s=$("work-model");if(m&&s){s.innerHTML=[...m.options].map(o=>'<option value="'+esc(o.value)+'">'+esc(o.textContent)+'</option>').join("");s.value=m.value;}if(window.lucide)lucide.createIcons();
 }
-function renderToolStatus(){const el=$("work-tool-status");if(!el)return;const labels=[];if(S.tools.web_search)labels.push("Web");if(S.tools.python)labels.push("Python");if(S.tools.document_create)labels.push("Word structuré");if(S.tools.exports)labels.push("PDF · Excel");el.textContent=labels.length?labels.join(" · "):"Outils à configurer";el.title=labels.length?"Outils Work disponibles : "+labels.join(", "):"Les exports locaux sont disponibles ; connecte-toi pour les outils Web et Python.";}
+function renderToolStatus(){const el=$("work-tool-status");if(!el)return;const labels=[];if(S.tools.web_search)labels.push("Web");if(S.tools.image_search)labels.push("Images");if(S.tools.python)labels.push("Python");if(S.tools.document_create)labels.push("Word structuré");if(S.tools.exports)labels.push("PDF · Excel");el.textContent=labels.length?labels.join(" · "):"Outils à configurer";el.title=labels.length?"Outils Work disponibles : "+labels.join(", "):"Les exports locaux sont disponibles ; connecte-toi pour les outils Web et Python.";}
 async function loadTools(){S.tools=Object.assign({web_search:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}renderToolStatus();}
 async function ensureChat(){if(S.chatId==null)S.chatId=await db.chats.add({title:"Espace Work",time:Date.now(),mode:"work",syncId:crypto.randomUUID().replace(/-/g,""),ownerUid:S.owner});}
 async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null}));renderMessages();}
