@@ -204,7 +204,7 @@ test("Work utilise le journal d'outils natifs pour créer et vérifier un DOCX",
   expect(download.suggestedFilename()).toBe("rapport-docx-agent.docx");
   await expect(page.locator("#work-file-name")).toHaveText("rapport-docx-agent.docx");
   await expect(page.locator(".work-reasoning")).toContainText("Vérification indépendante du fichier");
-  await expect(page.locator(".work-reasoning")).toContainText("vérifiées");
+  await expect(page.locator(".work-reasoning")).toContainText("vérifiés");
   await expect(page.locator(".work-message-body").last()).toContainText("généré en plusieurs sections");
 
   const saved = await page.evaluate(async () => {
