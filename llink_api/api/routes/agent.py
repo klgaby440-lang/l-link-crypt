@@ -7,7 +7,10 @@ from fastapi import APIRouter, Depends, Request
 from llink_api.database import get_db
 from llink_api.schemas import ChatPayload
 from llink_api.security import get_optional_user
-from llink_api.services.work_agent import (\n    AGENT_PROTOCOL_VERSION, MAX_AGENT_SECONDS, MAX_MODEL_TURNS, MAX_TOOL_CALLS,\n    _available_tool_definitions, work_agent_response,\n)
+from llink_api.services.work_agent import (
+    AGENT_PROTOCOL_VERSION, MAX_AGENT_SECONDS, MAX_MODEL_TURNS, MAX_TOOL_CALLS,
+    _available_tool_definitions, work_agent_response,
+)
 
 router = APIRouter()
 
