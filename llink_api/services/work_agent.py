@@ -1397,5 +1397,10 @@ async def work_agent_response(
     return StreamingResponse(
         stream(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+            "X-Llink-Work-Agent": AGENT_PROTOCOL_VERSION,
+        },
     )
