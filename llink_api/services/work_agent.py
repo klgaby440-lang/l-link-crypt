@@ -913,7 +913,7 @@ async def _run_agent(
             prompt_for_budget = system + "\n" + _json_safe(messages if model.provider != "gemini" else gemini_contents, 120_000)
             reservation = await reserve_usage_budget(
                 db=db, uid=str(user.get("uid") or "anonymous"), level=model.level,
-                model=model, prompt=prompt_for_budget,
+                model=model, prompt=prompt_for_budget, max_output_tokens=AGENT_OUTPUT_TOKENS,
             )
             usage = None
             status = "completed"
