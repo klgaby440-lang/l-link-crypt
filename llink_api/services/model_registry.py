@@ -17,7 +17,7 @@ class ModelDefinition:
     input_usd_per_million: Decimal
     output_usd_per_million: Decimal
     cached_input_usd_per_million: Decimal
-    max_output_tokens: int = 2048
+    max_output_tokens: int = 4096
 
 
 # Tarifs de référence vérifiés le 1er novembre 2026.
