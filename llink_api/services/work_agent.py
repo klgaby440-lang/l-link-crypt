@@ -9,6 +9,7 @@ import ipaddress
 import json
 import logging
 import re
+import socket
 import uuid
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -37,6 +38,8 @@ MAX_TOOL_CALLS = 20
 MAX_AGENT_SECONDS = 150
 MAX_TOOL_RESULT_CHARS = 12_000
 MAX_ARTIFACT_BYTES = 8_000_000
+MAX_AGENT_IMAGE_BYTES = 6_000_000
+MAX_AGENT_IMAGES = 12
 AGENT_OUTPUT_TOKENS = 4096
 
 TOOLS: list[dict[str, Any]] = [
@@ -226,6 +229,7 @@ class AgentState:
     drafts: dict[str, dict[str, Any]] = field(default_factory=dict)
     artifacts: dict[str, dict[str, Any]] = field(default_factory=dict)
     images: dict[str, dict[str, Any]] = field(default_factory=dict)
+    image_bytes: int = 0
     call_signatures: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_calls: int = 0
 
@@ -267,12 +271,34 @@ def _host_is_public(url: str) -> bool:
     return address.is_global
 
 
-async def _open_public_page(url: str) -> dict[str, Any]:
+async def _assert_public_host_resolves(url: str) -> None:
     if len(url) > 2000 or not _host_is_public(url):
         raise ValueError("Seules les URL publiques HTTP(S) sont acceptées.")
+    parsed = urlparse(url)
+    host = parsed.hostname
+    if not host:
+        raise ValueError("Nom d'hôte invalide.")
+    try:
+        infos = await asyncio.wait_for(
+            asyncio.to_thread(socket.getaddrinfo, host, parsed.port or (443 if parsed.scheme == "https" else 80), 0, socket.SOCK_STREAM),
+            timeout=5,
+        )
+    except Exception as exc:
+        raise ValueError("Impossible de vérifier l'adresse du serveur distant.") from exc
+    addresses = {item[4][0] for item in infos if item and item[4]}
+    try:
+        public = bool(addresses) and all(ipaddress.ip_address(address.split("%", 1)[0]).is_global for address in addresses)
+    except ValueError:
+        public = False
+    if not public:
+        raise ValueError("L'URL pointe vers un réseau non public et a été refusée.")
+
+
+async def _open_public_page(url: str) -> dict[str, Any]:
+    await _assert_public_host_resolves(url)
     headers = {"User-Agent": "LlinkWorkResearch/1.0", "Accept": "text/html,text/plain,application/xhtml+xml"}
     timeout = httpx.Timeout(18.0, connect=6.0)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client:
         response = await client.get(url, headers=headers)
     if response.is_redirect:
         raise ValueError("La page redirige. Rechercher et ouvrir sa nouvelle URL explicitement.")
