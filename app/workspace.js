@@ -1,7 +1,7 @@
 
 (() => {
 "use strict";
-const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},busy:false};
+const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},agentVersion:null,agentTools:[],agentStatusError:false,busy:false};
 const SERVER=typeof SERVER_URL!=="undefined"?SERVER_URL:"https://llink-usz9.onrender.com";
 const $=id=>S.root?.querySelector("#"+id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -32,8 +32,8 @@ S.root.innerHTML='<div class="work-topbar"><div class="work-brand"><span class="
 '<div class="work-mobile-tabs"><button class="active" data-act="mobile" data-panel="files">Fichiers</button><button data-act="mobile" data-panel="chat">Assistant</button><button data-act="mobile" data-panel="editor">Éditeur</button></div><div id="work-dialog-root"></div>';
 const m=document.getElementById("model-selector"),s=$("work-model");if(m&&s){s.innerHTML=[...m.options].map(o=>'<option value="'+esc(o.value)+'">'+esc(o.textContent)+'</option>').join("");s.value=m.value;}if(window.lucide)lucide.createIcons();
 }
-function renderToolStatus(){const el=$("work-tool-status");if(!el)return;const labels=[];if(S.tools.web_search)labels.push("Web");if(S.tools.image_search)labels.push("Images");if(S.tools.image_generate)labels.push("Image Gen");if(S.tools.python)labels.push("Python");if(S.tools.document_create)labels.push("Word structuré");if(S.tools.exports)labels.push("PDF · Excel");el.textContent=labels.length?labels.join(" · "):"Outils à configurer";el.title=labels.length?"Outils Work disponibles : "+labels.join(", "):"Les exports locaux sont disponibles ; connecte-toi pour les outils Web et Python.";}
-async function loadTools(){S.tools=Object.assign({web_search:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}renderToolStatus();}
+function renderToolStatus(){const el=$("work-tool-status");if(!el)return;const labels=[];if(S.tools.web_search)labels.push("Web");if(S.tools.image_search)labels.push("Images");if(S.tools.image_generate)labels.push("Image Gen");if(S.tools.python)labels.push("Python");if(S.tools.document_create)labels.push("Word structuré");if(S.tools.exports)labels.push("PDF · Excel");const agent=S.agentVersion?"Agent natif "+S.agentVersion:(S.agentStatusError?"Agent à actualiser":"Agent Work");el.textContent=agent+(labels.length?" · "+labels.join(" · "):"");el.title=S.agentTools.length?"Protocole natif confirmé. Outils actifs : "+S.agentTools.join(", "):"Impossible de confirmer la version du moteur natif Work. Actualise l'application et vérifie le déploiement Render.";}
+async function loadTools(){S.tools=Object.assign({web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}try{const agent=await api("/api/work/agent/status");if(agent.protocol==="native_function_calling"){S.agentVersion=String(agent.version||"");S.agentTools=Array.isArray(agent.tools)?agent.tools:[];S.agentStatusError=false;}else{S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}}catch(e){S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}renderToolStatus();}
 async function ensureChat(){if(S.chatId==null)S.chatId=await db.chats.add({title:"Espace Work",time:Date.now(),mode:"work",syncId:crypto.randomUUID().replace(/-/g,""),ownerUid:S.owner});}
 async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null}));renderMessages();}
 function renderProjects(){const s=$("work-project"),v=S.project;s.innerHTML='<option value="all">Tous les fichiers</option>'+S.projects.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");s.value=S.projects.some(p=>String(p.id)===String(v))||v==="all"?v:"all";S.project=s.value;}
@@ -52,10 +52,12 @@ return '<li class="work-reasoning-step is-'+status+'"><span class="work-reasonin
 }).join("")+'</ol>':"";
 const eventHtml=events.length?'<div class="work-reasoning-events"><div class="work-reasoning-subtitle">Actions et résultats confirmés</div>'+events.map(event=>'<div class="work-reasoning-event is-'+esc(event.status||"done")+'"><span class="work-reasoning-event-mark"></span><span><b>'+esc(String(event.label||"Action Work").slice(0,180))+'</b>'+(event.detail?'<small>'+esc(String(event.detail).slice(0,260))+'</small>':"")+'</span></div>').join("")+'</div>':"";
 const decisionHtml=decisions.length?'<div class="work-reasoning-decisions"><div class="work-reasoning-subtitle">Choix et justifications</div><ul>'+decisions.map(item=>'<li>'+esc(String(item).slice(0,240))+'</li>').join("")+'</ul></div>':"";
+const criteria=Array.isArray(reasoning.acceptance_criteria)?reasoning.acceptance_criteria.slice(0,12):[];
+const criteriaHtml=criteria.length?'<div class="work-reasoning-decisions"><div class="work-reasoning-subtitle">Critères de réussite</div><ul>'+criteria.map(item=>'<li>'+esc(String(item).slice(0,240))+'</li>').join("")+'</ul></div>':"";
 const caveats=Array.isArray(reasoning.limitations)?reasoning.limitations.slice(0,4):[];
 const caveatHtml=caveats.length?'<div class="work-reasoning-caveats"><div class="work-reasoning-subtitle">Limites signalées</div><ul>'+caveats.map(item=>'<li>'+esc(String(item).slice(0,240))+'</li>').join("")+'</ul></div>':"";
 const summary=esc(String(reasoning.summary||"Démarche de travail en cours.").slice(0,600));
-return '<details class="work-reasoning" open><summary><span class="work-reasoning-summary-title">Démarche de Llink</span><span class="work-reasoning-summary-state">'+state+'</span></summary><div class="work-reasoning-content"><p class="work-reasoning-overview">'+summary+'</p>'+stepHtml+eventHtml+decisionHtml+caveatHtml+'</div></details>';
+return '<details class="work-reasoning" open><summary><span class="work-reasoning-summary-title">Démarche de Llink</span><span class="work-reasoning-summary-state">'+state+'</span></summary><div class="work-reasoning-content"><p class="work-reasoning-overview">'+summary+'</p>'+stepHtml+eventHtml+criteriaHtml+decisionHtml+caveatHtml+'</div></details>';
 }
 function updateWorkReasoning(source,ans){
 const pattern=/<llink_reasoning\b[^>]*>([\s\S]*?)<\/llink_reasoning>/i;
@@ -220,6 +222,9 @@ if(invocation.name==="export_file"){const format=String(args.format||"").toLower
 throw new Error("Outil Work inconnu : "+String(invocation.name||""));
 }
 async function streamWorkAgent(payload,uploads,ans){
+const status=await api("/api/work/agent/status").catch(error=>{throw new Error("Le backend Render n'expose pas encore l'agent Work natif. Redéploie le dernier commit backend puis réessaie. Détail : "+error.message);});
+if(status.protocol!=="native_function_calling")throw new Error("Le backend Work utilise un protocole ancien. Le mode agent natif n'est pas actif.");
+S.agentVersion=String(status.version||"");S.agentTools=Array.isArray(status.tools)?status.tools:[];S.agentStatusError=false;renderToolStatus();
 const hasUploads=Array.isArray(uploads)&&uploads.length>0;
 const url=hasUploads?"/api/chat/attachments":"/api/work/agent";
 let body,hd;
@@ -250,6 +255,7 @@ ans.reasoning={
 summary:String(event.summary||"Plan de travail établi.").slice(0,600),
 steps:Array.isArray(event.steps)?event.steps.slice(0,10):[],
 decisions:Array.isArray(event.decisions)?event.decisions.slice(0,8):[],
+acceptance_criteria:Array.isArray(event.acceptance_criteria)?event.acceptance_criteria.slice(0,12):[],
 limitations:Array.isArray(event.limitations)?event.limitations.slice(0,8):[],
 events:ans.reasoning?.events||[],
 status:"in_progress",
