@@ -105,6 +105,26 @@ def _add_image(document: Document, block: dict[str, Any]) -> None:
         picture._inline.docPr.set("descr", alt.strip()[:500])
 
 
+def _add_rich_runs(paragraph: Any, block: dict[str, Any]) -> None:
+    """Ajoute des segments de texte formatés avec une liste de propriétés autorisées."""
+    runs = block.get("runs")
+    if not isinstance(runs, list) or len(runs) > 120:
+        raise ValueError("Les segments formatés doivent former une liste de 120 éléments au maximum.")
+    for item in runs:
+        if not isinstance(item, dict):
+            raise ValueError("Chaque segment de texte doit être un objet.")
+        value = _text(item.get("text", ""), 6_000)
+        if not value:
+            continue
+        run = paragraph.add_run(value)
+        run.bold = bool(item.get("bold", False))
+        run.italic = bool(item.get("italic", False))
+        run.underline = bool(item.get("underline", False))
+        if bool(item.get("code", False)):
+            run.font.name = "Consolas"
+            run.font.size = Pt(9)
+
+
 def _add_table(document: Document, block: dict[str, Any]) -> None:
     rows = block.get("rows")
     if not isinstance(rows, list) or not rows or len(rows) > MAX_TABLE_ROWS:
@@ -219,7 +239,11 @@ def build_structured_docx(payload: dict[str, Any]) -> bytes:
             level = block.get("level", 1)
             if isinstance(level, bool) or not isinstance(level, int) or level not in {1, 2, 3}:
                 raise ValueError("Le niveau d'un titre doit être 1, 2 ou 3.")
-            document.add_heading(_text(block.get("text", "")), level=level)
+            paragraph = document.add_heading("", level=level)
+            if isinstance(block.get("runs"), list):
+                _add_rich_runs(paragraph, block)
+            else:
+                paragraph.add_run(_text(block.get("text", "")))
         elif kind in {"paragraph", "bullet", "numbered", "quote", "caption"}:
             value = _text(block.get("text", ""))
             if kind == "bullet":
@@ -230,14 +254,19 @@ def build_structured_docx(payload: dict[str, Any]) -> bytes:
                 paragraph = document.add_paragraph(style="Quote")
             else:
                 paragraph = document.add_paragraph()
-            run = paragraph.add_run(value)
+            if isinstance(block.get("runs"), list):
+                _add_rich_runs(paragraph, block)
+            else:
+                paragraph.add_run(value)
             if kind == "caption":
                 paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run.italic = True
-                run.font.size = Pt(9)
-                run.font.color.rgb = RGBColor(95, 105, 98)
+                for run in paragraph.runs:
+                    run.italic = True
+                    run.font.size = Pt(9)
+                    run.font.color.rgb = RGBColor(95, 105, 98)
             elif kind == "quote":
-                run.italic = True
+                for run in paragraph.runs:
+                    run.italic = True
         elif kind == "table":
             _add_table(document, block)
             document.add_paragraph()

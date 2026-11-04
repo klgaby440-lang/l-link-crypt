@@ -71,3 +71,24 @@ def test_structured_docx_can_embed_a_valid_png_and_caption():
 def test_structured_docx_rejects_untrusted_or_invalid_blocks(block):
     with pytest.raises(ValueError):
         build_structured_docx({"title": "Document invalide", "blocks": [block]})
+
+
+
+def test_structured_docx_preserves_rich_text_runs():
+    payload = {
+        "title": "Texte mis en forme",
+        "blocks": [{
+            "type": "paragraph",
+            "text": "Important et italique",
+            "runs": [
+                {"text": "Important", "bold": True},
+                {"text": " et "},
+                {"text": "italique", "italic": True},
+            ],
+        }],
+    }
+    document = Document(io.BytesIO(build_structured_docx(payload)))
+    runs = document.paragraphs[-1].runs
+    assert "".join(run.text for run in runs) == "Important et italique"
+    assert runs[0].bold is True
+    assert runs[2].italic is True

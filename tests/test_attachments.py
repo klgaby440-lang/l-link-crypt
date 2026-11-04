@@ -294,3 +294,41 @@ def test_multipart_route_normalizes_oversized_work_context(client, monkeypatch):
     assert len(captured["preferences"]) <= 2_000
     assert captured["effort"] == "normal"
     assert captured["level"] is None
+
+
+
+def test_multipart_work_attachments_dispatch_to_native_work_agent(client, monkeypatch):
+    from llink_api.services import work_agent
+
+    captured = {}
+
+    async def allow_quota(**_kwargs):
+        return None
+
+    async def fake_work_agent(payload, request, user, db):
+        captured["mode"] = payload.mode
+        captured["message"] = payload.message
+        return JSONResponse({"agent": "native-work"})
+
+    monkeypatch.setattr(attachment_routes, "enforce_endpoint_quota", allow_quota)
+    monkeypatch.setattr(attachment_routes, "resolve_entitled_level", lambda _user, _db: "velora")
+    monkeypatch.setattr(work_agent, "work_agent_response", fake_work_agent)
+
+    response = client.post(
+        "/api/chat/attachments",
+        data={
+            "message": "Analyse ce fichier dans Work.",
+            "model": "gemini-3.5-flash-lite",
+            "level": "velora",
+            "effort": "extra",
+            "history": "[]",
+            "mode": "work",
+        },
+        files=[("files", ("notes-work.txt", b"Le contenu doit atteindre l'agent natif.", "text/plain"))],
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"agent": "native-work"}
+    assert response.headers["x-llink-attachment-count"] == "1"
+    assert captured["mode"] == "work"
+    assert "Le contenu doit atteindre l'agent natif." in captured["message"]
