@@ -347,3 +347,19 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
  .work-ppt-fields{grid-template-columns:1fr}
  .work-ppt-fields textarea{min-height:70px}
 }
+
+
+/* Live server-generated document drafts in the Work conversation. */
+.work-document-draft{margin:9px 0;border:1px solid var(--work-line);border-radius:11px;padding:10px;background:var(--work-panel-soft);color:var(--work-text)}
+.work-document-draft-top{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.work-document-draft-top>span{display:flex;flex-direction:column;gap:4px;min-width:0}
+.work-document-draft-top b{font-size:11px;overflow-wrap:anywhere}
+.work-document-draft-top small{font-size:9px;color:var(--work-muted)}
+.work-document-draft-headings{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.work-document-draft-headings span{padding:4px 7px;border:1px solid var(--work-line);border-radius:6px;background:var(--work-panel);font-size:9px;color:var(--work-muted)}
+.work-document-draft-warning{margin-top:9px;padding:8px 9px;border-radius:8px;border:1px solid #d6a65a;background:color-mix(in srgb,#d6a65a 10%,var(--work-panel));font-size:9px;line-height:1.5;color:var(--work-text)}
+.work-document-draft-warning b{display:block;margin-bottom:3px}
+.work-document-draft-warning ul{margin:4px 0 0;padding-left:16px}
+.work-document-draft.is-verified{border-color:#3b9870}
+.work-document-draft.is-verified .work-document-draft-top small{color:#26835a}
+@media(max-width:540px){.work-document-draft-top{align-items:flex-start;flex-direction:column}.work-document-draft-top .work-editor-action{align-self:flex-end}}
