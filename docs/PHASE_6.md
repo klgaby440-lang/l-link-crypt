@@ -111,3 +111,14 @@ Le client ajoute un paramètre de version aux ressources Work pour éviter de co
 - Les liens relatifs sont résolus par rapport à l'URL de la page. Les fragments sont retirés, les doublons et schémas dangereux (`javascript:`, `mailto:`, etc.) sont ignorés.
 - Chaque nouvelle URL est soumise à la validation des hôtes publics avant ouverture ; les URL locales et réseaux privés restent refusés.
 - Cette navigation est textuelle et non interactive : aucun JavaScript n'est exécuté, aucun compte n'est connecté, aucun formulaire ni bouton n'est activé et aucun fichier arbitraire n'est téléchargé. Les redirections HTTP doivent être recherchées puis ouvertes explicitement.
+
+
+## Extension — édition locale des classeurs Excel
+
+- Les fichiers `.xlsx` importés dans Work ouvrent un éditeur de grille basé sur SheetJS CE 0.20.3 (chargement à la demande depuis le CDN officiel).
+- L'éditeur expose la sélection des feuilles, l'ajout de lignes/colonnes/feuilles, la modification des cellules et l'export d'un nouveau classeur XLSX.
+- Les formules existantes sont présentées comme des formules et conservées comme expressions. Le moteur ne calcule pas les formules dans le navigateur ; le classeur exporté demande à Excel ou à un autre tableur compatible de recalculer à l'ouverture.
+- Pour garder l'interface réactive, l'affichage est limité à 100 lignes et 40 colonnes visibles à la fois, avec pagination verticale.
+- Les sauvegardes créent des versions locales dans IndexedDB. La restauration et l'export sont disponibles.
+- Cette première édition est réservée au format `.xlsx`, fonctionne localement et ne synchronise pas les binaires vers Firestore. Les fichiers `.xls`, `.xlsm`, `.ods` et les fonctions avancées de mise en page/objets Excel ne sont pas garantis.
+- Le test Playwright vérifie l'ouverture d'un classeur à deux feuilles, l'édition d'une valeur, la conservation d'une formule et la restauration d'une version.
