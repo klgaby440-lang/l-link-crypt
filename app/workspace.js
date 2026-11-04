@@ -136,6 +136,71 @@ function captureToolResult(ans,tool,result){
 }
 function updateToolResultsSlot(ans){const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-tool-results-slot');if(slot)slot.innerHTML=renderToolResults(ans.toolResults);}
 function updateArtifactSlot(ans){const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-artifacts-slot');if(slot)slot.innerHTML=renderArtifacts(ans.artifacts);}
+function renderDocumentDraft(draft){
+ if(!draft)return "";
+ const labels={in_progress:"Rédaction en cours",needs_revision:"Contrôle à corriger",verified:"Document vérifié",saved:"Brouillon enregistré"};
+ const headings=(draft.headings||[]).slice(0,6);
+ const checks=draft.verification||{};
+ const diag=Array.isArray(draft.repairGuidance)?draft.repairGuidance.slice(0,3):[];
+ return '<section class="work-document-draft is-'+esc(draft.status||"in_progress")+'"><div class="work-document-draft-top"><span><b>'+esc(draft.filename||"Document Word")+'</b><small>'+esc(labels[draft.status]||"Brouillon reçu")+' · '+Number(draft.blockCount||0)+' blocs · '+Number(draft.wordCount||0).toLocaleString("fr-FR")+' mots</small></span><button class="work-editor-action" data-act="open-document-draft" data-id="'+esc(draft.fileId)+'">Ouvrir dans l’éditeur</button></div>'+(headings.length?'<div class="work-document-draft-headings">'+headings.map(h=>'<span>'+esc(h)+'</span>').join("")+'</div>':"")+(checks.passed===false||diag.length?'<div class="work-document-draft-warning"><b>Vérification non validée</b>'+(diag.length?'<ul>'+diag.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>':(checks.missing_required_headings||[]).length?'<p>Sections manquantes : '+esc(checks.missing_required_headings.join(", "))+'</p>':'<p>Le brouillon reste disponible dans Work pour être corrigé.</p>')+'</div>':"")+'</section>';
+}
+function updateDocumentDraftSlot(ans){
+ const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-document-draft-slot');
+ if(slot)slot.innerHTML=renderDocumentDraft(ans.documentDraft);
+}
+async function upsertServerDocumentDraft(documentData,ans){
+ if(!documentData||typeof documentData.document_id!=="string"||!Array.isArray(documentData.blocks))return;
+ if(!window.LlinkDocumentEditor?.createFromPayload)throw new Error("L’export Word local n’est pas chargé.");
+ const payload={filename:String(documentData.filename||"document.docx"),title:String(documentData.title||"Document en cours"),subtitle:String(documentData.subtitle||""),author:String(documentData.author||"Llink Work"),institution:String(documentData.institution||""),blocks:documentData.blocks};
+ const all=await filesLocal();
+ let file=all.find(item=>item.agentDraftId===documentData.document_id);
+ const mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+ const blob=window.LlinkDocumentEditor.createFromPayload(payload);
+ if(!file){
+  const safeName=uniqueBinaryName(payload.filename);
+  file=await createBinaryFile(safeName,blob,mime,{documentData:payload,agentDraftId:documentData.document_id,isAgentDraft:true,documentRevision:Number(documentData.revision_count||0),agentDraftStatus:"in_progress"});
+ }else if(S.file?.id===file.id&&S.file.dirty){
+  ans.reasoning.limitations=[...(ans.reasoning.limitations||[]),"Le brouillon Word reçu a été conservé côté serveur, mais l’éditeur local contient des modifications non enregistrées. Enregistre-les ou compare-les avant de remplacer le contenu."];
+ }else{
+  file.documentData=payload;file.blob=blob;file.mimeType=mime;file.editorType="document";file.isBinary=true;
+  file.documentRevision=Number(documentData.revision_count||0);file.agentDraftStatus="in_progress";
+  file.sizeBytes=blob.size;file.updatedAt=new Date().toISOString();file.dirty=false;
+  if(S.file?.id===file.id&&S.binaryEditor?.setPayload){S.binaryEditor.setPayload(payload);meta();}
+  await db.workFiles.put(file);
+ }
+ S.files=await filesLocal();renderFiles();
+ const headings=payload.blocks.filter(b=>b?.type==="heading"&&String(b.text||"").trim()).map(b=>String(b.text).trim());
+ const words=payload.blocks.reduce((total,b)=>total+(String(b?.text||"").match(/[A-Za-zÀ-ÿ0-9]+/g)||[]).length,0);
+ ans.documentDraft={fileId:file.id,documentId:documentData.document_id,filename:file.name,status:"in_progress",blockCount:payload.blocks.length,wordCount:words,headings,revision:Number(documentData.revision_count||0),verification:null,repairGuidance:[]};
+ updateDocumentDraftSlot(ans);
+}
+function updateDocumentDraftVerification(ans,tool,result){
+ if(!ans.documentDraft||!result)return;
+ if(result.verification)ans.documentDraft.verification=result.verification;
+ if(tool==="document_finalize"&&result.precheck_passed===false){
+  ans.documentDraft.status="needs_revision";
+  ans.documentDraft.repairGuidance=Array.isArray(result.repair_guidance)?result.repair_guidance:[];
+ }else if(tool==="artifact_verify"){
+  ans.documentDraft.status=result.verified===true?"verified":"needs_revision";
+  ans.documentDraft.repairGuidance=Array.isArray(result.repair_guidance)?result.repair_guidance:[];
+ }
+ updateDocumentDraftSlot(ans);
+}
+async function storeVerifiedDocumentArtifact(filename,blob,mime,verification){
+ const all=await filesLocal();
+ let file=all.find(item=>item.isAgentDraft&&String(item.name).toLowerCase()===String(filename).toLowerCase());
+ if(file){
+  const version=Math.max(1,Number(file.localRevision||1));
+  if(file.blob instanceof Blob)await db.workFileVersions.add({fileId:file.id,version,blob:file.blob,mimeType:file.mimeType,createdAt:new Date().toISOString()});
+  file.blob=blob;file.mimeType=mime||blob.type||file.mimeType;file.sizeBytes=blob.size;
+  file.localRevision=version+1;file.updatedAt=new Date().toISOString();file.isAgentDraft=false;
+  file.agentDraftStatus="verified";file.verification=verification||{passed:true};file.pendingSync=false;file.dirty=false;
+  await db.workFiles.put(file);
+  if(S.file?.id===file.id&&S.binaryEditor?.setPayload&&file.documentData){S.binaryEditor.setPayload(file.documentData);meta();}
+  S.files=await filesLocal();renderFiles();return file;
+ }
+ return await createBinaryFile(uniqueBinaryName(filename),blob,mime||blob.type);
+}
 async function handleWorkArtifact(rawId,downloadNow){const file=await db.workFiles.get(Number(rawId));if(!file)return toast("Ce fichier n’est plus disponible.");await openFile(file.id);if(downloadNow)await download();}
 
 function renderMessages(){
