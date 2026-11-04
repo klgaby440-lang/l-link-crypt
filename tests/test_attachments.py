@@ -278,7 +278,7 @@ def test_multipart_route_normalizes_oversized_work_context(client, monkeypatch):
                 {"role": "user", "text": "Ancien contenu " * 4000},
                 {"role": "assistant", "text": "Dernière réponse conservée."},
             ]),
-            "mode": "work",
+            "mode": "chat",
         },
         files=[("files", ("notes.txt", b"Contenu important du fichier.", "text/plain"))],
     )
