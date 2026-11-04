@@ -170,7 +170,7 @@ test("Work livre un PDF vérifié comme fichier binaire", async ({ page }) => {
   ]);
 
   await page.locator("#work-prompt").fill("Crée un PDF de synthèse.");
-  const downloadPromise = page.waitForEvent("download");
+  const downloadPromise = page.waitForEvent("download", { predicate: item => item.suggestedFilename() === "analyse-agent-ci.pdf" });
   await page.locator("#work-send").click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("analyse-agent-ci.pdf");
@@ -462,4 +462,38 @@ test("Work permet de créer, sélectionner et supprimer un projet sans supprimer
   page.on("dialog", dialog => dialog.accept());
   await page.locator('[data-act="delete-project"]').click();
   await expect(page.locator(".work-manager-dialog")).toContainText("Aucun projet");
+});
+
+
+test("Work ouvre, modifie et enregistre un document Word", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.mammoth = {
+      images: {},
+      convertToHtml: async () => ({ value: "<h1>Rapport initial</h1><p><strong>Texte d’origine</strong></p>" })
+    };
+  });
+  await openWork(page);
+  let documentPayload = null;
+  await page.route(API + "/api/work/tools/document", async route => {
+    if (route.request().method() === "OPTIONS") {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
+    documentPayload = route.request().postDataJSON();
+    return route.fulfill({
+      status: 200,
+      headers: { ...CORS_HEADERS, "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+      body: Buffer.from("DOCX-test")
+    });
+  });
+  await page.locator("#work-upload-input").setInputFiles({
+    name: "rapport-test.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    buffer: Buffer.from("DOCX fixture")
+  });
+  await expect(page.locator(".work-doc-content")).toContainText("Rapport initial");
+  await page.locator(".work-doc-content").fill("Contenu modifié dans Word");
+  await expect(page.locator("#work-file-status")).toContainText("Document Word modifié");
+  await page.locator('[data-act="save"]').click();
+  await expect.poll(() => documentPayload?.blocks?.[0]?.text).toContain("Contenu modifié dans Word");
+  await expect(page.locator("#work-file-status")).toContainText("Document Word — stockage local");
 });

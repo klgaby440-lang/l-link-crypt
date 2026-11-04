@@ -171,9 +171,9 @@ updateReasoningSlot(ans);
 
 function meta(){
 const f=S.file;if(!f){$("work-file-name").textContent="Aucun fichier ouvert";$("work-file-status").textContent="Crée ou ouvre un fichier";$("work-count").textContent="0 caractères";$("work-version").textContent="Local";return;}
-const label={spreadsheet:"Classeur Excel",document:"Document Word",image:"Image",pdf:"Document PDF"}[f.editorType]||f.mimeType||"Fichier binaire";
+const label={spreadsheet:"Classeur",document:"Document Word",image:"Image",pdf:"Document PDF"}[f.editorType]||f.mimeType||"Fichier binaire";
 $("work-file-name").textContent=f.name;$("work-file-status").textContent=f.isBinary?(f.dirty?label+" modifié — non enregistré":label+" — stockage local"):(f.dirty?"Modifications non enregistrées":"Toutes les modifications sont enregistrées");
-$("work-lang").textContent=f.isBinary?label:(f.language||"Texte");$("work-count").textContent=f.isBinary?size(f.sizeBytes||f.blob?.size||0):(f.content||"").length.toLocaleString("fr-FR")+" caractères";
+$("work-lang").textContent=f.isBinary?(f.editorType==="spreadsheet"?"Classeur Excel":label):(f.language||"Texte");$("work-count").textContent=f.isBinary?size(f.sizeBytes||f.blob?.size||0):(f.content||"").length.toLocaleString("fr-FR")+" caractères";
 $("work-version").textContent=f.isBinary?"Version locale "+(f.localRevision||1):"Version "+(f.version||1);$("work-editor-icon").innerHTML='<i data-lucide="'+icon(f.name)+'"></i>';
 const previewTab=S.root?.querySelector('[data-tab="preview"]');if(previewTab)previewTab.hidden=!!f.isBinary;if(window.lucide)lucide.createIcons();
 }
