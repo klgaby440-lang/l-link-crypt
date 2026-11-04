@@ -152,8 +152,6 @@ h.innerHTML='<div class="work-welcome"><div class="work-welcome-mark"><i data-lu
 }
 h.scrollTop=h.scrollHeight;if(window.lucide)lucide.createIcons();
 }
-function updateReasoningSlot
-
 function updateReasoningSlot(ans){
 const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-reasoning-slot');
 if(slot)slot.innerHTML=renderWorkReasoning(ans.reasoning);

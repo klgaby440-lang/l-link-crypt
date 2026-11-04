@@ -96,7 +96,7 @@ async function open(host,blob,options={}){
   else document.execCommand(action);
   changed();
  };
- const input=()=>changed();body.addEventListener("input",input);host.addEventListener("click",click);
+ const input=()=>changed();host.addEventListener("input",input);host.addEventListener("click",click);
  return {
   toPayload(){
    return {filename:options.filename||"document.docx",title:host.querySelector('[data-doc-meta="title"]').value.trim().slice(0,300)||name,
@@ -104,7 +104,7 @@ async function open(host,blob,options={}){
     author:host.querySelector('[data-doc-meta="author"]').value.trim().slice(0,160),institution:"",
     blocks:blocksFrom(body)};
   },
-  destroy(){body.removeEventListener("input",input);host.removeEventListener("click",click);host.innerHTML="";}
+  destroy(){host.removeEventListener("input",input);host.removeEventListener("click",click);host.innerHTML="";}
  };
 }
 window.LlinkDocumentEditor={open,version:"1.0.0"};
