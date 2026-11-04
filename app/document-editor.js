@@ -98,13 +98,26 @@ function docxBlob(payload={}){
  const app='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Llink Work</Application></Properties>';
  return O.zipStore({"[Content_Types].xml":contentTypes,"_rels/.rels":rootRels,"word/document.xml":documentXml,"word/_rels/document.xml.rels":docRels,"word/styles.xml":styles,"docProps/core.xml":core,"docProps/app.xml":app});
 }
+function blocksToHtml(blocks){
+ const x=esc;return (Array.isArray(blocks)?blocks:[]).map(b=>{
+  if(b.type==="page_break")return "<hr>";
+  if(b.type==="table")return "<table><tbody>"+(b.rows||[]).map(row=>"<tr>"+row.map(v=>"<td>"+x(v)+"</td>").join("")+"</tr>").join("")+"</tbody></table>";
+  if(b.type==="image")return b.data_url?'<p><img src="'+x(b.data_url)+'" alt="'+x(b.alt||"Illustration")+'"></p>':"";
+  const text=(Array.isArray(b.runs)&&b.runs.length?b.runs.map(r=>{let t=x(r.text);if(r.bold)t="<strong>"+t+"</strong>";if(r.italic)t="<em>"+t+"</em>";if(r.underline)t="<u>"+t+"</u>";return t;}).join(""):x(b.text||"")).replace(/\n/g,"<br>");
+  return b.type==="heading"?"<h"+Math.min(3,Math.max(1,Number(b.level)||1))+">"+text+"</h"+Math.min(3,Math.max(1,Number(b.level)||1))+">":b.type==="bullet"?"<ul><li>"+text+"</li></ul>":b.type==="numbered"?"<ol><li>"+text+"</li></ol>":b.type==="quote"?"<blockquote>"+text+"</blockquote>":"<p>"+text+"</p>";
+ }).join("")||"<p>Document vide.</p>";
+}
 async function open(host,blob,options={}){
  if(!(blob instanceof Blob))throw new Error("Le document Word est indisponible.");
- const engine=await mammoth();
- const convertImage=engine.images?.inline?engine.images.inline(async image=>({src:"data:"+image.contentType+";base64,"+await image.read("base64")})):undefined;
- const result=await engine.convertToHtml({arrayBuffer:await blob.arrayBuffer()},convertImage?{convertImage}: {});
- const html=sanitize(result.value||"<p>Document vide.</p>");
  const name=String(options.filename||"document.docx").replace(/\.docx$/i,"");
+ let html;
+ if(options.documentData&&Array.isArray(options.documentData.blocks))html=sanitize(blocksToHtml(options.documentData.blocks));
+ else{
+  const engine=await mammoth();
+  const convertImage=engine.images?.inline?engine.images.inline(async image=>({src:"data:"+image.contentType+";base64,"+await image.read("base64")})):undefined;
+  const result=await engine.convertToHtml({arrayBuffer:await blob.arrayBuffer()},convertImage?{convertImage}: {});
+  html=sanitize(result.value||"<p>Document vide.</p>");
+ }
  host.innerHTML='<div class="work-doc-editor"><div class="work-doc-meta">'+
   '<label>Titre<input data-doc-meta="title" maxlength="300" value="'+esc(name)+'"></label>'+
   '<label>Sous-titre<input data-doc-meta="subtitle" maxlength="500" placeholder="Facultatif"></label>'+
