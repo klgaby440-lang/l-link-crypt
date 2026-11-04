@@ -64,6 +64,40 @@ function blocksFrom(root){
  Array.from(root.childNodes).forEach(visit);
  return out.length?out:[{type:"paragraph",text:(root.innerText||"").trim()||" "}];
 }
+function docxBlob(payload={}){
+ const O=window.LlinkOpenXml;if(!O?.zipStore)throw new Error("Le moteur DOCX local n’est pas chargé.");
+ const x=O.escapeXml,run=r=>'<w:r><w:rPr>'+(r.bold?'<w:b/>':'')+(r.italic?'<w:i/>':'')+(r.underline?'<w:u w:val="single"/>':'')+(r.code?'<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>':'')+'</w:rPr><w:t xml:space="preserve">'+x(r.text||"")+'</w:t></w:r>';
+ const paragraph=(text,style,runs)=>'<w:p>'+(style?'<w:pPr><w:pStyle w:val="'+style+'"/></w:pPr>':'')+((runs&&runs.length)?runs.map(run).join(""):run({text:text||""}))+'</w:p>';
+ const blocks=Array.isArray(payload.blocks)?payload.blocks:[{type:"paragraph",text:""}];
+ let body="";
+ for(const b of blocks){
+  if(b.type==="page_break"){body+='<w:p><w:r><w:br w:type="page"/></w:r></w:p>';continue;}
+  if(b.type==="table"){
+   const rows=Array.isArray(b.rows)?b.rows:[];
+   body+='<w:tbl><w:tblPr><w:tblBorders>'+["top","left","bottom","right","insideH","insideV"].map(n=>'<w:'+n+' w:val="single" w:sz="4" w:color="AAB3C2"/>').join("")+'</w:tblBorders></w:tblPr>';
+   for(const row of rows)body+='<w:tr>'+row.map(cell=>'<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>'+paragraph(String(cell??""))+'</w:tc>').join("")+'</w:tr>';
+   body+='</w:tbl>';continue;
+  }
+  if(b.type==="image")continue;
+  let text=String(b.text||"");
+  if(b.type==="bullet")text="•  "+text;
+  if(b.type==="numbered")text="1.  "+text;
+  const style=b.type==="heading"?"Heading"+Math.min(3,Math.max(1,Number(b.level)||1)):b.type==="quote"?"Quote":null;
+  body+=paragraph(text,style,b.runs);
+ }
+ const title=x(payload.title||"Document"),subtitle=x(payload.subtitle||""),author=x(payload.author||"Llink Work");
+ if(payload.title)body=paragraph(payload.title,"Title")+body;
+ if(payload.subtitle)body=paragraph(payload.subtitle,"Subtitle")+body;
+ const documentXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>';
+ const contentTypes='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>';
+ const rootRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>';
+ const docRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+ const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:rPr><w:i/><w:color w:val="667085"/><w:sz w:val="24"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="360"/></w:pPr><w:rPr><w:i/><w:color w:val="667085"/></w:rPr></w:style></w:styles>';
+ const now=new Date().toISOString();
+ const core='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>'+title+'</dc:title><dc:subject>'+subtitle+'</dc:subject><dc:creator>'+author+'</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">'+now+'</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">'+now+'</dcterms:modified></cp:coreProperties>';
+ const app='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Llink Work</Application></Properties>';
+ return O.zipStore({"[Content_Types].xml":contentTypes,"_rels/.rels":rootRels,"word/document.xml":documentXml,"word/_rels/document.xml.rels":docRels,"word/styles.xml":styles,"docProps/core.xml":core,"docProps/app.xml":app});
+}
 async function open(host,blob,options={}){
  if(!(blob instanceof Blob))throw new Error("Le document Word est indisponible.");
  const engine=await mammoth();
@@ -104,8 +138,9 @@ async function open(host,blob,options={}){
     author:host.querySelector('[data-doc-meta="author"]').value.trim().slice(0,160),institution:"",
     blocks:blocksFrom(body)};
   },
+  async toBlob(){return docxBlob(this.toPayload());},
   destroy(){host.removeEventListener("input",input);host.removeEventListener("click",click);host.innerHTML="";}
  };
 }
-window.LlinkDocumentEditor={open,version:"1.0.0"};
+window.LlinkDocumentEditor={open,createBlank:()=>docxBlob({title:"Nouveau document",blocks:[{type:"paragraph",text:"Commence à rédiger ici…"}]}),version:"1.1.0"};
 })();
