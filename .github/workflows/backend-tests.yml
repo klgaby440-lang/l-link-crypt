@@ -57,7 +57,7 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
 
       - name: Check Work workspace JavaScript syntax
-        run: node --check app/workspace.js && node --check app/spreadsheet-editor.js
+        run: node --check app/workspace.js && node --check app/spreadsheet-editor.js && node --check app/document-editor.js && node --check app/binary-editors.js
 
       - name: Check Python syntax
         run: python -m compileall -q llink_api

@@ -458,6 +458,7 @@ test("Work permet de créer, sélectionner et supprimer un projet sans supprimer
   await page.locator('.work-manager-row [data-act="select-project-manager"]').click();
   await expect(page.locator("#work-project")).toHaveValue(/\d+/);
   await expect(page.locator("#work-project option:checked")).toHaveText("Projet CI Work");
+  await page.locator('[data-act="manage-projects"]').click();
   page.on("dialog", dialog => dialog.accept());
   await page.locator('[data-act="delete-project"]').click();
   await expect(page.locator(".work-manager-dialog")).toContainText("Aucun projet");

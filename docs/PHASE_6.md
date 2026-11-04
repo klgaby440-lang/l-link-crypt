@@ -122,3 +122,17 @@ Le client ajoute un paramètre de version aux ressources Work pour éviter de co
 - Les sauvegardes créent des versions locales dans IndexedDB. La restauration et l'export sont disponibles.
 - Cette première édition est réservée au format `.xlsx`, fonctionne localement et ne synchronise pas les binaires vers Firestore. Les fichiers `.xls`, `.xlsm`, `.ods` et les fonctions avancées de mise en page/objets Excel ne sont pas garantis.
 - Le test Playwright vérifie l'ouverture d'un classeur à deux feuilles, l'édition d'une valeur, la conservation d'une formule et la restauration d'une version.
+
+
+## Extension — éditeurs et gestion du travail
+
+- Le frontend Work peut ouvrir les classeurs .xlsx avec l’éditeur de grille existant, les documents .docx, les PDF et les images PNG/JPEG/WEBP prises en charge par le navigateur.
+- L’éditeur Word importe le contenu avec Mammoth, permet de modifier le texte, les titres, les listes, les tableaux et la mise en forme simple (gras, italique, souligné), puis reconstruit un DOCX avec le moteur serveur. Les styles complexes, zones flottantes et mises en page avancées peuvent être simplifiés.
+- L’éditeur PDF conserve le document original et ajoute des annotations de texte ou des rotations de pages. Il ne réécrit pas le texte déjà présent dans le PDF.
+- L’éditeur d’image permet la rotation, le miroir horizontal/vertical et le redimensionnement sur un canevas local. L’export est limité aux formats raster pris en charge par le navigateur.
+- Les sauvegardes binaires créent des versions dans IndexedDB. DOCX, PDF, images et XLSX ne sont pas encore synchronisés en tant que blobs dans le cloud ; ils restent attachés à l’appareil où ils ont été importés ou édités.
+- Les résultats natifs de Web Search, Web Open, recherche d’images, Python, terminal et lecture de fichiers sont présentés dans la réponse Work sous forme de sources, extraits, liens et sorties structurées lorsqu’ils sont renvoyés par le serveur. Les fichiers livrés peuvent être ouverts dans l’éditeur ou téléchargés.
+- Les conversations Work peuvent être listées, rouvertes, renommées et supprimées. Elles réutilisent les identifiants et le mécanisme de synchronisation/suppression de l’historique général de Llink.
+- Les projets peuvent être créés, sélectionnés, renommés et supprimés depuis leur gestionnaire. La suppression d’un projet détache ses fichiers, sans effacer ces fichiers. Les suppressions hors ligne sont placées dans une file de reprise.
+- Les pièces jointes transmises depuis Work suivent désormais l’agent natif et sa boucle d’outils, après extraction/analyse multimodale, au lieu d’être envoyées au chat classique.
+- Le flux des éditeurs et les contrôles de gestion sont validés par Playwright et les tests API. Une vérification en production doit encore confirmer les clés Tavily, E2B et Z.AI ainsi que les permissions du compte connecté.
