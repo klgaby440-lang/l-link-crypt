@@ -179,7 +179,24 @@ const previewTab=S.root?.querySelector('[data-tab="preview"]');if(previewTab)pre
 }
 function setTab(t){S.tab=t;S.root.querySelectorAll("[data-act='tab']").forEach(b=>b.classList.toggle("active",b.dataset.tab===t));$("work-editor-host").style.display=t==="edit"?"flex":"none";$("work-preview").classList.toggle("is-visible",t==="preview");if(t==="preview")preview();}
 function preview(){const f=S.file,p=$("work-preview");if(!f)return;const x=ext(f.name),c=f.content||"";if(["md","markdown"].includes(x)&&window.marked&&window.DOMPurify){const h=window.marked.parse(c,{gfm:true,breaks:true});p.innerHTML='<div class="work-preview-markdown">'+window.DOMPurify.sanitize(h,{USE_PROFILES:{html:true},FORBID_TAGS:["script","iframe","object","embed","form","style"],FORBID_ATTR:["style","onclick","onerror"]})+'</div>';}else if(["html","htm"].includes(x)&&window.DOMPurify){p.innerHTML='<iframe class="work-preview-html" sandbox="" title="Aperçu HTML"></iframe>';p.querySelector("iframe").srcdoc=window.DOMPurify.sanitize(c,{USE_PROFILES:{html:true},FORBID_TAGS:["script","iframe","object","embed","form","style"],FORBID_ATTR:["style","onclick","onerror"]});}else p.innerHTML='<pre class="work-preview-markdown" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(c)+'</pre>';}
-async function cm(){if(S.cm)return S.cm;const b="https://cdn.jsdelivr.net/npm/";const [core,js,py,md,ht,css,json]=await Promise.all([import(b+"codemirror@6.0.2/+esm"),import(b+"@codemirror/lang-javascript/+esm"),import(b+"@codemirror/lang-python/+esm"),import(b+"@codemirror/lang-markdown/+esm"),import(b+"@codemirror/lang-html/+esm"),import(b+"@codemirror/lang-css/+esm"),import(b+"@codemirror/lang-json/+esm")]);S.cm={core,langs:{javascript:js.javascript(),typescript:js.javascript({typescript:true}),python:py.python(),markdown:md.markdown(),html:ht.html(),css:css.css(),json:json.json()}};return S.cm;}
+async function cm(){
+ if(S.cm)return S.cm;
+ const base="https://cdn.jsdelivr.net/npm/";
+ const [core,js,py,md,ht,css,json]=await Promise.all([
+  import(base+"codemirror@6.0.2/+esm"),import(base+"@codemirror/lang-javascript/+esm"),
+  import(base+"@codemirror/lang-python/+esm"),import(base+"@codemirror/lang-markdown/+esm"),
+  import(base+"@codemirror/lang-html/+esm"),import(base+"@codemirror/lang-css/+esm"),
+  import(base+"@codemirror/lang-json/+esm")
+ ]);
+ const names=["xml","sql","yaml","java","cpp","rust","go","php"];
+ const extras=await Promise.all(names.map(name=>import(base+"@codemirror/lang-"+name+"/+esm").catch(()=>null)));
+ const langs={javascript:js.javascript(),typescript:js.javascript({typescript:true}),python:py.python(),markdown:md.markdown(),html:ht.html(),css:css.css(),json:json.json()};
+ names.forEach((name,index)=>{
+  const mod=extras[index],fn=mod?.[name]||mod?.[name+"Language"];
+  if(typeof fn==="function"){try{langs[name]=fn();}catch(error){console.warn("Mode CodeMirror indisponible :",name,error);}}
+ });
+ S.cm={core,langs};return S.cm;
+}
 async function showBinary(f){
 const host=$("work-editor-host");
 if(S.previewUrl){URL.revokeObjectURL(S.previewUrl);S.previewUrl=null;}
