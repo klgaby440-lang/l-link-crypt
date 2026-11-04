@@ -465,35 +465,83 @@ test("Work permet de créer, sélectionner et supprimer un projet sans supprimer
 });
 
 
-test("Work ouvre, modifie et enregistre un document Word", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.mammoth = {
-      images: {},
-      convertToHtml: async () => ({ value: "<h1>Rapport initial</h1><p><strong>Texte d’origine</strong></p>" })
-    };
-  });
+test("Work crée, modifie et enregistre un document Word sans serveur", async ({ page }) => {
   await openWork(page);
-  let documentPayload = null;
-  await page.route(API + "/api/work/tools/document", async route => {
-    if (route.request().method() === "OPTIONS") {
-      return route.fulfill({ status: 204, headers: CORS_HEADERS });
-    }
-    documentPayload = route.request().postDataJSON();
-    return route.fulfill({
-      status: 200,
-      headers: { ...CORS_HEADERS, "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
-      body: Buffer.from("DOCX-test")
-    });
-  });
-  await page.locator("#work-upload-input").setInputFiles({
-    name: "rapport-test.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    buffer: Buffer.from("DOCX fixture")
-  });
-  await expect(page.locator(".work-doc-content")).toContainText("Rapport initial");
-  await page.locator(".work-doc-content").fill("Contenu modifié dans Word");
+  await page.locator('[data-act="new-file"]').first().click();
+  await page.locator("#work-new-type").selectOption("document");
+  await expect(page.locator("#work-new-name")).toHaveValue("document.docx");
+  await page.locator('[data-act="create-work-file"]').click();
+
+  await expect(page.locator(".work-doc-content")).toContainText("Commence à rédiger ici");
+  await page.locator(".work-doc-content").fill("Document Word créé et modifié entièrement dans le navigateur.");
   await expect(page.locator("#work-file-status")).toContainText("Document Word modifié");
   await page.locator('[data-act="save"]').click();
-  await expect.poll(() => documentPayload?.blocks?.[0]?.text).toContain("Contenu modifié dans Word");
   await expect(page.locator("#work-file-status")).toContainText("Document Word — stockage local");
+  await expect(page.locator("#work-version")).toHaveText("Version locale 2");
+
+  const saved = await page.evaluate(async () => {
+    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
+    const file = files.find(item => item.name === "document.docx");
+    const bytes = file ? new Uint8Array(await file.blob.arrayBuffer()) : new Uint8Array();
+    const zipText = new TextDecoder().decode(bytes);
+    return file ? {
+      isBinary: file.isBinary,
+      editorType: file.editorType,
+      size: file.blob.size,
+      documentText: file.documentData.blocks.map(block => block.text || "").join(" "),
+      hasOpenXmlDocument: zipText.includes("word/document.xml"),
+      hasEditedText: zipText.includes("Document Word créé et modifié entièrement dans le navigateur."),
+      hasCloudId: !!file.cloudId,
+      pendingSync: file.pendingSync
+    } : null;
+  });
+  expect(saved).toMatchObject({
+    isBinary: true,
+    editorType: "document",
+    documentText: "Document Word créé et modifié entièrement dans le navigateur.",
+    hasOpenXmlDocument: true,
+    hasEditedText: true,
+    hasCloudId: false,
+    pendingSync: false
+  });
+  expect(saved.size).toBeGreaterThan(0);
+});
+
+test("Work crée et exporte localement une présentation PowerPoint", async ({ page }) => {
+  await openWork(page);
+  await page.locator('[data-act="new-file"]').first().click();
+  await page.locator("#work-new-type").selectOption("presentation");
+  await expect(page.locator("#work-new-name")).toHaveValue("presentation.pptx");
+  await page.locator('[data-act="create-work-file"]').click();
+
+  await expect(page.locator(".work-ppt-editor")).toBeVisible();
+  await page.locator("[data-ppt-title]").fill("Présentation de test");
+  await page.locator("[data-ppt-body]").fill("Diapositive créée localement.\nAucune API n'est requise.");
+  await page.locator('[data-act="save"]').click();
+  await expect(page.locator("#work-file-status")).toContainText("Présentation PowerPoint — stockage local");
+
+  const saved = await page.evaluate(async () => {
+    const file = (await db.workFiles.where("ownerUid").equals("anonymous").toArray())
+      .find(item => item.name === "presentation.pptx");
+    const bytes = file ? new Uint8Array(await file.blob.arrayBuffer()) : new Uint8Array();
+    const zipText = new TextDecoder().decode(bytes);
+    return file ? {
+      editorType: file.editorType,
+      slideCount: file.presentationData.slides.length,
+      title: file.presentationData.slides[0].title,
+      containsSlideXml: zipText.includes("ppt/slides/slide1.xml"),
+      containsSlideText: zipText.includes("Présentation de test"),
+      hasCloudId: !!file.cloudId,
+      pendingSync: file.pendingSync
+    } : null;
+  });
+  expect(saved).toEqual({
+    editorType: "presentation",
+    slideCount: 2,
+    title: "Présentation de test",
+    containsSlideXml: true,
+    containsSlideText: true,
+    hasCloudId: false,
+    pendingSync: false
+  });
 });
