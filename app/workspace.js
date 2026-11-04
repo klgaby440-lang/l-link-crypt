@@ -10,7 +10,7 @@ const connected=()=>uid()!=="anonymous"&&!!(window.isLoggedIn||window.auth?.curr
 const ext=n=>(String(n).split(".").pop()||"").toLowerCase();
 const language=n=>({md:"markdown",markdown:"markdown",py:"python",js:"javascript",ts:"typescript",html:"html",htm:"html",css:"css",json:"json",xml:"xml",sql:"sql",yaml:"yaml",yml:"yaml",sh:"shell",bash:"shell",java:"java",c:"cpp",h:"cpp",cpp:"cpp",cc:"cpp",rs:"rust",go:"go",php:"php"}[ext(n)]||"plaintext");
 const icon=n=>({md:"file-text",txt:"file-text",py:"file-code",js:"file-code",ts:"file-code",html:"code",css:"code",json:"code",pdf:"file-pdf",docx:"file-ms-word",png:"image",jpg:"image",jpeg:"image",webp:"image",csv:"file-spreadsheet",xlsx:"file-spreadsheet"}[ext(n)]||"file");
-const textFile=f=>["md","markdown","txt","csv","tsv","json","xml","html","htm","css","js","ts","py","sql","yaml","yml","toml","ini","log","sh","java","c","cpp","rs","go","php","rb","svg"].includes(ext(f.name))||String(f.type||"").startsWith("text/");
+const textFile=f=>["md","markdown","txt","json","xml","html","htm","css","js","ts","py","sql","yaml","yml","toml","ini","log","sh","java","c","cpp","rs","go","php","rb","svg"].includes(ext(f.name))||String(f.type||"").startsWith("text/");
 const bytes=s=>new Blob([s]).size;
 function size(value){
 let n=Number(value)||0;if(n<1024)return n+" o";
@@ -205,30 +205,28 @@ function setEditorValue(content){setValue(String(content??""));}
 async function saveFile(){
 const f=S.file;if(!f)return toast("Ouvre un fichier avant de l’enregistrer.");
 if(f.isBinary||f.blob instanceof Blob){
- if(!S.binaryEditor||!["spreadsheet","document","image","pdf"].includes(f.editorType))return toast("Ce format n’a pas d’éditeur modifiable dans Work.");
+ if(!S.binaryEditor||!["spreadsheet","document","image","pdf","presentation"].includes(f.editorType))return toast("Ce format ne possède pas encore d’éditeur modifiable dans Work.");
  if(!f.dirty)return toast("Aucune modification à enregistrer.");
- let blob;
- if(f.editorType==="document"){
-  const payload=S.binaryEditor.toPayload();payload.filename=f.name;
-  const response=await fetch(SERVER+"/api/work/tools/document",{method:"POST",headers:await headers(true),body:JSON.stringify(payload)});
-  if(!response.ok){const d=await response.json().catch(()=>({}));throw new Error(typeof d.detail==="string"?d.detail:"La génération du document Word a échoué.");}
-  blob=await response.blob();
- }else blob=await S.binaryEditor.toBlob();
+ const blob=await S.binaryEditor.toBlob();
+ if(!(blob instanceof Blob)||!blob.size)throw new Error("L’export du fichier a échoué.");
  if(blob.size>MAX_BINARY_BYTES)return toast("Le fichier dépasse la limite locale de 50 Mo.");
+ if(f.editorType==="presentation"&&typeof S.binaryEditor.toData==="function")f.presentationData=S.binaryEditor.toData();
  const now=new Date().toISOString(),version=Math.max(1,Number(f.localRevision||1));
  await db.workFileVersions.add({fileId:f.id,version,blob:f.blob,mimeType:f.mimeType,createdAt:now});
- f.localRevision=version+1;f.blob=blob;f.mimeType=f.editorType==="document"?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":f.editorType==="pdf"?"application/pdf":f.editorType==="image"?(blob.type||"image/png"):"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+ f.localRevision=version+1;f.blob=blob;
+ f.mimeType=f.editorType==="document"?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":f.editorType==="pdf"?"application/pdf":f.editorType==="presentation"?"application/vnd.openxmlformats-officedocument.presentationml.presentation":f.editorType==="image"?(blob.type||"image/png"):(f.name.toLowerCase().endsWith(".csv")?"text/csv":f.name.toLowerCase().endsWith(".tsv")?"text/tab-separated-values":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
  f.sizeBytes=blob.size;f.updatedAt=now;f.dirty=false;f.pendingSync=false;
  await db.workFiles.put(f);meta();renderFiles();status("pending","Enregistré localement");
- toast("Fichier enregistré localement. La synchronisation cloud des fichiers binaires n’est pas encore disponible.");return;
+ toast("Fichier enregistré sur cet appareil. La connexion au serveur sera ajoutée séparément.");return;
 }
 const content=String(value()??"");if(bytes(content)>LIMIT)return toast("Le fichier dépasse la limite de 700 Ko.");
 const previous=typeof f.savedContent==="string"?f.savedContent:String(f.content||"");
-if(content===previous&&!f.pendingSync&&f.cloudId){f.dirty=false;meta();return toast("Aucune modification à enregistrer.");}
-const now=new Date().toISOString();if(content!==previous){const version=Math.max(1,Number(f.localRevision||f.version||1));await db.workFileVersions.add({fileId:f.id,version,content:previous,createdAt:now});f.localRevision=version+1;}
-f.content=content;f.savedContent=content;f.sizeBytes=bytes(content);f.updatedAt=now;f.dirty=false;f.pendingSync=true;await db.workFiles.put(f);meta();renderFiles();
-if(connected()&&navigator.onLine){status("pending","Synchronisation…");await syncFile(f);toast(f.pendingSync?"Fichier enregistré localement ; synchronisation en attente.":"Fichier enregistré et synchronisé.");}
-else{status("pending","Enregistré localement");toast("Fichier enregistré localement. Il sera synchronisé à la reconnexion.");}
+if(content===previous&&!f.dirty)return toast("Aucune modification à enregistrer.");
+const now=new Date().toISOString();
+if(content!==previous){const version=Math.max(1,Number(f.localRevision||f.version||1));await db.workFileVersions.add({fileId:f.id,version,content:previous,createdAt:now});f.localRevision=version+1;}
+f.content=content;f.savedContent=content;f.sizeBytes=bytes(content);f.updatedAt=now;f.dirty=false;f.pendingSync=false;
+await db.workFiles.put(f);meta();renderFiles();status("pending","Enregistré localement");
+toast("Fichier enregistré sur cet appareil. La synchronisation serveur sera connectée ultérieurement.");
 }
 async function openFile(raw){let f=await db.workFiles.get(Number(raw));if(!f)return;if(f.cloudId&&!f.isBinary&&!f.contentLoaded&&connected()&&navigator.onLine){try{const d=await api("/api/work/files/"+encodeURIComponent(f.cloudId));Object.assign(f,{content:d.content||"",version:d.version||1,contentLoaded:true,pendingSync:false});await db.workFiles.put(f);}catch(e){toast(e.message);}}if(S.file?.dirty&&!confirm("Le fichier actuel n’est pas enregistré. Ouvrir sans le sauvegarder ?"))return;S.file=f;if(!f.isBinary&&typeof f.savedContent!=="string")f.savedContent=String(f.content||"");f.dirty=false;await mount();setTab("edit");renderFiles();}
 function status(kind,label){const s=$("work-sync");s.className="work-sync-pill"+(kind?" is-"+kind:"");s.textContent=label;}
@@ -538,7 +536,7 @@ finally{S.busy=false;$("work-send").disabled=false;renderMessages();}
 async function showVersions(){if(!S.file)return toast("Ouvre un fichier d’abord.");let a=[];if(S.file.cloudId&&connected()&&navigator.onLine){try{a=(await api("/api/work/files/"+encodeURIComponent(S.file.cloudId)+"/versions")).versions||[];}catch(e){toast(e.message);}}else a=await db.workFileVersions.where("fileId").equals(S.file.id).toArray();$("work-dialog-root").innerHTML='<div class="work-dialog-backdrop"><div class="work-dialog"><h3>Historique des versions</h3><p>Restaurer une version crée une nouvelle version courante.</p><div id="work-ver-list"></div><div class="work-dialog-actions"><button data-act="close-dialog">Fermer</button></div></div></div>';$("work-dialog-root").querySelector("#work-ver-list").innerHTML=a.length?a.map(v=>'<div class="work-version-row"><div><b>Version '+v.version+'</b><small>'+esc(v.created_at||v.createdAt||"")+'</small></div><button data-act="restore" data-version="'+v.version+'">Restaurer</button></div>').join(""):"Aucune version précédente.";}
 async function restore(v){const f=S.file;if(!f)return;if(f.dirty&&!confirm("Ignorer les modifications non enregistrées et restaurer cette version ?"))return;if(f.isBinary||f.blob instanceof Blob){const old=await db.workFileVersions.where({fileId:f.id,version:Number(v)}).first();if(!old)return toast("Version introuvable.");if(!(old.blob instanceof Blob))return toast("Cette version ne contient pas de copie binaire restaurable.");const current=S.binaryEditor?await S.binaryEditor.toBlob():f.blob;const now=new Date().toISOString();await db.workFileVersions.add({fileId:f.id,version:Math.max(1,Number(f.localRevision||1)),blob:current,mimeType:f.mimeType,createdAt:now});f.blob=old.blob;f.sizeBytes=old.blob.size;f.mimeType=old.mimeType||f.mimeType;f.localRevision=Math.max(1,Number(f.localRevision||1))+1;f.updatedAt=now;f.dirty=false;f.pendingSync=false;await db.workFiles.put(f);await mount();meta();$("work-dialog-root").innerHTML="";toast("Ancienne version du classeur restaurée localement.");return;}let c;if(f.cloudId&&connected()&&navigator.onLine){const old=await db.workFiles.get(f.id);await api("/api/work/files/"+encodeURIComponent(f.cloudId)+"/restore",{method:"POST",body:JSON.stringify({version:Number(v)})});const d=await api("/api/work/files/"+encodeURIComponent(f.cloudId));await db.workFileVersions.add({fileId:f.id,version:old?.localRevision||1,content:old?.content||"",createdAt:new Date().toISOString()});c=d.content;f.version=d.version;f.localRevision=(old?.localRevision||1)+1;f.content=c;f.savedContent=c;f.sizeBytes=bytes(c);f.updatedAt=new Date().toISOString();f.dirty=false;f.pendingSync=false;await db.workFiles.put(f);setEditorValue(c);f.dirty=false;await db.workFiles.put(f);meta();}else{const old=await db.workFileVersions.where({fileId:f.id,version:Number(v)}).first();if(!old)return toast("Version introuvable.");setEditorValue(old.content);await saveFile();}$("work-dialog-root").innerHTML="";}
 async function download(){if(!S.file)return;const f=S.file;if(f.isBinary&&S.binaryEditor&&f.dirty)await saveFile();const blob=(f.isBinary&&f.blob instanceof Blob)?f.blob:new Blob([value()],{type:"text/plain;charset=utf-8"}),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=f.name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);}
-async function renameFile(){const f=S.file;if(!f)return;const next=await askInput("Renommer le fichier","Tu peux aussi déplacer le fichier dans un dossier avec un chemin relatif.","Nom ou chemin",f.path||f.name,"Ex. src/main.py","Renommer");if(!next||!next.trim())return;const path=next.trim().replace(/\\/g,"/"),parts=path.split("/");if(path.startsWith("/")||parts.some(p=>!p||p==="."||p===".."))return toast("Chemin relatif invalide.");const name=parts.pop(),folder=parts.join("/");if(f.editorType==="spreadsheet"&&!name.toLowerCase().endsWith(".xlsx"))return toast("Conserve l’extension .xlsx pour garder l’édition du classeur.");if(S.files.some(x=>x.id!==f.id&&String(x.path).toLowerCase()===path.toLowerCase()))return toast("Un fichier existe déjà à cet emplacement.");f.name=name;f.folder=folder;f.path=folder?folder+"/"+name:name;f.language=language(name);f.pendingSync=true;await db.workFiles.put(f);meta();renderFiles();if(connected()&&navigator.onLine)await syncFile(f);}
+async function renameFile(){const f=S.file;if(!f)return;const next=await askInput("Renommer le fichier","Tu peux aussi déplacer le fichier dans un dossier avec un chemin relatif.","Nom ou chemin",f.path||f.name,"Ex. src/main.py","Renommer");if(!next||!next.trim())return;const path=next.trim().replace(/\\/g,"/"),parts=path.split("/");if(path.startsWith("/")||parts.some(p=>!p||p==="."||p===".."))return toast("Chemin relatif invalide.");const name=parts.pop(),folder=parts.join("/");if(f.editorType==="spreadsheet"&&!name.toLowerCase().endsWith(".xlsx"))return toast("Conserve l’extension .xlsx pour garder l’édition du classeur.");if(S.files.some(x=>x.id!==f.id&&String(x.path).toLowerCase()===path.toLowerCase()))return toast("Un fichier existe déjà à cet emplacement.");f.name=name;f.folder=folder;f.path=folder?folder+"/"+name:name;f.language=language(name);f.pendingSync=false;await db.workFiles.put(f);meta();renderFiles();status("pending","Stockage local");}
 async function deleteFile(){const f=S.file;if(!f)return;if(!confirm("Supprimer définitivement "+f.path+" et ses versions ?"))return;if(f.cloudId&&connected()&&navigator.onLine){try{await api("/api/work/files/"+encodeURIComponent(f.cloudId),{method:"DELETE"});}catch(e){toast("Suppression cloud impossible : "+e.message);return;}}await db.workFileVersions.where("fileId").equals(f.id).delete();await db.workFiles.delete(f.id);S.files=S.files.filter(x=>x.id!==f.id);S.file=null;if(S.editor)S.editor.destroy();S.editor=null;if(S.binaryEditor)S.binaryEditor.destroy();S.binaryEditor=null;$("work-editor-host").innerHTML='<div class="work-empty-editor"><i data-lucide="file-pen-line"></i><b>Ton espace d’édition</b><span>Ouvre un fichier pour commencer.</span></div>';meta();renderFiles();}
 async function pending(){
  if(!connected()||!navigator.onLine)return;
@@ -581,21 +579,21 @@ const project=S.projects.find(p=>String(p.id)===String(S.project));
 const now=new Date().toISOString();
 const f={cloudId:null,ownerUid:S.owner,name,folder,path,language:language(name),content,savedContent:content,isBinary:false,contentLoaded:true,version:1,localRevision:1,sizeBytes:bytes(content),updatedAt:now,pendingSync:true,dirty:false,projectLocalId:project?project.id:null,projectId:project?.cloudId||null};
 f.id=await db.workFiles.add(f);S.files.unshift(f);S.file=f;renderFiles();await mount();setTab("edit");
-if(connected()&&navigator.onLine){if(project&&!project.cloudId&&project.pendingSync)await pending();else await syncFile(f);}
-else status("pending","Enregistré localement");
+f.pendingSync=false;await db.workFiles.put(f);status("pending","Stockage local");
 return f;
 }
-async function createBinaryFile(name,blob,mimeType){
+async function createBinaryFile(name,blob,mimeType,extra={}){
 const clean=String(name||"").replace(/\\/g,"/").split("/").pop().trim();if(!clean)throw new Error("Nom de fichier invalide.");
 if(S.files.some(f=>String(f.path||f.name).toLowerCase()===clean.toLowerCase()))throw new Error("Un fichier de ce nom existe déjà.");
 const existing=await db.workFiles.where("ownerUid").equals(S.owner).toArray(),used=existing.reduce((n,f)=>n+(f.blob?.size||0),0);
 if(used+blob.size>MAX_BINARY_BYTES)throw new Error("L’espace local de fichiers binaires est limité à 50 Mo.");
 const project=S.projects.find(p=>String(p.id)===String(S.project)),type=mimeType||blob.type||"application/octet-stream",lower=clean.toLowerCase();let editorType=null;
-if(lower.endsWith(".xlsx")||type==="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")editorType="spreadsheet";
+if([".xlsx",".csv",".tsv"].some(s=>lower.endsWith(s))||type==="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"||type==="text/csv"||type==="text/tab-separated-values")editorType="spreadsheet";
 else if(lower.endsWith(".docx")||type==="application/vnd.openxmlformats-officedocument.wordprocessingml.document")editorType="document";
+else if(lower.endsWith(".pptx")||type==="application/vnd.openxmlformats-officedocument.presentationml.presentation")editorType="presentation";
 else if(lower.endsWith(".pdf")||type==="application/pdf")editorType="pdf";
 else if(type.startsWith("image/")&&["png","jpg","jpeg","webp"].includes(ext(clean)))editorType="image";
-const f={cloudId:null,ownerUid:S.owner,name:clean,folder:"",path:clean,language:"binary",content:"",blob,mimeType:type,editorType,isBinary:true,contentLoaded:true,version:1,localRevision:1,sizeBytes:blob.size,updatedAt:new Date().toISOString(),pendingSync:false,dirty:false,projectLocalId:project?project.id:null,projectId:project?.cloudId||null};
+const f={cloudId:null,ownerUid:S.owner,name:clean,folder:"",path:clean,language:"binary",content:"",blob,mimeType:type,editorType,isBinary:true,contentLoaded:true,version:1,localRevision:1,sizeBytes:blob.size,updatedAt:new Date().toISOString(),pendingSync:false,dirty:false,projectLocalId:project?project.id:null,projectId:project?.cloudId||null,...extra};
 f.id=await db.workFiles.add(f);S.files.unshift(f);S.file=f;renderFiles();await mount();return f;
 }
 async function importFiles(a){for(const f of a){if(f.size>10e6){toast(f.name+" dépasse 10 Mo.");continue;}if(textFile(f)){try{const c=await f.text();if(bytes(c)>LIMIT){toast(f.name+" dépasse 700 Ko.");continue;}await createFile(f.name,c);}catch(e){toast(e.message);}}else{try{await createBinaryFile(f.name,f.slice(0,f.size,f.type),f.type||"application/octet-stream");toast(f.name+" importé dans l’espace local.");}catch(e){toast(e.message);}}}renderFiles();}
