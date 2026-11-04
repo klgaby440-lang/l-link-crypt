@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
 import io
 import ipaddress
 import json
@@ -1756,21 +1757,43 @@ async def _run_agent(
                         result = {"ok": False, "error": f"L'outil {name} a échoué. {str(exc)[:400]}"}
                         status = "failed"
                     detail = "Action exécutée."
-                    if result.get("filename"):
-                        detail = f"{result['filename']} · {result.get('size_bytes', 0)} octets · vérifié={bool(result.get('verified'))}"
-                    elif result.get("results") is not None:
-                        detail = f"{len(result.get('results') or [])} résultat(s) retourné(s)."
-                    elif result.get("error"):
+                    if result.get("error"):
                         detail = str(result["error"])
-                    elif result.get("verified") is False and result.get("repair_guidance"):
-                        detail = "Vérification échouée : " + " ; ".join(result["repair_guidance"][:3])
                     elif result.get("precheck_passed") is False and result.get("repair_guidance"):
                         detail = "Contrôle préalable échoué : " + " ; ".join(result["repair_guidance"][:3])
+                    elif result.get("verified") is False and result.get("repair_guidance"):
+                        detail = "Vérification échouée : " + " ; ".join(result["repair_guidance"][:3])
+                    elif result.get("filename"):
+                        detail = f"{result['filename']} · {result.get('size_bytes', 0)} octets"
+                    elif result.get("results") is not None:
+                        detail = f"{len(result.get('results') or [])} résultat(s) retourné(s)."
                     elif name == "project_run":
                         detail = "Commande terminée (code " + str(result.get("exit_code", "inconnu")) + ")."
                     event = _event(label, status, detail, name)
                     state.events.append(event)
                     await emit({"type": "tool_result", **event, "result": {k: v for k, v in result.items() if k not in {"data", "base64"}}})
+
+                    # Keep the user's editor synchronized while a structured DOCX is
+                    # being written. The snapshot is intentionally a separate SSE
+                    # event so its content never becomes extra model/tool context.
+                    if name in {"document_begin", "document_add_blocks"} and status == "done":
+                        document_id = str(result.get("document_id") or "")
+                        draft = state.drafts.get(document_id)
+                        if draft:
+                            await emit({
+                                "type": "document_progress",
+                                "document": {
+                                    "document_id": document_id,
+                                    "filename": str(draft.get("filename") or "document.docx"),
+                                    "title": str(draft.get("title") or ""),
+                                    "subtitle": str(draft.get("subtitle") or ""),
+                                    "author": str(draft.get("author") or ""),
+                                    "institution": str(draft.get("institution") or ""),
+                                    "blocks": copy.deepcopy(draft.get("blocks") or []),
+                                    "revision_count": int(draft.get("revision_count") or 0),
+                                    "quality": copy.deepcopy(draft.get("quality") or {}),
+                                },
+                            })
 
                 result_for_model = _json_safe(result)
                 if model.provider == "gemini":
