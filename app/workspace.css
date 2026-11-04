@@ -332,7 +332,7 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
 .work-ppt-preview small{position:absolute;right:5%;bottom:4%;color:var(--ppt-accent);font-size:10px;font-weight:850}
 .work-ppt-fields{display:grid;grid-template-columns:1fr 1.4fr;gap:9px}
 .work-ppt-fields label{display:flex;flex-direction:column;gap:5px;font-size:9px;font-weight:800;color:var(--work-muted)}
-.work-ppt-fields input,.work-ppt-fields textarea{box-sizing:border-box;width:100%;border:1px solid var(--work-line);border-radius:8px;padding:8px;background:var(--work-bg);color:var(--work-text);font:11px/1.45 inherit;outline:none}
+.work-ppt-fields input,.work-ppt-fields textarea{box-sizing:border-box;width:100%;border:1px solid var(--work-line);border-radius:8px;padding:8px;background:var(--work-bg);color:var(--work-text);font:11px/1.45 system-ui,sans-serif;outline:none}
 .work-ppt-fields textarea{resize:vertical;min-height:90px}
 .work-ppt-fields input:focus,.work-ppt-fields textarea:focus{border-color:var(--work-accent)}
 .work-binary-view audio{width:min(620px,100%)}
