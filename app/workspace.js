@@ -165,7 +165,11 @@ async function upsertServerDocumentDraft(documentData,ans){
   file.documentData=payload;file.blob=blob;file.mimeType=mime;file.editorType="document";file.isBinary=true;
   file.documentRevision=Number(documentData.revision_count||0);file.agentDraftStatus="in_progress";
   file.sizeBytes=blob.size;file.updatedAt=new Date().toISOString();file.dirty=false;
-  if(S.file?.id===file.id&&S.binaryEditor?.setPayload){S.binaryEditor.setPayload(payload);meta();}
+  if(S.file?.id===file.id){
+   if(S.binaryEditor?.setPayload)S.binaryEditor.setPayload(payload);
+   Object.assign(S.file,file);
+   meta();
+  }
   await db.workFiles.put(file);
  }
  S.files=await filesLocal();renderFiles();
