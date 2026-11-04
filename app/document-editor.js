@@ -119,9 +119,9 @@ async function open(host,blob,options={}){
   html=sanitize(result.value||"<p>Document vide.</p>");
  }
  host.innerHTML='<div class="work-doc-editor"><div class="work-doc-meta">'+
-  '<label>Titre<input data-doc-meta="title" maxlength="300" value="'+esc(name)+'"></label>'+
-  '<label>Sous-titre<input data-doc-meta="subtitle" maxlength="500" placeholder="Facultatif"></label>'+
-  '<label>Auteur<input data-doc-meta="author" maxlength="160" value="Llink Work"></label></div>'+
+  '<label>Titre<input data-doc-meta="title" maxlength="300" value="'+esc(options.documentData?.title||name)+'"></label>'+
+  '<label>Sous-titre<input data-doc-meta="subtitle" maxlength="500" value="'+esc(options.documentData?.subtitle||'')+'" placeholder="Facultatif"></label>'+
+  '<label>Auteur<input data-doc-meta="author" maxlength="160" value="'+esc(options.documentData?.author||'Llink Work')+'"></label></div>'+
   '<div class="work-doc-toolbar">'+
   '<button type="button" data-doc-action="bold"><b>G</b></button><button type="button" data-doc-action="italic"><i>I</i></button><button type="button" data-doc-action="underline"><u>S</u></button>'+
   '<button type="button" data-doc-action="h1">Titre 1</button><button type="button" data-doc-action="h2">Titre 2</button>'+
@@ -151,9 +151,22 @@ async function open(host,blob,options={}){
     author:host.querySelector('[data-doc-meta="author"]').value.trim().slice(0,160),institution:"",
     blocks:blocksFrom(body)};
   },
+  setPayload(payload){
+   if(!payload||!Array.isArray(payload.blocks))throw new Error("Le brouillon Word reçu est invalide.");
+   options.documentData=payload;
+   host.querySelector('[data-doc-meta="title"]').value=String(payload.title||name).slice(0,300);
+   host.querySelector('[data-doc-meta="subtitle"]').value=String(payload.subtitle||"").slice(0,500);
+   host.querySelector('[data-doc-meta="author"]').value=String(payload.author||"Llink Work").slice(0,160);
+   body.innerHTML=sanitize(blocksToHtml(payload.blocks));
+  },
   async toBlob(){return docxBlob(this.toPayload());},
   destroy(){host.removeEventListener("input",input);host.removeEventListener("click",click);host.innerHTML="";}
  };
 }
-window.LlinkDocumentEditor={open,createBlank:()=>docxBlob({title:"Nouveau document",blocks:[{type:"paragraph",text:"Commence à rédiger ici…"}]}),version:"1.1.0"};
+window.LlinkDocumentEditor={
+ open,
+ createBlank:()=>docxBlob({title:"Nouveau document",blocks:[{type:"paragraph",text:"Commence à rédiger ici…"}]}),
+ createFromPayload:payload=>docxBlob(payload||{}),
+ version:"1.2.0"
+};
 })();
