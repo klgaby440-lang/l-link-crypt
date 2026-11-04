@@ -194,13 +194,20 @@ async function storeVerifiedDocumentArtifact(filename,blob,mime,verification){
  const all=await filesLocal();
  let file=all.find(item=>item.isAgentDraft&&String(item.name).toLowerCase()===String(filename).toLowerCase());
  if(file){
+  if(S.file?.id===file.id&&S.file.dirty){
+   return await createBinaryFile(uniqueBinaryName(filename),blob,mime||blob.type,{agentDraftStatus:"verified",verification:verification||{passed:true}});
+  }
   const version=Math.max(1,Number(file.localRevision||1));
   if(file.blob instanceof Blob)await db.workFileVersions.add({fileId:file.id,version,blob:file.blob,mimeType:file.mimeType,createdAt:new Date().toISOString()});
   file.blob=blob;file.mimeType=mime||blob.type||file.mimeType;file.sizeBytes=blob.size;
   file.localRevision=version+1;file.updatedAt=new Date().toISOString();file.isAgentDraft=false;
   file.agentDraftStatus="verified";file.verification=verification||{passed:true};file.pendingSync=false;file.dirty=false;
   await db.workFiles.put(file);
-  if(S.file?.id===file.id&&S.binaryEditor?.setPayload&&file.documentData){S.binaryEditor.setPayload(file.documentData);meta();}
+  if(S.file?.id===file.id){
+   Object.assign(S.file,file);
+   if(S.binaryEditor?.setPayload&&file.documentData)S.binaryEditor.setPayload(file.documentData);
+   meta();
+  }
   S.files=await filesLocal();renderFiles();return file;
  }
  return await createBinaryFile(uniqueBinaryName(filename),blob,mime||blob.type);
