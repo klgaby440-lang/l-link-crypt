@@ -231,7 +231,12 @@
     }
 
     return {
-      async toBlob() {
+      async toBlob(options = {}) {
+        const extension = String(options.filename || "").split(".").pop().toLowerCase();
+        if (extension === "csv" || extension === "tsv") {
+          const output = XLSX.utils.sheet_to_csv(selectedSheet(), { FS: extension === "tsv" ? "\t" : "," });
+          return new Blob(["\uFEFF", output], { type: extension === "tsv" ? "text/tab-separated-values;charset=utf-8" : "text/csv;charset=utf-8" });
+        }
         workbook.Workbook = workbook.Workbook || {};
         workbook.Workbook.CalcPr = { fullCalcOnLoad: true, forceFullCalc: true };
         const output = XLSX.write(workbook, { bookType: "xlsx", type: "array", compression: true, cellStyles: true });
@@ -248,6 +253,18 @@
     };
   }
 
+  async function createBlank() {
+    const XLSX = await loadSheetJS();
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ["Colonne A", "Colonne B", "Colonne C"],
+      ["", "", ""],
+      ["", "", ""]
+    ]), "Feuil1");
+    const output = XLSX.write(workbook, { bookType: "xlsx", type: "array", compression: true });
+    return new Blob([output], { type: MIME });
+  }
+
   async function open(host, blob, options = {}) {
     if (!(blob instanceof Blob)) throw new Error("Le contenu du classeur Excel est indisponible.");
     const XLSX = await loadSheetJS();
@@ -259,5 +276,5 @@
     return workbookController(host, workbook, XLSX, options.onChange);
   }
 
-  window.LlinkSpreadsheetEditor = { open, version: "0.20.3" };
+  window.LlinkSpreadsheetEditor = { open, createBlank, version: "0.20.3" };
 })();
