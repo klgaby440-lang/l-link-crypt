@@ -300,3 +300,50 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
 .work-manager-row>button:not(.work-manager-select){border:1px solid var(--work-line);border-radius:7px;padding:7px 9px;color:var(--work-muted)}
 .work-manager-empty{padding:18px;text-align:center;color:var(--work-muted);font-size:12px}
 @media(max-width:540px){.work-top-actions [data-act="manage-projects"] span{display:none}}
+
+
+/* Local Work file creation dialog */
+.work-new-file-kicker{font-size:9px;font-weight:850;letter-spacing:.12em;color:var(--work-accent);margin-bottom:8px}
+.work-new-file-dialog{width:min(520px,100%)}
+.work-new-file-dialog>label{display:block;margin:12px 0 5px;color:var(--work-muted);font-size:10px;font-weight:800}
+.work-new-file-dialog select{width:100%;appearance:auto}
+.work-new-file-hint{margin-top:10px;padding:10px;border:1px solid var(--work-line);border-radius:9px;background:var(--work-panel-soft);color:var(--work-muted);font-size:10px;line-height:1.5}
+.work-new-file-dialog .work-dialog-actions{margin-top:16px}
+
+/* PowerPoint editor, all data remains in the local workspace. */
+.work-ppt-editor{display:grid;grid-template-columns:190px minmax(0,1fr);gap:0;width:100%;height:100%;min-height:0;background:var(--work-panel);color:var(--work-text)}
+.work-ppt-sidebar{display:flex;flex-direction:column;gap:8px;min-height:0;padding:10px;border-right:1px solid var(--work-line);background:var(--work-panel-soft)}
+.work-ppt-slide-list{display:flex;flex:1;min-height:0;flex-direction:column;gap:7px;overflow:auto}
+.work-ppt-slide{display:flex;flex-direction:column;gap:4px;min-height:82px;padding:9px;border:1px solid var(--work-line);border-radius:9px;background:var(--work-panel);text-align:left;color:var(--work-text);cursor:pointer}
+.work-ppt-slide.active{border-color:var(--work-accent);box-shadow:0 0 0 1px var(--work-accent)}
+.work-ppt-slide small{font-size:8px;color:var(--work-accent);font-weight:850}
+.work-ppt-slide b{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-ppt-slide span{font-size:9px;color:var(--work-muted);line-height:1.35;overflow:hidden;max-height:27px}
+.work-ppt-add{width:100%;min-height:32px}
+.work-ppt-canvas{display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0;padding:10px;overflow:auto}
+.work-ppt-toolbar{display:flex;align-items:center;gap:9px;min-height:32px}
+.work-ppt-toolbar label{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--work-muted);font-weight:800}
+.work-ppt-toolbar select{height:28px;padding:0 8px;border:1px solid var(--work-line);border-radius:7px;background:var(--work-panel);color:var(--work-text);font-size:10px}
+.work-ppt-toolbar span{margin-left:auto;color:var(--work-muted);font-size:9px}
+.work-ppt-stage{display:grid;place-items:center;width:100%;max-width:900px;aspect-ratio:16/9;max-height:52vh;margin:0 auto;border:1px solid var(--work-line);border-radius:10px;background:var(--ppt-bg);overflow:hidden}
+.work-ppt-preview{position:relative;display:flex;flex-direction:column;justify-content:center;width:100%;height:100%;padding:7% 8%;color:var(--ppt-text)}
+.work-ppt-preview h1{max-height:30%;overflow:hidden;margin:0 0 5%;color:var(--ppt-title);font-size:clamp(14px,2.1vw,30px);font-weight:850;line-height:1.16;overflow-wrap:anywhere}
+.work-ppt-preview p{max-height:55%;overflow:hidden;margin:0;color:var(--ppt-text);font-size:clamp(9px,1.2vw,17px);line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.work-ppt-preview small{position:absolute;right:5%;bottom:4%;color:var(--ppt-accent);font-size:10px;font-weight:850}
+.work-ppt-fields{display:grid;grid-template-columns:1fr 1.4fr;gap:9px}
+.work-ppt-fields label{display:flex;flex-direction:column;gap:5px;font-size:9px;font-weight:800;color:var(--work-muted)}
+.work-ppt-fields input,.work-ppt-fields textarea{box-sizing:border-box;width:100%;border:1px solid var(--work-line);border-radius:8px;padding:8px;background:var(--work-bg);color:var(--work-text);font:11px/1.45 inherit;outline:none}
+.work-ppt-fields textarea{resize:vertical;min-height:90px}
+.work-ppt-fields input:focus,.work-ppt-fields textarea:focus{border-color:var(--work-accent)}
+.work-binary-view audio{width:min(620px,100%)}
+.work-binary-view video{max-width:100%;max-height:100%;object-fit:contain}
+@media(max-width:620px){
+ .work-ppt-editor{grid-template-columns:1fr;grid-template-rows:112px minmax(0,1fr)}
+ .work-ppt-sidebar{padding:6px;border-right:0;border-bottom:1px solid var(--work-line)}
+ .work-ppt-slide-list{flex-direction:row;overflow-x:auto;overflow-y:hidden}
+ .work-ppt-slide{flex:0 0 132px;min-height:65px}
+ .work-ppt-add{min-height:27px}
+ .work-ppt-stage{max-height:36vh}
+ .work-ppt-fields{grid-template-columns:1fr}
+ .work-ppt-fields textarea{min-height:70px}
+}
