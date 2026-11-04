@@ -545,3 +545,168 @@ test("Work crée et exporte localement une présentation PowerPoint", async ({ p
     pendingSync: false
   });
 });
+
+
+test("Work affiche le brouillon Word du serveur pendant la rédaction et conserve les diagnostics", async ({ page }) => {
+  await openWork(page);
+  const firstBlocks = [
+    { type: "heading", level: 1, text: "Introduction aux astéroïdes" },
+    { type: "paragraph", text: "Les astéroïdes sont de petits corps rocheux qui orbitent autour du Soleil." }
+  ];
+  const finalBlocks = [
+    ...firstBlocks,
+    { type: "heading", level: 1, text: "Origine et formation" },
+    { type: "paragraph", text: "Ils sont principalement les vestiges de la formation du Système solaire." },
+    { type: "heading", level: 1, text: "Classification" },
+    { type: "paragraph", text: "On distingue notamment les astéroïdes carbonés, silicatés et métalliques." }
+  ];
+  const reasoning = {
+    summary: "Le brouillon est visible, mais le contrôle des sources doit encore être corrigé.",
+    steps: [
+      { label: "Initialiser le document", status: "done" },
+      { label: "Ajouter les sections", status: "done" },
+      { label: "Corriger les contrôles", status: "blocked" }
+    ],
+    decisions: [],
+    acceptance_criteria: ["Les sources doivent être vérifiables."],
+    limitations: ["Le DOCX n'a pas passé la vérification indépendante."],
+    events: [],
+    status: "completed_with_limitations",
+    tool_calls: 4
+  };
+  await mockAgentEvents(page, [
+    plan("Rédaction progressive d'un document Word sur les astéroïdes.", [
+      "Initialiser le document",
+      "Ajouter les sections",
+      "Vérifier le document"
+    ]),
+    toolEvent("tool_start", "document_begin", "Initialisation du document", "in_progress"),
+    toolEvent("tool_result", "document_begin", "Initialisation du document", "done", "Brouillon initialisé"),
+    {
+      type: "document_progress",
+      document: {
+        document_id: "asteroid-draft-001",
+        filename: "les_asteroides.docx",
+        title: "Les astéroïdes",
+        subtitle: "Origine, classification et exploration",
+        author: "Llink Work",
+        institution: "",
+        blocks: [],
+        revision_count: 0,
+        quality: {}
+      }
+    },
+    toolEvent("tool_start", "document_add_blocks", "Rédaction d'une section", "in_progress"),
+    {
+      type: "document_progress",
+      document: {
+        document_id: "asteroid-draft-001",
+        filename: "les_asteroides.docx",
+        title: "Les astéroïdes",
+        subtitle: "Origine, classification et exploration",
+        author: "Llink Work",
+        institution: "",
+        blocks: firstBlocks,
+        revision_count: 1,
+        quality: {}
+      }
+    },
+    toolEvent("tool_result", "document_add_blocks", "Rédaction d'une section", "done", "2 blocs ajoutés"),
+    {
+      type: "document_progress",
+      document: {
+        document_id: "asteroid-draft-001",
+        filename: "les_asteroides.docx",
+        title: "Les astéroïdes",
+        subtitle: "Origine, classification et exploration",
+        author: "Llink Work",
+        institution: "",
+        blocks: finalBlocks,
+        revision_count: 2,
+        quality: {}
+      }
+    },
+    toolEvent("tool_start", "document_finalize", "Génération et vérification du fichier", "in_progress"),
+    {
+      type: "tool_result",
+      tool: "document_finalize",
+      label: "Génération et vérification du fichier",
+      status: "failed",
+      detail: "Contrôle préalable échoué : ajouter des sources vérifiables",
+      result: {
+        precheck_passed: false,
+        verification: {
+          passed: false,
+          unique_source_urls: 0,
+          minimum_source_urls: 3,
+          minimum_source_urls_met: false,
+          missing_required_headings: ["Bibliographie"]
+        },
+        repair_guidance: [
+          "Ajouter au moins trois URL de sources distinctes et vérifiables.",
+          "Ajouter une section Bibliographie."
+        ]
+      }
+    },
+    {
+      type: "tool_result",
+      tool: "artifact_verify",
+      label: "Vérification indépendante du fichier",
+      status: "failed",
+      detail: "Le brouillon doit être corrigé avant sa livraison.",
+      result: {
+        verified: false,
+        verification: {
+          passed: false,
+          unique_source_urls: 0,
+          minimum_source_urls: 3,
+          minimum_source_urls_met: false,
+          missing_required_headings: ["Bibliographie"]
+        },
+        repair_guidance: [
+          "Ajouter au moins trois URL de sources distinctes et vérifiables.",
+          "Ajouter une section Bibliographie."
+        ]
+      }
+    },
+    finalEvent(
+      "Le brouillon reste disponible dans Work, mais je ne le présente pas comme un document final tant que la vérification échoue.",
+      null,
+      reasoning
+    )
+  ]);
+
+  await page.locator("#work-prompt").fill("Rédige un document Word complet sur les astéroïdes.");
+  await page.locator("#work-send").click();
+
+  await expect(page.locator("#work-file-name")).toHaveText("les_asteroides.docx");
+  await expect(page.locator(".work-doc-content")).toContainText("Introduction aux astéroïdes");
+  await expect(page.locator(".work-doc-content")).toContainText("Classification");
+  await expect(page.locator(".work-document-draft")).toContainText("6 blocs");
+  await expect(page.locator(".work-document-draft")).toContainText("Contrôle à corriger");
+  await expect(page.locator(".work-document-draft-warning")).toContainText("sources distinctes et vérifiables");
+  await expect(page.locator(".work-document-draft-warning")).toContainText("Bibliographie");
+  
+  const saved = await page.evaluate(async () => {
+    const files = await db.workFiles.where("ownerUid").equals("anonymous").toArray();
+    const file = files.find(item => item.agentDraftId === "asteroid-draft-001");
+    return file ? {
+      name: file.name,
+      isAgentDraft: file.isAgentDraft,
+      editorType: file.editorType,
+      revision: file.documentRevision,
+      blocks: file.documentData.blocks.length,
+      includesBibliography: file.documentData.blocks.some(block => String(block.text || "").includes("Bibliographie")),
+      cloudId: file.cloudId
+    } : null;
+  });
+  expect(saved).toEqual({
+    name: "les_asteroides.docx",
+    isAgentDraft: true,
+    editorType: "document",
+    revision: 2,
+    blocks: 6,
+    includesBibliography: false,
+    cloudId: null
+  });
+});
