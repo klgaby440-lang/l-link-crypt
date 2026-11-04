@@ -134,6 +134,13 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
         assert document.tables[0].cell(1, 0).text == "Création"
         assert final["reasoning"]["tool_calls"] == 5
         assert any(event["type"] == "tool_result" and event["status"] == "done" for event in events)
+        progress = [event for event in events if event["type"] == "document_progress"]
+        assert len(progress) == 2
+        assert progress[0]["document"]["blocks"] == []
+        assert progress[0]["document"]["filename"] == "rapport-agent-test.docx"
+        assert progress[1]["document"]["revision_count"] == 1
+        assert progress[1]["document"]["blocks"][0]["text"] == "Introduction"
+        assert progress[1]["document"]["blocks"][1]["text"] == "Un agent doit vérifier ses résultats."
 
 
     asyncio.run(run_test())
