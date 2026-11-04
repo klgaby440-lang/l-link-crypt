@@ -188,7 +188,7 @@ if(!(f.blob instanceof Blob)){host.innerHTML='<div class="work-empty-editor"><b>
 const onChange=()=>{f.dirty=true;meta();};
 try{
  if(f.editorType==="spreadsheet"){if(!window.LlinkSpreadsheetEditor)throw new Error("L’éditeur Excel n’est pas chargé.");S.binaryEditor=await window.LlinkSpreadsheetEditor.open(host,f.blob,{onChange});}
- else if(f.editorType==="document"){if(!window.LlinkDocumentEditor)throw new Error("L’éditeur Word n’est pas chargé.");S.binaryEditor=await window.LlinkDocumentEditor.open(host,f.blob,{filename:f.name,onChange});}
+ else if(f.editorType==="document"){if(!window.LlinkDocumentEditor)throw new Error("L’éditeur Word n’est pas chargé.");S.binaryEditor=await window.LlinkDocumentEditor.open(host,f.blob,{filename:f.name,documentData:f.documentData,onChange});}
  else if(f.editorType==="image"){if(!window.LlinkBinaryEditors?.openImage)throw new Error("L’éditeur d’image n’est pas chargé.");S.binaryEditor=await window.LlinkBinaryEditors.openImage(host,f.blob,{onChange});}
  else if(f.editorType==="pdf"){if(!window.LlinkBinaryEditors?.openPdf)throw new Error("L’éditeur PDF n’est pas chargé.");S.binaryEditor=window.LlinkBinaryEditors.openPdf(host,f.blob,{onChange});}
  else if(f.editorType==="presentation"){
@@ -213,10 +213,11 @@ const f=S.file;if(!f)return toast("Ouvre un fichier avant de l’enregistrer.");
 if(f.isBinary||f.blob instanceof Blob){
  if(!S.binaryEditor||!["spreadsheet","document","image","pdf","presentation"].includes(f.editorType))return toast("Ce format ne possède pas encore d’éditeur modifiable dans Work.");
  if(!f.dirty)return toast("Aucune modification à enregistrer.");
- const blob=await S.binaryEditor.toBlob();
+ const blob=await S.binaryEditor.toBlob({filename:f.name});
  if(!(blob instanceof Blob)||!blob.size)throw new Error("L’export du fichier a échoué.");
  if(blob.size>MAX_BINARY_BYTES)return toast("Le fichier dépasse la limite locale de 50 Mo.");
  if(f.editorType==="presentation"&&typeof S.binaryEditor.toData==="function")f.presentationData=S.binaryEditor.toData();
+ if(f.editorType==="document"&&typeof S.binaryEditor.toPayload==="function")f.documentData=S.binaryEditor.toPayload();
  const now=new Date().toISOString(),version=Math.max(1,Number(f.localRevision||1));
  await db.workFileVersions.add({fileId:f.id,version,blob:f.blob,mimeType:f.mimeType,createdAt:now});
  f.localRevision=version+1;f.blob=blob;
