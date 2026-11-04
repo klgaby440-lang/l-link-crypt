@@ -433,3 +433,32 @@ test("Work affiche les vraies sources retournées par la recherche native", asyn
   await expect(page.locator(".work-tool-results")).toContainText("Documentation officielle");
   await expect(page.locator(".work-result-source").first()).toHaveAttribute("href", "https://example.org/docs");
 });
+
+
+test("Work permet de renommer et rouvrir une conversation", async ({ page }) => {
+  await openWork(page);
+  await page.locator('[data-act="conversations"]').click();
+  await expect(page.locator(".work-manager-dialog")).toContainText("Espace Work");
+  await page.locator('.work-manager-row [data-act="rename-conversation"]').first().click();
+  await page.locator("#work-dialog-value").fill("Projet de test Work");
+  await page.locator("#work-input-dialog button[type=submit]").click();
+  await expect(page.locator(".work-manager-dialog")).toContainText("Projet de test Work");
+  await page.locator('.work-manager-row [data-act="switch-conversation"]').first().click();
+  await expect(page.locator("#work-messages")).toContainText("Sur quoi travaillons-nous");
+});
+
+test("Work permet de créer, sélectionner et supprimer un projet sans supprimer ses fichiers", async ({ page }) => {
+  await openWork(page);
+  await page.locator('[data-act="manage-projects"]').click();
+  await expect(page.locator(".work-manager-dialog")).toContainText("Aucun projet");
+  await page.locator('[data-act="project-from-manager"]').click();
+  await page.locator("#work-dialog-value").fill("Projet CI Work");
+  await page.locator("#work-input-dialog button[type=submit]").click();
+  await expect(page.locator(".work-manager-dialog")).toContainText("Projet CI Work");
+  await page.locator('.work-manager-row [data-act="select-project-manager"]').click();
+  await expect(page.locator("#work-project")).toHaveValue(/\d+/);
+  await expect(page.locator("#work-project option:checked")).toHaveText("Projet CI Work");
+  page.on("dialog", dialog => dialog.accept());
+  await page.locator('[data-act="delete-project"]').click();
+  await expect(page.locator(".work-manager-dialog")).toContainText("Aucun projet");
+});

@@ -292,3 +292,11 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
 .work-artifact-row b{font-size:11px;overflow-wrap:anywhere}.work-artifact-row small{font-size:9px;color:var(--work-muted)}
 .work-artifact-row button{border:1px solid var(--work-line);border-radius:7px;padding:6px 8px;font-size:10px;color:var(--work-text);white-space:nowrap}
 @media(max-width:540px){.work-artifact-row{flex-wrap:wrap}.work-artifact-row>span{flex-basis:100%}.work-artifact-row button{flex:1}}
+
+.work-manager-dialog{max-height:82vh;overflow:auto}.work-manager-list{display:flex;flex-direction:column;gap:7px;max-height:52vh;overflow:auto;margin:12px 0}
+.work-manager-row{display:flex;align-items:center;gap:6px;border:1px solid var(--work-line);border-radius:9px;padding:7px}
+.work-manager-select{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px;text-align:left;color:var(--work-text);padding:4px}
+.work-manager-select b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.work-manager-select small{font-size:10px;color:var(--work-muted)}
+.work-manager-row>button:not(.work-manager-select){border:1px solid var(--work-line);border-radius:7px;padding:7px 9px;color:var(--work-muted)}
+.work-manager-empty{padding:18px;text-align:center;color:var(--work-muted);font-size:12px}
+@media(max-width:540px){.work-top-actions [data-act="manage-projects"] span{display:none}}
