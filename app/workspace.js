@@ -588,6 +588,53 @@ f.id=await db.workFiles.add(f);S.files.unshift(f);S.file=f;renderFiles();await m
 f.pendingSync=false;await db.workFiles.put(f);status("pending","Stockage local");
 return f;
 }
+function showNewFileDialog(){
+ const root=$("work-dialog-root");
+ root.innerHTML='<div class="work-dialog-backdrop" data-dialog-backdrop><div class="work-dialog work-new-file-dialog"><div class="work-new-file-kicker">LLINK WORK · ÉDITEURS LOCAUX</div><h3>Créer un fichier</h3><p>Choisis un format. Le fichier sera créé et enregistré sur cet appareil, sans connexion au serveur.</p><label>Type de fichier</label><select id="work-new-type" class="work-dialog-input"><option value="code">Code / développement</option><option value="markdown" selected>Markdown</option><option value="text">Texte brut</option><option value="html">Page HTML</option><option value="css">Feuille CSS</option><option value="javascript">JavaScript</option><option value="json">Données JSON</option><option value="yaml">Configuration YAML</option><option value="sql">SQL</option><option value="document">Document Word (.docx)</option><option value="spreadsheet">Classeur Excel (.xlsx)</option><option value="csv">Tableau CSV</option><option value="presentation">Présentation PowerPoint (.pptx)</option><option value="pdf">Document PDF (.pdf)</option><option value="image">Image PNG</option></select><label>Nom du fichier</label><input id="work-new-name" class="work-dialog-input" maxlength="180" value="README.md" placeholder="Nom du fichier"><div class="work-new-file-hint">Tu pourras modifier le contenu, enregistrer des versions et exporter le fichier depuis Work.</div><div class="work-dialog-actions"><button data-act="cancel-new-file">Annuler</button><button class="primary" data-act="create-work-file">Créer le fichier</button></div></div></div>';
+ const select=root.querySelector("#work-new-type"),input=root.querySelector("#work-new-name");
+ const defaults={code:"main.py",markdown:"README.md",text:"notes.txt",html:"index.html",css:"styles.css",javascript:"app.js",json:"data.json",yaml:"config.yaml",sql:"schema.sql",document:"document.docx",spreadsheet:"classeur.xlsx",csv:"tableau.csv",presentation:"presentation.pptx",pdf:"document.pdf",image:"image.png"};
+ select.addEventListener("change",()=>{input.value=defaults[select.value]||"nouveau-fichier";});
+ input.focus();input.select();
+}
+async function createBlankFile(kind,rawName){
+ const defaults={code:"main.py",markdown:"README.md",text:"notes.txt",html:"index.html",css:"styles.css",javascript:"app.js",json:"data.json",yaml:"config.yaml",sql:"schema.sql",document:"document.docx",spreadsheet:"classeur.xlsx",csv:"tableau.csv",presentation:"presentation.pptx",pdf:"document.pdf",image:"image.png"};
+ const suffix={code:".py",markdown:".md",text:".txt",html:".html",css:".css",javascript:".js",json:".json",yaml:".yaml",sql:".sql",document:".docx",spreadsheet:".xlsx",csv:".csv",presentation:".pptx",pdf:".pdf",image:".png"};
+ let name=String(rawName||defaults[kind]||"nouveau-fichier").trim().replace(/\\/g,"/");
+ if(!name)throw new Error("Indique un nom de fichier.");
+ if(!/\.[a-z0-9]{1,12}$/i.test(name))name+=suffix[kind]||".txt";
+ if(kind==="document"&&!name.toLowerCase().endsWith(".docx"))name+=".docx";
+ if(kind==="spreadsheet"&&!name.toLowerCase().endsWith(".xlsx"))name+=".xlsx";
+ if(kind==="presentation"&&!name.toLowerCase().endsWith(".pptx"))name+=".pptx";
+ if(kind==="pdf"&&!name.toLowerCase().endsWith(".pdf"))name+=".pdf";
+ if(kind==="image"&&!name.toLowerCase().endsWith(".png"))name+=".png";
+ const templates={
+  markdown:"# Nouveau document\n\nCommence à rédiger ici.\n",
+  text:"Écris tes notes ici.\n",
+  html:"<!doctype html>\n<html lang=\"fr\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Ma page</title>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <main>\n    <h1>Bonjour !</h1>\n    <p>Mon premier projet avec Llink Work.</p>\n  </main>\n  <script src=\"app.js\"></script>\n</body>\n</html>\n",
+  css:"/* Feuille de styles */\n:root {\n  font-family: system-ui, sans-serif;\n  color-scheme: light dark;\n}\n",
+  javascript:"// Point d'entrée JavaScript\nfunction main() {\n  console.log(\"Bonjour depuis Llink Work !\");\n}\n\nmain();\n",
+  json:"{\n  \"name\": \"mon-projet\",\n  \"version\": \"1.0.0\",\n  \"description\": \"\"\n}\n",
+  yaml:"name: mon-projet\nversion: 1.0.0\ndescription: \"\"\n",
+  sql:"-- Schéma de base de données\nCREATE TABLE exemple (\n  id INTEGER PRIMARY KEY,\n  nom TEXT NOT NULL\n);\n"
+ };
+ if(kind==="code"){
+  const language=ext(name);
+  const code=language==="js"||language==="ts"?"// Point d'entrée JavaScript\nfunction main() {\n  console.log(\"Bonjour depuis Llink Work !\");\n}\n\nmain();\n":language==="html"?"<!doctype html>\n<html lang=\"fr\"><head><meta charset=\"utf-8\"><title>Mon projet</title></head><body><h1>Bonjour !</h1></body></html>\n":language==="css"?"/* Styles du projet */\nbody { font-family: system-ui, sans-serif; }\n":language==="json"?"{\n  \"name\": \"mon-projet\"\n}\n":language==="sql"?"-- Commence ici\n":language==="py"||language==="python"?"def main():\n    print(\"Bonjour depuis Llink Work !\")\n\nif __name__ == \"__main__\":\n    main()\n":"// Commence à coder ici\n";
+  return createFile(name,code);
+ }
+ if(templates[kind]!==undefined)return createFile(name,templates[kind]);
+ let blob,mime,extra={};
+ if(kind==="document"){if(!window.LlinkDocumentEditor?.createBlank)throw new Error("L’éditeur Word local n’est pas chargé.");blob=window.LlinkDocumentEditor.createBlank();mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document";extra.documentData={filename:name,title:"Nouveau document",subtitle:"",author:"Llink Work",blocks:[{type:"paragraph",text:"Commence à rédiger ici…"}]};}
+ else if(kind==="spreadsheet"||kind==="csv"){if(kind==="spreadsheet"){if(!window.LlinkSpreadsheetEditor?.createBlank)throw new Error("L’éditeur Excel n’est pas chargé.");blob=await window.LlinkSpreadsheetEditor.createBlank();mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";}else{blob=new Blob(["Nom,Valeur\r\n,\r\n"],{type:"text/csv;charset=utf-8"});mime="text/csv";}}
+ else if(kind==="presentation"){if(!window.LlinkPresentationEditor?.createBlank)throw new Error("L’éditeur PowerPoint local n’est pas chargé.");extra.presentationData=window.LlinkPresentationEditor.createBlank();blob=window.LlinkPresentationEditor.toBlob(extra.presentationData);mime="application/vnd.openxmlformats-officedocument.presentationml.presentation";}
+ else if(kind==="pdf"){if(!window.LlinkBinaryEditors?.createBlankPdf)throw new Error("Le moteur PDF local n’est pas chargé.");blob=window.LlinkBinaryEditors.createBlankPdf();mime="application/pdf";}
+ else if(kind==="image"){const canvas=document.createElement("canvas");canvas.width=1280;canvas.height=720;const ctx=canvas.getContext("2d");ctx.fillStyle="#ffffff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle="#334155";ctx.font="32px sans-serif";ctx.fillText("Image créée avec Llink Work",48,80);blob=await new Promise((resolve,reject)=>canvas.toBlob(v=>v?resolve(v):reject(new Error("Impossible de créer l’image.")),"image/png"));mime="image/png";}
+ else throw new Error("Ce type de fichier n’est pas encore pris en charge.");
+ const file=await createBinaryFile(name,blob,mime,extra);
+ if(kind==="document"&&file.editorType==="document"){await mount();}
+ toast("Fichier créé dans le stockage local.");
+ return file;
+}
 async function createBinaryFile(name,blob,mimeType,extra={}){
 const clean=String(name||"").replace(/\\/g,"/").split("/").pop().trim();if(!clean)throw new Error("Nom de fichier invalide.");
 if(S.files.some(f=>String(f.path||f.name).toLowerCase()===clean.toLowerCase()))throw new Error("Un fichier de ce nom existe déjà.");
