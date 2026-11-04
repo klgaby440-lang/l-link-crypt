@@ -191,9 +191,15 @@ try{
  else if(f.editorType==="document"){if(!window.LlinkDocumentEditor)throw new Error("L’éditeur Word n’est pas chargé.");S.binaryEditor=await window.LlinkDocumentEditor.open(host,f.blob,{filename:f.name,onChange});}
  else if(f.editorType==="image"){if(!window.LlinkBinaryEditors?.openImage)throw new Error("L’éditeur d’image n’est pas chargé.");S.binaryEditor=await window.LlinkBinaryEditors.openImage(host,f.blob,{onChange});}
  else if(f.editorType==="pdf"){if(!window.LlinkBinaryEditors?.openPdf)throw new Error("L’éditeur PDF n’est pas chargé.");S.binaryEditor=window.LlinkBinaryEditors.openPdf(host,f.blob,{onChange});}
+ else if(f.editorType==="presentation"){
+  if(f.presentationData&&window.LlinkPresentationEditor?.open)S.binaryEditor=window.LlinkPresentationEditor.open(host,f.blob,{presentationData:f.presentationData,onChange});
+  else{const url=URL.createObjectURL(f.blob);S.previewUrl=url;host.innerHTML='<div class="work-empty-editor"><i data-lucide="file-presentation"></i><b>Présentation PowerPoint importée</b><span>L’édition des présentations créées dans Llink est disponible. L’import et la modification de présentations PowerPoint externes seront ajoutés dans une prochaine étape.</span><button class="work-editor-action primary" data-act="download">Télécharger le fichier</button></div>';}
+ }
  else{const url=URL.createObjectURL(f.blob);S.previewUrl=url;const mime=f.mimeType||f.blob.type||"";
   if(mime.startsWith("image/"))host.innerHTML='<div class="work-binary-view"><img src="'+url+'" alt="'+esc(f.name)+'"></div>';
   else if(mime==="application/pdf")host.innerHTML='<iframe class="work-binary-pdf" sandbox="" title="Aperçu PDF" src="'+url+'"></iframe>';
+  else if(mime.startsWith("audio/"))host.innerHTML='<div class="work-binary-view"><audio controls preload="metadata" src="'+url+'"></audio></div>';
+  else if(mime.startsWith("video/"))host.innerHTML='<div class="work-binary-view"><video controls preload="metadata" src="'+url+'"></video></div>';
   else host.innerHTML='<div class="work-empty-editor"><i data-lucide="file-check"></i><b>'+esc(f.name)+'</b><span>Ce format reste binaire. Tu peux le télécharger ou le joindre à un message pour l’analyser.</span><button class="work-editor-action primary" data-act="download">Télécharger le fichier</button></div>';
  }
  meta();
