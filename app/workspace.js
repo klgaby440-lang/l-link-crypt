@@ -577,7 +577,6 @@ else if(type.startsWith("image/")&&["png","jpg","jpeg","webp"].includes(ext(clea
 const f={cloudId:null,ownerUid:S.owner,name:clean,folder:"",path:clean,language:"binary",content:"",blob,mimeType:type,editorType,isBinary:true,contentLoaded:true,version:1,localRevision:1,sizeBytes:blob.size,updatedAt:new Date().toISOString(),pendingSync:false,dirty:false,projectLocalId:project?project.id:null,projectId:project?.cloudId||null};
 f.id=await db.workFiles.add(f);S.files.unshift(f);S.file=f;renderFiles();await mount();return f;
 }
-async function importFiles(
 async function importFiles(a){for(const f of a){if(f.size>10e6){toast(f.name+" dépasse 10 Mo.");continue;}if(textFile(f)){try{const c=await f.text();if(bytes(c)>LIMIT){toast(f.name+" dépasse 700 Ko.");continue;}await createFile(f.name,c);}catch(e){toast(e.message);}}else{try{await createBinaryFile(f.name,f.slice(0,f.size,f.type),f.type||"application/octet-stream");toast(f.name+" importé dans l’espace local.");}catch(e){toast(e.message);}}}renderFiles();}
 
 async function saveWorkChat(){
