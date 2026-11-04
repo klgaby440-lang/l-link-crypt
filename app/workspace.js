@@ -536,13 +536,14 @@ const binary=atob(artifact.content_base64);
 const bytesArray=new Uint8Array(binary.length);
 for(let i=0;i<binary.length;i++)bytesArray[i]=binary.charCodeAt(i);
 const blob=new Blob([bytesArray],{type:artifact.mime_type||"application/octet-stream"});
-const filename=uniqueBinaryName(artifact.filename||"llink-artifact.bin");
+const filename=String(artifact.filename||"llink-artifact.bin");
 let file;
 if((artifact.mime_type||"").startsWith("text/")||["json","md","markdown","txt","csv","py","js","ts","html","css","xml","yaml","yml","sql"].includes(ext(filename))){
 const textContent=await blob.text();
-if(bytes(textContent)<=LIMIT)file=await createFile(filename,textContent);
-else file=await createBinaryFile(filename,blob,artifact.mime_type);
-}else file=await createBinaryFile(filename,blob,artifact.mime_type);
+if(bytes(textContent)<=LIMIT)file=await createFile(uniqueBinaryName(filename),textContent);
+else file=await createBinaryFile(uniqueBinaryName(filename),blob,artifact.mime_type);
+}else if(ext(filename)==="docx")file=await storeVerifiedDocumentArtifact(filename,blob,artifact.mime_type,artifact.verification);
+else file=await createBinaryFile(uniqueBinaryName(filename),blob,artifact.mime_type);
 if(file){
 downloaded++;
 const verified=artifact.verification?.passed===true||artifact.verified===true||artifact.verified_by_agent===true;
@@ -552,6 +553,11 @@ if(downloaded===1)downloadWorkArtifact(blob,filename);
 }
 }
 if(artifacts.length&&!downloaded)ans.reasoning.limitations=[...(ans.reasoning.limitations||[]),"Un fichier généré n'a pas pu être ajouté à l'espace local (nom déjà utilisé ou quota local)."];
+if(ans.documentDraft&&ans.documentDraft.status!=="verified"&&!artifacts.some(item=>ext(item.filename||"")==="docx")){
+ ans.documentDraft.status="needs_revision";
+ if(!ans.documentDraft.repairGuidance.length)ans.documentDraft.repairGuidance=["Le brouillon reste disponible dans Work, mais aucun DOCX validé n’a été remis. Corrige les contrôles affichés avant de le considérer comme final."];
+ updateDocumentDraftSlot(ans);
+}
 finalReceived=true;
 updateReasoningSlot(ans);updateToolResultsSlot(ans);updateArtifactSlot(ans);
 return;
