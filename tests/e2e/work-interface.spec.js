@@ -1,4 +1,6 @@
 const { test, expect } = require("@playwright/test");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const API = "https://llink-usz9.onrender.com";
 const CORS_HEADERS = {
@@ -340,4 +342,67 @@ test("Work respecte un réglage explicite de réflexion Normal", async ({ page }
   await page.locator("#work-prompt").fill("Réponds brièvement à cette question.");
   await page.locator("#work-send").click();
   await expect(page.locator(".work-message-body").last()).toContainText("réglage Normal");
+});
+
+
+test("Work édite un classeur XLSX, conserve les formules et restaure une version locale", async ({ page }) => {
+  await openWork(page);
+  const sample = fs.readFileSync(path.join(__dirname, "fixtures", "work-sample.xlsx.b64"), "utf8").trim();
+  await page.locator("#work-upload-input").setInputFiles({
+    name: "Budget.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from(sample, "base64")
+  });
+
+  await expect(page.locator(".work-sheet-grid")).toBeVisible();
+  await expect(page.locator('[data-xlsx-cell="A2"]')).toHaveValue("Cahier");
+  await expect(page.locator('[data-xlsx-cell="D2"]')).toHaveValue("=B2*C2");
+  await expect(page.locator('[data-xlsx-sheet] option')).toHaveCount(2);
+
+  await page.locator('[data-xlsx-cell="B2"]').fill("1500");
+  await expect(page.locator("#work-file-status")).toContainText("Classeur modifié");
+
+  await page.locator('[data-xlsx-sheet]').selectOption("Notes");
+  await expect(page.locator('[data-xlsx-cell="A1"]')).toHaveValue("Deuxième feuille");
+  await page.locator('[data-xlsx-sheet]').selectOption("Budget");
+  await expect(page.locator('[data-xlsx-cell="B2"]')).toHaveValue("1500");
+
+  await page.locator('.work-editor-action[data-act="save"]').click();
+  await expect(page.locator("#work-file-status")).toContainText("Classeur Excel — stockage local");
+  await expect(page.locator("#work-version")).toHaveText("Version locale 2");
+
+  const saved = await page.evaluate(async () => {
+    const file = (await db.workFiles.where("ownerUid").equals("anonymous").toArray())
+      .find(item => item.name === "Budget.xlsx");
+    const workbook = window.XLSX.read(await file.blob.arrayBuffer(), {
+      type: "array", cellFormula: true
+    });
+    return {
+      sheetNames: workbook.SheetNames,
+      price: workbook.Sheets.Budget.B2.v,
+      totalFormula: workbook.Sheets.Budget.D2.f,
+      priorVersionCount: await db.workFileVersions.where("fileId").equals(file.id).count()
+    };
+  });
+  expect(saved).toEqual({
+    sheetNames: ["Budget", "Notes"],
+    price: 1500,
+    totalFormula: "B2*C2",
+    priorVersionCount: 1
+  });
+
+  await page.locator('.work-editor-action[data-act="versions"]').click();
+  await expect(page.locator("#work-ver-list")).toContainText("Version 1");
+  await page.locator('#work-ver-list [data-act="restore"][data-version="1"]').click();
+  await expect(page.locator('[data-xlsx-cell="B2"]')).toHaveValue("1000");
+
+  const restored = await page.evaluate(async () => {
+    const file = (await db.workFiles.where("ownerUid").equals("anonymous").toArray())
+      .find(item => item.name === "Budget.xlsx");
+    const workbook = window.XLSX.read(await file.blob.arrayBuffer(), {
+      type: "array", cellFormula: true
+    });
+    return { price: workbook.Sheets.Budget.B2.v, formula: workbook.Sheets.Budget.D2.f };
+  });
+  expect(restored).toEqual({ price: 1000, formula: "B2*C2" });
 });
