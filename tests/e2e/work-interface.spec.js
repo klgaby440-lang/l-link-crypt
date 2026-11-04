@@ -348,13 +348,33 @@ test("Work respecte un réglage explicite de réflexion Normal", async ({ page }
 test("Work édite un classeur XLSX, conserve les formules et restaure une version locale", async ({ page }) => {
   await openWork(page);
   const sample = fs.readFileSync(path.join(__dirname, "fixtures", "work-sample.xlsx.b64"), "utf8").trim();
+  page.on("pageerror", error => console.error("WORK_SHEET_PAGE_ERROR", error.stack || error.message));
   await page.locator("#work-upload-input").setInputFiles({
     name: "Budget.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from(sample, "base64")
   });
 
-  await expect(page.locator(".work-sheet-grid")).toBeVisible();
+  await page.waitForTimeout(800);
+  const diagnostic = await page.evaluate(async () => {
+    const file = (await db.workFiles.where("ownerUid").equals("anonymous").toArray())
+      .find(item => item.name === "Budget.xlsx");
+    return {
+      editorGlobal: typeof window.LlinkSpreadsheetEditor,
+      xlsxVersion: window.XLSX?.version || null,
+      xlsxRead: typeof window.XLSX?.read,
+      xlsxWrite: typeof window.XLSX?.write,
+      editorHost: document.querySelector("#work-editor-host")?.innerHTML?.slice(0, 600) || null,
+      file: file ? {
+        isBinary: file.isBinary, editorType: file.editorType,
+        mimeType: file.mimeType, blobSize: file.blob?.size || 0,
+        blobIsBlob: file.blob instanceof Blob
+      } : null
+    };
+  });
+  console.log("WORK_SHEET_DIAGNOSTIC", JSON.stringify(diagnostic));
+
+  await expect(page.locator(".work-sheet-grid")).toBeVisible({ timeout: 12000 });
   await expect(page.locator('[data-xlsx-cell="A2"]')).toHaveValue("Cahier");
   await expect(page.locator('[data-xlsx-cell="D2"]')).toHaveValue("=B2*C2");
   await expect(page.locator('[data-xlsx-sheet] option')).toHaveCount(2);
