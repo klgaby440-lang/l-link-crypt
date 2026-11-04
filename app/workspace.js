@@ -43,7 +43,7 @@ el.title=S.agentTools.length?"Outils activés réellement par le serveur : "+S.a
 }
 async function loadTools(){S.agentEffort=window.llThink?.agentEffort?window.llThink.agentEffort():"extra";S.tools=Object.assign({web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}try{const agent=await api("/api/work/agent/status");if(agent.protocol==="native_function_calling"){S.agentVersion=String(agent.version||"");S.agentTools=Array.isArray(agent.tools)?agent.tools:[];S.agentStatusError=false;}else{S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}}catch(e){S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}renderToolStatus();}
 async function ensureChat(){if(S.chatId==null)S.chatId=await db.chats.add({title:"Espace Work",time:Date.now(),mode:"work",syncId:crypto.randomUUID().replace(/-/g,""),ownerUid:S.owner});}
-async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null}));renderMessages();}
+async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null,attachments:m.attachments||[],toolResults:m.toolResults||[],artifacts:m.artifacts||[]}));renderMessages();}
 function renderProjects(){const s=$("work-project"),v=S.project;s.innerHTML='<option value="all">Tous les fichiers</option>'+S.projects.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");s.value=S.projects.some(p=>String(p.id)===String(v))||v==="all"?v:"all";S.project=s.value;}
 function renderFiles(){const h=$("work-list"),q=($("work-search").value||"").toLowerCase(),a=S.files.filter(f=>(S.project==="all"||String(f.projectLocalId??f.projectId)===String(S.project))&&(!q||(f.name+" "+f.path).toLowerCase().includes(q)));if(!a.length){h.innerHTML='<div class="work-empty-files"><div class="work-empty-icon"><i data-lucide="folder-open"></i></div><b>Aucun fichier</b><p>Crée un fichier ou importe un document pour commencer.</p><button class="work-file-action mt-3" data-act="new-file">+ Créer un fichier</button></div>';}else{const g={};a.forEach(f=>{const k=f.folder||"Racine";(g[k] ||= []).push(f);});h.innerHTML=Object.entries(g).map(([k,items])=>'<div class="work-file-group">'+esc(k)+'</div>'+items.map(f=>'<button class="work-file-item '+(S.file?.id===f.id?"is-active":"")+'" data-act="open" data-id="'+f.id+'"><span class="work-file-icon"><i data-lucide="'+icon(f.name)+'"></i></span><span class="work-file-info"><span class="work-file-name">'+esc(f.name)+'</span><span class="work-file-meta">'+esc(f.isBinary?"Fichier local":(f.language||"texte"))+' · '+size(f.sizeBytes||0)+(f.pendingSync?" · En attente":"")+'</span></span></button>').join("")).join("");}if(window.lucide)lucide.createIcons();}
 function renderWorkReasoning(reasoning){
@@ -91,20 +91,69 @@ ans.reasoning={summary:String(value.summary||"Démarche mise à jour.").slice(0,
 const visible=(String(source).slice(0,match.index)+String(source).slice(match.index+match[0].length)).trim();
 return {visible,found:true};
 }
+
+function safeToolUrl(raw){try{const u=new URL(String(raw||""));return ["https:","http:"].includes(u.protocol)?u.href:null;}catch(e){return null;}}
+function normalizeToolResult(tool,result){
+ if(!result||typeof result!=="object")return null;
+ const item={tool,label:tool.replace(/_/g," "),kind:"summary",text:"",sources:[],images:[]};
+ if(tool==="web_search"&&Array.isArray(result.results)){
+  item.kind="sources";item.sources=result.results.slice(0,8).map(x=>({title:String(x.title||x.url||"Source").slice(0,180),url:safeToolUrl(x.url),snippet:String(x.snippet||"").slice(0,450)})).filter(x=>x.url);
+ }else if(tool==="web_open"){
+  item.kind="opened";item.title=String(result.title||"Page ouverte").slice(0,180);item.url=safeToolUrl(result.url);item.text=String(result.text||"").slice(0,1800);
+  item.sources=(Array.isArray(result.links)?result.links.slice(0,6):[]).map(x=>({title:String(x.title||x.url||"Lien").slice(0,160),url:safeToolUrl(x.url)})).filter(x=>x.url);
+ }else if(tool==="image_search"&&Array.isArray(result.images)){
+  item.kind="images";item.images=result.images.slice(0,4).map(x=>({description:String(x.description||"Image").slice(0,200),url:safeToolUrl(x.source_url),title:String(x.source_title||"Source image").slice(0,160)}));
+ }else if(tool==="python"||tool==="project_run"||tool==="workspace_read_file"||tool==="project_read_file"){
+  item.kind="output";item.text=[result.content,result.text,result.result,result.stdout,result.stderr,result.error].filter(x=>typeof x==="string"&&x.trim()).join("\n").slice(0,8000);
+  if(result.exit_code!==undefined)item.exitCode=result.exit_code;
+ }else{
+  const parts=[];["note","status","filename","path","size_bytes","verified","verified_by_agent","saved","version","count","total_blocks","exit_code","error"].forEach(k=>{if(result[k]!==undefined&&result[k]!==null)parts.push(k.replace(/_/g," ")+": "+String(result[k]).slice(0,350));});
+  if(result.verification&&typeof result.verification==="object")parts.push("Vérification : "+(result.verification.passed?"réussie":"à compléter"));
+  item.text=parts.slice(0,8).join("\n");
+ }
+ return item;
+}
+function renderToolResults(items){
+ if(!Array.isArray(items)||!items.length)return "";
+ return '<div class="work-tool-results">'+items.slice(-8).map(item=>{
+  let body="";
+  if(item.kind==="sources")body='<div class="work-result-list">'+item.sources.map(x=>'<a class="work-result-source" href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer"><b>'+esc(x.title)+'</b>'+(x.snippet?'<small>'+esc(x.snippet)+'</small>':"")+'</a>').join("")+'</div>';
+  else if(item.kind==="opened")body='<div class="work-result-opened">'+(item.url?'<a href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer">'+esc(item.title)+'</a>':'<b>'+esc(item.title)+'</b>')+'<p>'+esc(item.text||"Page ouverte.")+'</p>'+(item.sources.length?'<div class="work-result-list">'+item.sources.map(x=>'<a class="work-result-source" href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>').join("")+'</div>':"")+'</div>';
+  else if(item.kind==="images")body='<div class="work-result-list">'+item.images.map(x=>'<div class="work-result-image"><b>'+esc(x.description)+'</b>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>':"")+'</div>').join("")+'</div>';
+  else if(item.kind==="output")body='<pre class="work-result-output">'+esc(item.text||"Aucune sortie texte.")+'</pre>';
+  else body='<p class="work-result-summary">'+esc(item.text||"Résultat reçu.")+'</p>';
+  return '<section class="work-result-card"><div class="work-result-title">'+esc(item.label||item.tool||"Résultat outil")+'</div>'+body+'</section>';
+ }).join("")+'</div>';
+}
+function renderArtifacts(items){
+ if(!Array.isArray(items)||!items.length)return "";
+ return '<div class="work-artifacts">'+items.map(x=>'<div class="work-artifact-row"><span><b>'+esc(x.filename||"Fichier généré")+'</b><small>'+esc(size(x.size_bytes||0))+' · '+(x.verified?"Vérifié":"Livré")+'</small></span><button data-act="artifact-open" data-id="'+esc(x.fileId)+'">Ouvrir dans Work</button><button data-act="artifact-download" data-id="'+esc(x.fileId)+'">Télécharger</button></div>').join("")+'</div>';
+}
+function captureToolResult(ans,tool,result){
+ if(!Array.isArray(ans.toolResults))ans.toolResults=[];
+ const item=normalizeToolResult(tool,result);if(!item)return;
+ ans.toolResults.push(item);ans.toolResults=ans.toolResults.slice(-8);updateToolResultsSlot(ans);
+}
+function updateToolResultsSlot(ans){const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-tool-results-slot');if(slot)slot.innerHTML=renderToolResults(ans.toolResults);}
+function updateArtifactSlot(ans){const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-artifacts-slot');if(slot)slot.innerHTML=renderArtifacts(ans.artifacts);}
+async function handleWorkArtifact(rawId,downloadNow){const file=await db.workFiles.get(Number(rawId));if(!file)return toast("Ce fichier n’est plus disponible.");await openFile(file.id);if(downloadNow)await download();}
+
 function renderMessages(){
 const h=$("work-messages");
 if(!S.messages.length){
 h.innerHTML='<div class="work-welcome"><div class="work-welcome-mark"><i data-lucide="sparkles"></i></div><h2>Sur quoi travaillons-nous&nbsp;?</h2><p>Rédige, analyse, organise un projet ou travaille sur du code. Les changements restent dans l’éditeur jusqu’à ta validation.</p><div class="work-starter-grid"><button class="work-starter" data-act="starter" data-prompt="Aide-moi à rédiger un document professionnel sur : "><i data-lucide="file-text"></i><span>Rédiger un document</span></button><button class="work-starter" data-act="starter" data-prompt="Analyse le fichier ouvert : "><i data-lucide="chart-no-axes-combined"></i><span>Analyser un fichier</span></button><button class="work-starter" data-act="starter" data-prompt="Conçois une structure de projet logiciel pour : "><i data-lucide="code"></i><span>Créer un projet de code</span></button><button class="work-starter" data-act="starter" data-prompt="Prépare un plan de recherche en distinguant les faits et les sources à vérifier sur : "><i data-lucide="search"></i><span>Préparer une recherche</span></button></div></div>';
 }else{
-h.innerHTML=S.messages.map(m=>{
-const html=typeof parseMarkdown==="function"?parseMarkdown(m.text):esc(m.text).replace(/\\n/g,"<br>");
-const has=m.role!=="user";
-return '<article class="work-message '+(m.role==="user"?"user":"assistant")+'" data-mid="'+esc(m.id)+'"><div class="work-message-role">'+(m.role==="user"?"TOI":"LLINK WORK")+'</div>'+(has?'<div class="work-reasoning-slot">'+renderWorkReasoning(m.reasoning)+'</div>':"")+'<div class="work-message-body">'+html+'</div>'+(has?'<div class="work-message-actions"><button class="work-message-action" data-act="apply" data-id="'+esc(m.id)+'">Appliquer la réponse à l’éditeur</button><button class="work-message-action" data-act="create-code" data-id="'+esc(m.id)+'">Créer un fichier depuis la réponse</button></div>':"")+'</article>';
-}).join("");
+ h.innerHTML=S.messages.map(m=>{
+  const html=typeof parseMarkdown==="function"?parseMarkdown(m.text):esc(m.text).replace(/\n/g,"<br>");
+  const has=m.role!=="user";
+  const attachments=Array.isArray(m.attachments)&&m.attachments.length?'<div class="work-message-attachments">'+m.attachments.map(a=>'<span>'+esc(a.name||"Fichier joint")+'</span>').join("")+'</div>':"";
+  return '<article class="work-message '+(m.role==="user"?"user":"assistant")+'" data-mid="'+esc(m.id)+'"><div class="work-message-role">'+(m.role==="user"?"TOI":"LLINK WORK")+'</div>'+attachments+(has?'<div class="work-reasoning-slot">'+renderWorkReasoning(m.reasoning)+'</div><div class="work-tool-results-slot">'+renderToolResults(m.toolResults)+'</div><div class="work-artifacts-slot">'+renderArtifacts(m.artifacts)+'</div>':"")+'<div class="work-message-body">'+html+'</div>'+(has?'<div class="work-message-actions"><button class="work-message-action" data-act="apply" data-id="'+esc(m.id)+'">Appliquer la réponse à l’éditeur</button><button class="work-message-action" data-act="create-code" data-id="'+esc(m.id)+'">Créer un fichier depuis la réponse</button></div>':"")+'</article>';
+ }).join("");
 }
-h.scrollTop=h.scrollHeight;
-if(window.lucide)lucide.createIcons();
+h.scrollTop=h.scrollHeight;if(window.lucide)lucide.createIcons();
 }
+function updateReasoningSlot
+
 function updateReasoningSlot(ans){
 const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-reasoning-slot');
 if(slot)slot.innerHTML=renderWorkReasoning(ans.reasoning);
@@ -361,10 +410,12 @@ return;
 if(event.type==="tool_result"){
 const state=event.status==="done"?"done":event.status==="blocked"?"blocked":"failed";
 recordWorkEvent(ans,event.tool,state,event.detail||"Résultat reçu.");
+if(event.result)captureToolResult(ans,event.tool,event.result);
 return;
 }
 if(event.type==="final"){
 ans.text=String(event.answer||"La tâche est terminée.");
+ans.toolResults=Array.isArray(ans.toolResults)?ans.toolResults:[];ans.artifacts=Array.isArray(ans.artifacts)?ans.artifacts:[];
 const liveEvents=Array.isArray(ans.reasoning?.events)?ans.reasoning.events:[];
 const finalReasoning=event.reasoning||ans.reasoning||{};
 const reportedEvents=Array.isArray(finalReasoning.events)?finalReasoning.events:[];
@@ -396,13 +447,15 @@ else file=await createBinaryFile(filename,blob,artifact.mime_type);
 }else file=await createBinaryFile(filename,blob,artifact.mime_type);
 if(file){
 downloaded++;
-recordWorkEvent(ans,"artifact","done",file.name+" · "+size(blob.size)+" · vérification réussie.");
+const verified=artifact.verification?.passed===true||artifact.verified===true||artifact.verified_by_agent===true;
+ans.artifacts.push({fileId:file.id,filename:file.name,mime_type:artifact.mime_type||file.mimeType||blob.type,size_bytes:blob.size,verified,verification:artifact.verification||null});
+recordWorkEvent(ans,"artifact","done",file.name+" · "+size(blob.size)+" · "+(verified?"vérifié par le serveur":"reçu"));
 if(downloaded===1)downloadWorkArtifact(blob,filename);
 }
 }
 if(artifacts.length&&!downloaded)ans.reasoning.limitations=[...(ans.reasoning.limitations||[]),"Un fichier généré n'a pas pu être ajouté à l'espace local (nom déjà utilisé ou quota local)."];
 finalReceived=true;
-updateReasoningSlot(ans);
+updateReasoningSlot(ans);updateToolResultsSlot(ans);updateArtifactSlot(ans);
 return;
 }
 if(event.type==="error")throw new Error(String(event.message||"L'agent Work a rencontré une erreur."));
@@ -444,10 +497,10 @@ if(uploads.reduce((n,f)=>n+f.size,0)>25e6)return toast("La taille totale des pi�
 if(!typed&&!uploads.length)return;
 S.uploads=[];renderUploads();input.value="";await ensureChat();
 const ctx=S.file?"\n\nFICHIER OUVERT ("+S.file.path+") : le fichier a été ajouté aux pièces jointes. Analyse son contenu si cela aide à répondre. Ne prétends pas l’avoir enregistré.":"";
-const text=(typed||"Analyse les fichiers joints.")+ctx,user={role:"user",text};
-user.id=await db.msgs.add({chatId:S.chatId,role:"user",text,attachments:uploads.map(f=>({name:f.name,size:f.size,type:f.type}))});
+const text=(typed||"Analyse les fichiers joints.")+ctx,user={role:"user",text,attachments:uploads.map(f=>({name:f.name,size:f.size,type:f.type}))};
+user.id=await db.msgs.add({chatId:S.chatId,role:"user",text,attachments:user.attachments});
 S.messages.push(user);
-const ans={role:"assistant",text:"",id:"work-"+Date.now(),reasoning:{summary:"Je prépare le travail demandé et les étapes de vérification.",steps:[{label:"Comprendre la demande",status:"in_progress"},{label:"Réaliser le travail et vérifier le résultat",status:"planned"}],decisions:[],limitations:[],events:[],status:"in_progress",modelProvided:false}};S.messages.push(ans);renderMessages();
+const ans={role:"assistant",text:"",id:"work-"+Date.now(),toolResults:[],artifacts:[],reasoning:{summary:"Je prépare le travail demandé et les étapes de vérification.",steps:[{label:"Comprendre la demande",status:"in_progress"},{label:"Réaliser le travail et vérifier le résultat",status:"planned"}],decisions:[],limitations:[],events:[],status:"in_progress",modelProvided:false}};S.messages.push(ans);renderMessages();
 S.busy=true;$("work-send").disabled=true;
 try{
 let payload={
@@ -461,10 +514,10 @@ preferences:""
 };
 await streamWorkAgent(payload,uploads,ans);
 if(!ans.reasoning.status||ans.reasoning.status==="in_progress")ans.reasoning.status="completed";
-await db.msgs.add({chatId:S.chatId,role:"bot",text:ans.text,reasoning:ans.reasoning});
+await db.msgs.add({chatId:S.chatId,role:"bot",text:ans.text,reasoning:ans.reasoning,toolResults:ans.toolResults||[],artifacts:ans.artifacts||[]});
 const c=await db.chats.get(S.chatId);
 if(c&&window.isLoggedIn&&typeof syncChatToServer==="function"){c.messages=(await db.msgs.where("chatId").equals(S.chatId).toArray()).slice(-200);await syncChatToServer(c);}
-}catch(e){ans.text="❌ "+e.message;if(ans.reasoning){recordWorkEvent(ans,"agent_preflight","blocked",e.message);ans.reasoning.status="failed";updateReasoningSlot(ans);}toast(ans.text);}
+}catch(e){ans.text="❌ "+e.message;if(ans.reasoning){recordWorkEvent(ans,"agent_preflight","blocked",e.message);ans.reasoning.status="failed";updateReasoningSlot(ans);}await db.msgs.add({chatId:S.chatId,role:"bot",text:ans.text,reasoning:ans.reasoning,toolResults:ans.toolResults||[],artifacts:ans.artifacts||[]});toast(ans.text);}
 finally{S.busy=false;$("work-send").disabled=false;renderMessages();}
 }
 async function showVersions(){if(!S.file)return toast("Ouvre un fichier d’abord.");let a=[];if(S.file.cloudId&&connected()&&navigator.onLine){try{a=(await api("/api/work/files/"+encodeURIComponent(S.file.cloudId)+"/versions")).versions||[];}catch(e){toast(e.message);}}else a=await db.workFileVersions.where("fileId").equals(S.file.id).toArray();$("work-dialog-root").innerHTML='<div class="work-dialog-backdrop"><div class="work-dialog"><h3>Historique des versions</h3><p>Restaurer une version crée une nouvelle version courante.</p><div id="work-ver-list"></div><div class="work-dialog-actions"><button data-act="close-dialog">Fermer</button></div></div></div>';$("work-dialog-root").querySelector("#work-ver-list").innerHTML=a.length?a.map(v=>'<div class="work-version-row"><div><b>Version '+v.version+'</b><small>'+esc(v.created_at||v.createdAt||"")+'</small></div><button data-act="restore" data-version="'+v.version+'">Restaurer</button></div>').join(""):"Aucune version précédente.";}

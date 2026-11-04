@@ -276,3 +276,19 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
 .work-media-note,.work-doc-note{font-size:10px;color:var(--work-muted);line-height:1.5}
 @media(max-width:900px){.work-doc-meta{grid-template-columns:1fr 1fr}.work-doc-meta label:first-child{grid-column:1/-1}.work-doc-content{padding:18px}.work-pdf-toolbar label:nth-child(2){min-width:120px}}
 @media(max-width:540px){.work-doc-meta{grid-template-columns:1fr}.work-doc-meta label:first-child{grid-column:auto}.work-doc-content{min-height:55vh}.work-media-toolbar label{min-width:76px}}
+
+.work-message-attachments{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 8px}.work-message-attachments span{font-size:10px;padding:4px 7px;border:1px solid var(--work-line);border-radius:99px;color:var(--work-muted)}
+.work-tool-results,.work-artifacts{display:flex;flex-direction:column;gap:7px;margin:8px 0}
+.work-result-card{border:1px solid var(--work-line);border-radius:9px;padding:9px;background:var(--work-panel);font-size:11px;overflow:hidden}
+.work-result-title{font-weight:700;text-transform:capitalize;margin-bottom:6px;color:var(--work-text)}
+.work-result-list{display:flex;flex-direction:column;gap:6px}
+.work-result-source,.work-result-image{display:flex;flex-direction:column;gap:3px;padding:7px;border-radius:7px;background:var(--work-bg);color:var(--work-text);text-decoration:none;overflow-wrap:anywhere}
+.work-result-source:hover{text-decoration:underline}.work-result-source small{font-size:10px;color:var(--work-muted);line-height:1.45}
+.work-result-opened p,.work-result-summary{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;color:var(--work-muted);margin:4px 0}
+.work-result-opened>a{font-weight:700;color:var(--work-accent)}.work-result-output{white-space:pre-wrap;overflow:auto;max-height:260px;padding:9px;background:var(--work-bg);border-radius:7px;font-size:10px}
+.work-result-image a{color:var(--work-accent);font-size:10px}
+.work-artifact-row{display:flex;align-items:center;gap:7px;border:1px solid var(--work-line);border-radius:9px;padding:8px}
+.work-artifact-row>span{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px;overflow:hidden}
+.work-artifact-row b{font-size:11px;overflow-wrap:anywhere}.work-artifact-row small{font-size:9px;color:var(--work-muted)}
+.work-artifact-row button{border:1px solid var(--work-line);border-radius:7px;padding:6px 8px;font-size:10px;color:var(--work-text);white-space:nowrap}
+@media(max-width:540px){.work-artifact-row{flex-wrap:wrap}.work-artifact-row>span{flex-basis:100%}.work-artifact-row button{flex:1}}

@@ -406,3 +406,30 @@ test("Work édite un classeur XLSX, conserve les formules et restaure une versio
   });
   expect(restored).toEqual({ price: 1000, formula: "B2*C2" });
 });
+
+
+test("Work affiche les vraies sources retournées par la recherche native", async ({ page }) => {
+  await openWork(page);
+  await mockAgentEvents(page, [
+    plan("Je lance une recherche et affiche les liens réellement retournés.", ["Rechercher", "Présenter les sources"]),
+    {
+      type: "tool_result",
+      tool: "web_search",
+      status: "done",
+      detail: "Deux sources renvoyées.",
+      result: {
+        query: "Documentation officielle",
+        results: [
+          { title: "Documentation officielle", url: "https://example.org/docs", snippet: "Page de référence officielle." },
+          { title: "Guide technique", url: "https://example.org/guide", snippet: "Guide de mise en œuvre." }
+        ]
+      }
+    },
+    finalEvent("Les deux sources trouvées sont présentées sous cette réponse.")
+  ]);
+  await page.locator("#work-prompt").fill("Recherche la documentation.");
+  await page.locator("#work-send").click();
+  await expect(page.locator(".work-result-source")).toHaveCount(2);
+  await expect(page.locator(".work-tool-results")).toContainText("Documentation officielle");
+  await expect(page.locator(".work-result-source").first()).toHaveAttribute("href", "https://example.org/docs");
+});
