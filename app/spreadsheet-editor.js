@@ -163,6 +163,7 @@
     host.addEventListener("input", handleInput);
     host.addEventListener("change", handleChange);
     host.addEventListener("click", handleClick);
+    render();
 
     function handleInput(event) {
       const input = event.target.closest("[data-xlsx-cell]");
