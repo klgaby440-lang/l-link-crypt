@@ -84,5 +84,16 @@ function pdfEditor(host,blob,options={}){
   destroy(){host.removeEventListener("click",click);URL.revokeObjectURL(url);host.innerHTML="";}
  };
 }
-window.LlinkBinaryEditors={openImage:imageEditor,openPdf:pdfEditor,version:"1.0.0"};
+function createBlankPdf(){
+ const encoder=new TextEncoder();
+ const objects=["<< /Type /Catalog /Pages 2 0 R >>","<< /Type /Pages /Kids [3 0 R] /Count 1 >>","<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>","<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>","<< /Length 0 >>\nstream\n\nendstream"];
+ let pdf="%PDF-1.4\n",offsets=[0];
+ objects.forEach((object,i)=>{offsets.push(encoder.encode(pdf).length);pdf+=(i+1)+" 0 obj\n"+object+"\nendobj\n";});
+ const xref=encoder.encode(pdf).length;
+ pdf+="xref\n0 "+(objects.length+1)+"\n0000000000 65535 f \n";
+ for(let i=1;i<offsets.length;i++)pdf+=String(offsets[i]).padStart(10,"0")+" 00000 n \n";
+ pdf+="trailer\n<< /Size "+(objects.length+1)+" /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF";
+ return new Blob([pdf],{type:"application/pdf"});
+}
+window.LlinkBinaryEditors={openImage:imageEditor,openPdf:pdfEditor,createBlankPdf,version:"1.1.0"};
 })();
