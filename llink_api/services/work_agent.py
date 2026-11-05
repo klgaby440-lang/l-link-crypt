@@ -1396,6 +1396,15 @@ async def _dispatch_tool(
         draft = state.drafts.get(document_id)
         if not draft:
             raise ValueError("Brouillon introuvable ou expiré.")
+        outline = draft.get("outline") or []
+        if outline:
+            incomplete = [item for item in outline if item.get("status") != "completed"]
+            if incomplete:
+                current = incomplete[0]
+                raise ValueError(
+                    f"Finalisation prématurée : la section {current['title']} n'est pas terminée. "
+                    f"Continue document_add_blocks avec section_id={current['id']} et section_complete=true."
+                )
         payload = {key: draft[key] for key in ("title", "subtitle", "author", "institution", "blocks")}
         raw = await asyncio.to_thread(build_structured_docx, payload)
         if len(raw) > MAX_ARTIFACT_BYTES:
@@ -1414,8 +1423,9 @@ async def _dispatch_tool(
             "verified_by_agent": False,
             "superseded": False,
             "kind": "docx",
-            "expected_blocks": list(draft["blocks"]),
+            "expected_blocks": copy.deepcopy(draft["blocks"]),
             "quality": dict(draft.get("quality") or {}),
+            "revision_count": int(draft.get("revision_count") or 0),
         }
         state.artifacts[artifact_id] = artifact
         return {
