@@ -10,6 +10,7 @@ on:
       - 'phase-4/**'
       - 'phase-5/**'
       - 'phase-6/**'
+      - 'test/multi-part-document-generation'
     paths:
       - 'main.py'
       - 'app/**'
