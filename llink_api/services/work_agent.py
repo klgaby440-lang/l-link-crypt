@@ -1299,6 +1299,22 @@ async def _dispatch_tool(
         if not draft:
             raise ValueError("Brouillon introuvable ou expiré.")
         blocks = args.get("blocks")
+        outline = draft.get("outline") or []
+        active_section = None
+        active_section_index = None
+        section_complete = bool(args.get("section_complete", False))
+        if outline:
+            active_section_index = int(draft.get("current_section_index") or 0)
+            if active_section_index >= len(outline):
+                raise ValueError("Toutes les sections sont terminées. Lance document_finalize ; n'ajoute pas de blocs après la fin du plan sauf si document_finalize ouvre une section de correction.")
+            active_section = outline[active_section_index]
+            requested_section_id = str(args.get("section_id") or "").strip()
+            if requested_section_id != active_section["id"]:
+                raise ValueError(
+                    f"Ordre des sections à respecter : rédige {active_section['title']} "
+                    f"(section_id={active_section['id']}) avant toute autre section."
+                )
+            active_section["status"] = "in_progress"
         if not isinstance(blocks, list) or not 1 <= len(blocks) <= 6:
             raise ValueError("Chaque appel doit ajouter de 1 à 6 blocs.")
         if len(draft["blocks"]) + len(blocks) > 160:
