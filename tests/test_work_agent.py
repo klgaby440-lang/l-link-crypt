@@ -39,6 +39,15 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                         ],
                         "decisions": ["Écrire le contenu par sections pour éviter les appels trop volumineux."],
                     }},
+                    {"id": "doc-plan-1", "name": "document_plan", "arguments": {
+                        "title": "Rapport de test agent",
+                        "target_total_words": 100,
+                        "sections": [
+                            {"id": "intro", "title": "Introduction", "purpose": "Présenter le sujet et les objectifs du rapport.", "target_words": 34},
+                            {"id": "method", "title": "Méthode", "purpose": "Expliquer les étapes et les critères utilisés.", "target_words": 33},
+                            {"id": "conclusion", "title": "Conclusion", "purpose": "Résumer les résultats et les suites possibles.", "target_words": 33},
+                        ],
+                    }},
                     {"id": "begin-1", "name": "document_begin", "arguments": {
                         "filename": "rapport-agent-test.docx",
                         "title": "Rapport de test agent",
@@ -58,12 +67,26 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
                 )
                 document_id = json.loads(begin_result)["document_id"]
                 calls = [
-                    {"id": "blocks-1", "name": "document_add_blocks", "arguments": {
-                        "document_id": document_id,
+                    {"id": "blocks-intro", "name": "document_add_blocks", "arguments": {
+                        "document_id": document_id, "section_id": "intro", "section_complete": True,
                         "blocks": [
                             {"type": "heading", "level": 1, "text": "Introduction"},
-                            {"type": "paragraph", "text": "Un agent doit vérifier ses résultats."},
+                            {"type": "paragraph", "text": "Un agent doit vérifier ses résultats et organiser les informations avant de créer un livrable. Une introduction claire présente le sujet, explique les objectifs et annonce la progression du document."},
                             {"type": "table", "rows": [["Étape", "État"], ["Création", "Terminée"]]},
+                        ],
+                    }},
+                    {"id": "blocks-method", "name": "document_add_blocks", "arguments": {
+                        "document_id": document_id, "section_id": "method", "section_complete": True,
+                        "blocks": [
+                            {"type": "heading", "level": 1, "text": "Méthode"},
+                            {"type": "paragraph", "text": "La méthode consiste à répartir le travail en parties cohérentes. Chaque partie est rédigée séparément, puis les contrôles relisent le document final afin de repérer les oublis et les erreurs de structure."},
+                        ],
+                    }},
+                    {"id": "blocks-conclusion", "name": "document_add_blocks", "arguments": {
+                        "document_id": document_id, "section_id": "conclusion", "section_complete": True,
+                        "blocks": [
+                            {"type": "heading", "level": 1, "text": "Conclusion"},
+                            {"type": "paragraph", "text": "Cette organisation rend la rédaction plus lisible et plus fiable. Elle permet aussi de corriger une partie sans recommencer tout le document, avant de produire et vérifier le fichier Word définitif."},
                         ],
                     }},
                     {"id": "finish-1", "name": "document_finalize", "arguments": {"document_id": document_id}},
@@ -132,15 +155,16 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
         document = Document(io.BytesIO(data))
         assert "Introduction" in [paragraph.text for paragraph in document.paragraphs]
         assert document.tables[0].cell(1, 0).text == "Création"
-        assert final["reasoning"]["tool_calls"] == 5
+        assert final["reasoning"]["tool_calls"] == 8
         assert any(event["type"] == "tool_result" and event["status"] == "done" for event in events)
         progress = [event for event in events if event["type"] == "document_progress"]
-        assert len(progress) == 2
+        assert len(progress) == 4
         assert progress[0]["document"]["blocks"] == []
         assert progress[0]["document"]["filename"] == "rapport-agent-test.docx"
-        assert progress[1]["document"]["revision_count"] == 1
-        assert progress[1]["document"]["blocks"][0]["text"] == "Introduction"
-        assert progress[1]["document"]["blocks"][1]["text"] == "Un agent doit vérifier ses résultats."
+        assert [item["title"] for item in progress[0]["document"]["outline"]] == ["Introduction", "Méthode", "Conclusion"]
+        assert progress[-1]["document"]["revision_count"] == 3
+        assert progress[-1]["document"]["blocks"][0]["text"] == "Introduction"
+        assert progress[-1]["document"]["blocks"][1]["text"].startswith("Un agent doit vérifier ses résultats")
 
 
     asyncio.run(run_test())
@@ -149,7 +173,7 @@ def test_agent_tool_registry_is_general_and_uses_native_function_schemas():
     names = {item["function"]["name"] for item in work_agent.TOOLS}
     assert {
         "update_plan", "web_search", "web_open", "image_search", "image_generate", "python",
-        "document_begin", "document_add_blocks", "document_finalize",
+        "document_plan", "document_begin", "document_add_blocks", "document_finalize",
         "artifact_verify", "create_text_file", "export_file",
     }.issubset(names)
     assert all(item["type"] == "function" for item in work_agent.TOOLS)
