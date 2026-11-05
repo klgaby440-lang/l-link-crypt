@@ -1325,6 +1325,7 @@ async def _dispatch_tool(
             raise ValueError("Le lot de blocs n'est pas un JSON valide.") from exc
         if batch_size > 28_000:
             raise ValueError("Ce lot est trop volumineux. Sépare-le en plusieurs appels.")
+        block_start = len(draft["blocks"])
         for block in blocks:
             if not isinstance(block, dict):
                 raise ValueError("Chaque bloc doit être un objet.")
