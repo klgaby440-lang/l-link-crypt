@@ -179,6 +179,8 @@ TOOLS: list[dict[str, Any]] = [
             "description": "Append up to six structured blocks to an existing Word draft. Use multiple calls to write a long document in sections. Each text block should remain concise.",
             "parameters": {"type": "object", "properties": {
                 "document_id": {"type": "string"},
+                "section_id": {"type": "string", "maxLength": 40},
+                "section_complete": {"type": "boolean"},
                 "blocks": {"type": "array", "minItems": 1, "maxItems": 6, "items": {
                     "type": "object",
                     "properties": {
