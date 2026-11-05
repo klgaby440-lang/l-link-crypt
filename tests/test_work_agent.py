@@ -381,7 +381,7 @@ def test_document_outline_enforces_order_and_requires_every_section_before_final
             state=state, request=None, user=user, db=None,
         )
         assert first_batch["section"]["status"] == "in_progress"
-        with pytest.raises(ValueError, match="ordre des sections"):
+        with pytest.raises(ValueError, match="[Oo]rdre des sections"):
             await work_agent._dispatch_tool(
                 "document_add_blocks",
                 {"document_id": document_id, "section_id": "analysis", "section_complete": True,
@@ -961,6 +961,19 @@ def test_document_begin_cannot_lower_inferred_quality_requirements():
     async def run():
         state = work_agent.AgentState(
             user_request="Fais des recherches et crée un rapport de 5 pages avec des images et un tableau."
+        )
+        await work_agent._dispatch_tool(
+            "document_plan",
+            {
+                "title": "Rapport de systématique",
+                "target_total_words": 1500,
+                "sections": [
+                    {"id": "intro", "title": "Introduction", "purpose": "Présenter le contexte et les objectifs du rapport.", "target_words": 500},
+                    {"id": "analysis", "title": "Analyse", "purpose": "Développer les éléments scientifiques principaux.", "target_words": 500},
+                    {"id": "conclusion", "title": "Conclusion", "purpose": "Résumer les résultats et les limites du rapport.", "target_words": 500},
+                ],
+            },
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
         )
         result = await work_agent._dispatch_tool(
             "document_begin",
