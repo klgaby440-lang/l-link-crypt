@@ -337,6 +337,152 @@ def test_document_begin_resumes_unverified_draft_instead_of_starting_over():
     asyncio.run(run())
 
 
+def test_document_outline_enforces_order_and_requires_every_section_before_finalize():
+    async def run():
+        state = work_agent.AgentState(user_request="Crée un document Word détaillé.")
+        user = {"uid": "anonymous"}
+        with pytest.raises(ValueError, match="document_plan"):
+            await work_agent._dispatch_tool(
+                "document_begin", {"filename": "sections.docx", "title": "Sections"},
+                state=state, request=None, user=user, db=None,
+            )
+
+        planned = await work_agent._dispatch_tool(
+            "document_plan",
+            {
+                "title": "Rapport structuré",
+                "target_total_words": 100,
+                "sections": [
+                    {"id": "intro", "title": "Introduction", "purpose": "Présenter le sujet et les objectifs.", "target_words": 30},
+                    {"id": "analysis", "title": "Analyse", "purpose": "Développer les éléments principaux du sujet.", "target_words": 30},
+                    {"id": "conclusion", "title": "Conclusion", "purpose": "Résumer les résultats et les limites.", "target_words": 30},
+                ],
+            },
+            state=state, request=None, user=user, db=None,
+        )
+        assert planned["sections_count"] == 3
+
+        begin = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "sections.docx", "title": "Rapport structuré"},
+            state=state, request=None, user=user, db=None,
+        )
+        document_id = begin["document_id"]
+
+        first_batch = await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {
+                "document_id": document_id, "section_id": "intro", "section_complete": False,
+                "blocks": [
+                    {"type": "heading", "level": 1, "text": "Introduction"},
+                    {"type": "paragraph", "text": "Cette première partie présente le sujet, précise les objectifs du rapport et annonce les thèmes qui seront étudiés. Elle fournit au lecteur les repères nécessaires pour comprendre la suite."},
+                ],
+            },
+            state=state, request=None, user=user, db=None,
+        )
+        assert first_batch["section"]["status"] == "in_progress"
+        with pytest.raises(ValueError, match="ordre des sections"):
+            await work_agent._dispatch_tool(
+                "document_add_blocks",
+                {"document_id": document_id, "section_id": "analysis", "section_complete": True,
+                 "blocks": [{"type": "heading", "level": 1, "text": "Analyse"}]},
+                state=state, request=None, user=user, db=None,
+            )
+        with pytest.raises(ValueError, match="Finalisation prématurée"):
+            await work_agent._dispatch_tool(
+                "document_finalize", {"document_id": document_id},
+                state=state, request=None, user=user, db=None,
+            )
+
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "section_id": "intro", "section_complete": True,
+             "blocks": [{"type": "paragraph", "text": "Cette seconde livraison clôt l'introduction et prépare la transition vers l'analyse approfondie du sujet."}]},
+            state=state, request=None, user=user, db=None,
+        )
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "section_id": "analysis", "section_complete": True,
+             "blocks": [
+                 {"type": "heading", "level": 1, "text": "Analyse"},
+                 {"type": "paragraph", "text": "L'analyse examine les informations utiles, compare les éléments disponibles et explique leurs relations. Chaque affirmation importante doit être justifiée par des faits pertinents et replacée dans son contexte."},
+             ]},
+            state=state, request=None, user=user, db=None,
+        )
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "section_id": "conclusion", "section_complete": True,
+             "blocks": [
+                 {"type": "heading", "level": 1, "text": "Conclusion"},
+                 {"type": "paragraph", "text": "La conclusion rassemble les résultats, rappelle les limites de l'étude et propose des pistes cohérentes pour approfondir le sujet. Elle termine le rapport sans introduire de nouveaux arguments non démontrés."},
+             ]},
+            state=state, request=None, user=user, db=None,
+        )
+        finalized = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": document_id},
+            state=state, request=None, user=user, db=None,
+        )
+        assert finalized["precheck_passed"] is True
+        assert all(section["status"] == "completed" for section in state.drafts[document_id]["outline"])
+        verified = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": finalized["artifact_id"]},
+            state=state, request=None, user=user, db=None,
+        )
+        assert verified["verified"] is True
+
+    asyncio.run(run())
+
+
+def test_docx_artifact_from_an_older_revision_cannot_be_verified():
+    async def run():
+        state = work_agent.AgentState()
+        begin = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "revision.docx", "title": "Contrôle des révisions", "quality": {"minimum_words": 5}},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        document_id = begin["document_id"]
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "blocks": [
+                {"type": "heading", "level": 1, "text": "Première version"},
+                {"type": "paragraph", "text": "Un premier contenu suffisamment clair est présent dans le document initial."},
+            ]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        first = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": document_id},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert first["precheck_passed"] is True
+
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "blocks": [
+                {"type": "paragraph", "text": "Une modification ultérieure change le contenu et invalide nécessairement le fichier Word déjà construit."},
+            ]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        stale = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": first["artifact_id"]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert stale["verified"] is False
+        assert stale["stale"] is True
+
+        second = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": document_id},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        verified = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": second["artifact_id"]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert verified["verified"] is True
+
+    asyncio.run(run())
+
+
 def test_project_sandbox_tools_require_e2b_and_are_not_advertised_to_anonymous(monkeypatch):
     sandbox_tools = {
         "project_sandbox_open", "project_run", "project_list_files",
