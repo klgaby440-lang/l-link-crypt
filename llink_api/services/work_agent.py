@@ -1233,6 +1233,7 @@ async def _dispatch_tool(
                         "status": "existing_draft_resumed",
                         "existing_blocks": len(existing_draft["blocks"]),
                         "last_verification": existing_draft.get("last_verification"),
+                        "outline": copy.deepcopy(existing_draft.get("outline") or []),
                         "next": "Continue ce même brouillon avec document_add_blocks. Ne recommence pas le document après un contrôle échoué. Utilise restart=true seulement si un redémarrage complet est justifié.",
                     }
         document_id = uuid.uuid4().hex
@@ -1252,12 +1253,15 @@ async def _dispatch_tool(
                 raise ValueError(f"Le critère {key} doit être un entier.") from exc
             return max(0, min(number, maximum))
         inferred_quality = _infer_document_quality(state.user_request)
+        planned_outline = copy.deepcopy(state.document_plan["sections"]) if state.document_plan else []
+        planned_word_target = int(state.document_plan.get("target_total_words") or 0) if state.document_plan else 0
         requested_headings = [
             str(item).strip()[:180]
             for item in required_headings[:20]
             if isinstance(item, str) and item.strip()
         ]
-        all_headings = list(dict.fromkeys(inferred_quality["required_headings"] + requested_headings))
+        planned_headings = [item["title"] for item in planned_outline]
+        all_headings = list(dict.fromkeys(inferred_quality["required_headings"] + requested_headings + planned_headings))
         state.drafts[document_id] = {
             "filename": filename,
             "title": str(args.get("title") or "")[:300],
@@ -1265,7 +1269,7 @@ async def _dispatch_tool(
             "author": str(args.get("author") or "")[:160],
             "institution": str(args.get("institution") or "")[:200],
             "quality": {
-                "minimum_words": max(inferred_quality["minimum_words"], bounded_quality_int("minimum_words", 20_000)),
+                "minimum_words": max(inferred_quality["minimum_words"], bounded_quality_int("minimum_words", 20_000), planned_word_target),
                 "minimum_images": max(inferred_quality["minimum_images"], bounded_quality_int("minimum_images", 12)),
                 "minimum_tables": max(inferred_quality["minimum_tables"], bounded_quality_int("minimum_tables", 20)),
                 "minimum_source_urls": max(inferred_quality["minimum_source_urls"], bounded_quality_int("minimum_source_urls", 20)),
@@ -1273,11 +1277,19 @@ async def _dispatch_tool(
                 "require_bibliography": inferred_quality["require_bibliography"] or bool(quality_args.get("require_bibliography", False)),
             },
             "blocks": [],
+            "outline": planned_outline,
+            "current_section_index": 0,
+            "repair_attempts": 0,
             "last_verification": None,
             "last_artifact_id": None,
             "revision_count": 0,
         }
-        return {"document_id": document_id, "status": "draft_created", "next": "Append content using document_add_blocks in small batches."}
+        state.document_plan = None
+        return {
+            "document_id": document_id, "status": "draft_created",
+            "outline": copy.deepcopy(planned_outline),
+            "next": "Rédige la première section avec son section_id. Chaque appel document_add_blocks accepte 1 à 6 blocs. Termine une section avec section_complete=true avant de passer à la suivante.",
+        }
 
     if name == "document_add_blocks":
         document_id = str(args.get("document_id") or "")
