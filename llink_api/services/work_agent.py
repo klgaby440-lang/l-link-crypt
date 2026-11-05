@@ -1428,6 +1428,30 @@ async def _dispatch_tool(
             "revision_count": int(draft.get("revision_count") or 0),
         }
         state.artifacts[artifact_id] = artifact
+        repair_section_id = None
+        if not verification.get("passed") and outline:
+            draft["repair_attempts"] = int(draft.get("repair_attempts") or 0) + 1
+            if draft["repair_attempts"] <= 3:
+                repair_section_id = "quality-repair"
+                repair_section = next((item for item in outline if item.get("id") == repair_section_id), None)
+                missing_words = max(0, int(verification.get("minimum_words", 0)) - int(verification.get("word_count", 0)))
+                guidance = _document_repair_guidance(verification)
+                if repair_section is None:
+                    repair_section = {
+                        "id": repair_section_id,
+                        "title": "Compléments et corrections",
+                        "purpose": "Compléter les critères signalés par le contrôle qualité : " + " ; ".join(guidance[:4]),
+                        "target_words": max(80, missing_words + 40),
+                        "actual_words": 0,
+                        "status": "in_progress",
+                    }
+                    outline.append(repair_section)
+                else:
+                    repair_section["status"] = "in_progress"
+                    repair_section["actual_words"] = 0
+                    repair_section["target_words"] = max(80, missing_words + 40)
+                    repair_section["purpose"] = "Corriger les critères non satisfaits : " + " ; ".join(guidance[:4])
+                draft["current_section_index"] = outline.index(repair_section)
         return {
             "artifact_id": artifact_id,
             "filename": artifact["filename"],
@@ -1437,10 +1461,14 @@ async def _dispatch_tool(
             "status": "pending_independent_verification" if verification.get("passed") else "draft_needs_revision",
             "draft_id": document_id,
             "repair_guidance": _document_repair_guidance(verification),
+            "outline": copy.deepcopy(outline),
+            "repair_section_id": repair_section_id,
             "next_action": (
-                "Precheck failed. Continue the SAME draft_id with document_add_blocks to repair the listed criteria, then document_finalize again. Do not start a new document."
+                f"Le contrôle préalable a échoué. Complète la section section_id={repair_section_id} avec document_add_blocks, puis relance document_finalize. Ne vérifie pas cet ancien artefact."
+                if repair_section_id
+                else "Precheck failed. Continue the SAME draft_id with document_add_blocks to repair the listed criteria, then document_finalize again. Do not start a new document."
                 if not verification.get("passed")
-                else "Call artifact_verify. The file is not delivered until that succeeds."
+                else "Call artifact_verify for this latest artifact. The file is not delivered until that succeeds."
             ),
         }
 
