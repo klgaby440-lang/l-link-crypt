@@ -36,5 +36,10 @@
         }
       ]
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "test/multi-part-document-generation": false
+    }
+  }
 }
