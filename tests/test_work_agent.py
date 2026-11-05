@@ -25,6 +25,23 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
         monkeypatch.setattr(work_agent, "finalize_usage", no_settlement)
 
         turns = 0
+        section_text = {
+            "introduction": (
+                "Les astéroïdes sont de petits corps rocheux ou métalliques qui orbitent autour du Soleil. "
+                "Ils conservent des indices précieux sur les premières étapes de la formation du système solaire "
+                "et permettent aux scientifiques de mieux comprendre son histoire."
+            ),
+            "methodes": (
+                "Les chercheurs étudient les astéroïdes grâce aux télescopes, à la spectroscopie, aux mesures "
+                "radar et aux missions spatiales. Chaque méthode apporte des informations complémentaires sur "
+                "leur composition, leur forme, leur rotation et leur trajectoire."
+            ),
+            "conclusion": (
+                "L'étude des astéroïdes contribue à comprendre l'évolution du système solaire et à évaluer "
+                "certains risques d'impact. Les observations et les missions spatiales complètent les modèles "
+                "scientifiques et améliorent progressivement les connaissances disponibles."
+            ),
+        }
 
         async def fake_openai_turn(**kwargs):
             nonlocal turns
@@ -32,43 +49,55 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
             if turns == 1:
                 calls = [
                     {"id": "plan-1", "name": "update_plan", "arguments": {
-                        "summary": "Rédiger puis contrôler un document Word.",
+                        "summary": "Rédiger puis contrôler un document Word par sections.",
                         "steps": [
-                            {"label": "Organiser le contenu", "status": "done"},
-                            {"label": "Créer et vérifier le DOCX", "status": "in_progress"},
+                            {"label": "Établir le plan", "status": "done"},
+                            {"label": "Rédiger chaque section", "status": "in_progress"},
+                            {"label": "Générer et vérifier le DOCX", "status": "planned"},
                         ],
-                        "decisions": ["Écrire le contenu par sections pour éviter les appels trop volumineux."],
+                        "decisions": ["Chaque section est rédigée et validée avant de passer à la suivante."],
+                    }},
+                    {"id": "outline-1", "name": "document_plan", "arguments": {
+                        "title": "Rapport de test agent",
+                        "target_total_words": 90,
+                        "sections": [
+                            {"id": "introduction", "title": "Introduction", "purpose": "Présenter le sujet et son contexte scientifique.", "target_words": 30},
+                            {"id": "methodes", "title": "Méthodes d'étude", "purpose": "Présenter les principales méthodes d'observation.", "target_words": 30},
+                            {"id": "conclusion", "title": "Conclusion", "purpose": "Résumer les apports scientifiques du sujet.", "target_words": 30},
+                        ],
                     }},
                     {"id": "begin-1", "name": "document_begin", "arguments": {
                         "filename": "rapport-agent-test.docx",
                         "title": "Rapport de test agent",
-                        "subtitle": "Validation des outils natifs",
+                        "subtitle": "Validation de la rédaction section par section",
                         "author": "Llink Work",
                     }},
                 ]
-            elif turns == 2:
-                prior_tool_turn = next(
-                    message for message in kwargs["messages"]
-                    if message.get("role") == "assistant" and message.get("tool_calls")
-                )
-                assert prior_tool_turn.get("reasoning_content") == "Décision intermédiaire conservée pour DeepSeek."
+            elif turns in (2, 3, 4):
                 begin_result = next(
                     message["content"] for message in kwargs["messages"]
                     if message.get("role") == "tool" and message.get("tool_call_id") == "begin-1"
                 )
                 document_id = json.loads(begin_result)["document_id"]
-                calls = [
-                    {"id": "blocks-1", "name": "document_add_blocks", "arguments": {
-                        "document_id": document_id,
-                        "blocks": [
-                            {"type": "heading", "level": 1, "text": "Introduction"},
-                            {"type": "paragraph", "text": "Un agent doit vérifier ses résultats."},
-                            {"type": "table", "rows": [["Étape", "État"], ["Création", "Terminée"]]},
-                        ],
-                    }},
-                    {"id": "finish-1", "name": "document_finalize", "arguments": {"document_id": document_id}},
-                ]
-            elif turns == 3:
+                section_id = ("introduction", "methodes", "conclusion")[turns - 2]
+                section_title = {"introduction": "Introduction", "methodes": "Méthodes d'étude", "conclusion": "Conclusion"}[section_id]
+                calls = [{"id": f"blocks-{turns}", "name": "document_add_blocks", "arguments": {
+                    "document_id": document_id,
+                    "section_id": section_id,
+                    "section_complete": True,
+                    "blocks": [
+                        {"type": "heading", "level": 1, "text": section_title},
+                        {"type": "paragraph", "text": section_text[section_id]},
+                    ],
+                }}]
+            elif turns == 5:
+                begin_result = next(
+                    message["content"] for message in kwargs["messages"]
+                    if message.get("role") == "tool" and message.get("tool_call_id") == "begin-1"
+                )
+                document_id = json.loads(begin_result)["document_id"]
+                calls = [{"id": "finish-1", "name": "document_finalize", "arguments": {"document_id": document_id}}]
+            elif turns == 6:
                 finish_result = next(
                     message["content"] for message in kwargs["messages"]
                     if message.get("role") == "tool" and message.get("tool_call_id") == "finish-1"
@@ -121,26 +150,28 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
         final = next(event for event in events if event["type"] == "final")
         assert any(event["type"] == "model_start" for event in events)
         assert any(event["type"] == "model_done" and event["tool_calls"] > 0 for event in events)
-        assert turns == 4
+        assert turns == 7
         assert final["answer"] == "Le document a été créé et vérifié."
         assert len(final["artifacts"]) == 1
         artifact = final["artifacts"][0]
         assert artifact["filename"] == "rapport-agent-test.docx"
+        assert artifact["draft_id"]
         assert artifact["verification"]["passed"] is True
 
         data = base64.b64decode(artifact["content_base64"])
         document = Document(io.BytesIO(data))
-        assert "Introduction" in [paragraph.text for paragraph in document.paragraphs]
-        assert document.tables[0].cell(1, 0).text == "Création"
-        assert final["reasoning"]["tool_calls"] == 5
+        paragraphs = [paragraph.text for paragraph in document.paragraphs]
+        assert "Introduction" in paragraphs
+        assert "Méthodes d'étude" in paragraphs
+        assert "Conclusion" in paragraphs
+        assert final["reasoning"]["tool_calls"] == 8
         assert any(event["type"] == "tool_result" and event["status"] == "done" for event in events)
         progress = [event for event in events if event["type"] == "document_progress"]
-        assert len(progress) == 2
+        assert len(progress) == 4
         assert progress[0]["document"]["blocks"] == []
         assert progress[0]["document"]["filename"] == "rapport-agent-test.docx"
-        assert progress[1]["document"]["revision_count"] == 1
-        assert progress[1]["document"]["blocks"][0]["text"] == "Introduction"
-        assert progress[1]["document"]["blocks"][1]["text"] == "Un agent doit vérifier ses résultats."
+        assert progress[-1]["document"]["revision_count"] == 3
+        assert [item["status"] for item in progress[-1]["document"]["outline"]] == ["completed"] * 3
 
 
     asyncio.run(run_test())
@@ -273,6 +304,101 @@ def test_academic_document_requests_require_substantial_content_and_sources():
     assert "Bibliographie" in quality["required_headings"]
 
 
+
+
+def test_detailed_asteroid_document_requires_substance_and_sources():
+    quality = work_agent._infer_document_quality(
+        "Crée un document Word professionnel et détaillé sur les astéroïdes."
+    )
+    assert quality["minimum_words"] >= 1500
+    assert quality["minimum_source_urls"] >= 3
+    assert quality["require_bibliography"] is True
+    assert "Bibliographie" in quality["required_headings"]
+
+
+def test_document_outline_enforces_section_order_and_minimum_words():
+    async def run():
+        state = work_agent.AgentState()
+        plan = await work_agent._dispatch_tool(
+            "document_plan",
+            {
+                "title": "Rapport de validation",
+                "target_total_words": 90,
+                "sections": [
+                    {"id": "intro", "title": "Introduction", "purpose": "Présenter le sujet du rapport.", "target_words": 30},
+                    {"id": "analysis", "title": "Analyse", "purpose": "Développer les informations essentielles.", "target_words": 30},
+                    {"id": "conclusion", "title": "Conclusion", "purpose": "Résumer les éléments développés.", "target_words": 30},
+                ],
+            },
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert plan["sections_count"] == 3
+        begin = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "validation-sections.docx", "title": "Rapport de validation"},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        document_id = begin["document_id"]
+
+        with pytest.raises(ValueError, match="Ordre des sections"):
+            await work_agent._dispatch_tool(
+                "document_add_blocks",
+                {"document_id": document_id, "section_id": "analysis", "section_complete": True,
+                 "blocks": [{"type": "heading", "level": 1, "text": "Analyse"}]},
+                state=state, request=None, user={"uid": "anonymous"}, db=None,
+            )
+
+        short = await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "section_id": "intro", "section_complete": True,
+             "blocks": [
+                 {"type": "heading", "level": 1, "text": "Introduction"},
+                 {"type": "paragraph", "text": "Un sujet scientifique."},
+             ]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert short["section"]["completion_rejected"] is True
+        assert short["section"]["section_complete"] is False
+        assert short["section"]["words_remaining_to_complete"] > 0
+
+        first = await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "section_id": "intro", "section_complete": True,
+             "blocks": [{"type": "paragraph", "text":
+                 "Cette section explique le contexte historique, les concepts importants, les définitions utiles et les objectifs de la recherche afin que le lecteur comprenne les bases avant de découvrir les analyses et les résultats présentés dans la suite du rapport."}]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert first["section"]["section_complete"] is True
+
+        for section_id, title, paragraph in [
+            ("analysis", "Analyse",
+             "L'analyse détaille les observations, compare les résultats disponibles, présente les méthodes employées et explique les limites des données. Elle relie les informations aux objectifs et distingue les faits établis des hypothèses."),
+            ("conclusion", "Conclusion",
+             "En conclusion, les résultats sont résumés, les limites sont rappelées et les principales idées sont reliées à l'objectif initial. Cette synthèse indique également les questions qui méritent des recherches supplémentaires."),
+        ]:
+            result = await work_agent._dispatch_tool(
+                "document_add_blocks",
+                {"document_id": document_id, "section_id": section_id, "section_complete": True,
+                 "blocks": [
+                     {"type": "heading", "level": 1, "text": title},
+                     {"type": "paragraph", "text": paragraph},
+                 ]},
+                state=state, request=None, user={"uid": "anonymous"}, db=None,
+            )
+            assert result["section"]["section_complete"] is True
+
+        built = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": document_id},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert built["precheck_passed"] is True
+        verified = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": built["artifact_id"]},
+            state=state, request=None, user={"uid": "anonymous"}, db=None,
+        )
+        assert verified["verified"] is True
+
+    asyncio.run(run())
 
 def test_document_begin_resumes_unverified_draft_instead_of_starting_over():
     async def run():
