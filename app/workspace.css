@@ -363,3 +363,17 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
 .work-document-draft.is-verified{border-color:#3b9870}
 .work-document-draft.is-verified .work-document-draft-top small{color:#26835a}
 @media(max-width:540px){.work-document-draft-top{align-items:flex-start;flex-direction:column}.work-document-draft-top .work-editor-action{align-self:flex-end}}
+/* Section-by-section progress for multi-part Work documents. */
+.work-document-outline{display:grid;gap:7px;margin-top:10px;padding-top:9px;border-top:1px solid var(--work-line)}
+.work-document-outline-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--work-text);font-size:9px}
+.work-document-outline-head small{color:var(--work-muted);font-size:8px}
+.work-document-section{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.work-document-section-mark{display:grid;place-items:center;width:17px;height:17px;flex:0 0 17px;border:1px solid var(--work-line);border-radius:50%;color:var(--work-muted);font-size:8px;font-weight:800}
+.work-document-section.is-completed .work-document-section-mark{border-color:#3b9870;background:color-mix(in srgb,#3b9870 12%,var(--work-panel));color:#26835a}
+.work-document-section.is-current .work-document-section-mark{border-color:var(--work-text);color:var(--work-text)}
+.work-document-section-main{display:grid;gap:3px;flex:1;min-width:0}
+.work-document-section-main>b{overflow-wrap:anywhere;color:var(--work-text);font-size:9px;font-weight:750}
+.work-document-section-main>small{color:var(--work-muted);font-size:8px}
+.work-document-section-track{height:3px;overflow:hidden;border-radius:99px;background:var(--work-line)}
+.work-document-section-track>i{display:block;height:100%;border-radius:99px;background:var(--work-muted)}
+.work-document-section.is-completed .work-document-section-track>i{background:#3b9870}
