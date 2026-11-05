@@ -1352,7 +1352,44 @@ async def _dispatch_tool(
                 draft["blocks"].append(normalized)
         draft["revision_count"] = int(draft.get("revision_count") or 0) + 1
         draft["last_verification"] = None
-        return {"document_id": document_id, "blocks_added": len(blocks), "total_blocks": len(draft["blocks"]), "status": "draft_updated", "revision_count": draft["revision_count"]}
+        newly_added = draft["blocks"][block_start:]
+        added_text = " ".join(str(item.get("text") or "") for item in newly_added if isinstance(item, dict))
+        added_words = len(added_text.split())
+        section_result = None
+        if active_section is not None:
+            active_section["actual_words"] = int(active_section.get("actual_words") or 0) + added_words
+            if section_complete:
+                active_section["status"] = "completed"
+                active_section["completed_revision"] = draft["revision_count"]
+                draft["current_section_index"] = int(active_section_index or 0) + 1
+            section_result = {
+                "id": active_section["id"],
+                "title": active_section["title"],
+                "status": active_section["status"],
+                "actual_words": active_section["actual_words"],
+                "target_words": active_section["target_words"],
+                "section_complete": section_complete and active_section["status"] == "completed",
+            }
+        for artifact in state.artifacts.values():
+            if artifact.get("draft_id") == document_id and int(artifact.get("revision_count", -1)) != draft["revision_count"]:
+                artifact["stale"] = True
+                artifact["verified_by_agent"] = False
+        return {
+            "document_id": document_id,
+            "blocks_added": len(blocks),
+            "total_blocks": len(draft["blocks"]),
+            "status": "draft_updated",
+            "revision_count": draft["revision_count"],
+            "section": section_result,
+            "outline": copy.deepcopy(outline),
+            "next_action": (
+                "Section terminée. Passe à la section suivante dans l'ordre."
+                if section_result and section_result["section_complete"]
+                else "Continue cette même section avec le même section_id ; n'en commence pas une autre avant de la marquer terminée."
+                if section_result
+                else "Continue le brouillon puis finalise-le."
+            ),
+        }
 
     if name == "document_finalize":
         document_id = str(args.get("document_id") or "")
