@@ -1479,6 +1479,25 @@ async def _dispatch_tool(
             raise ValueError("Fichier généré introuvable.")
         data = artifact["data"]
         kind = artifact.get("kind", "binary")
+        draft = state.drafts.get(str(artifact.get("draft_id") or ""))
+        if kind == "docx" and draft is not None and (
+            int(artifact.get("revision_count", -1)) != int(draft.get("revision_count") or 0)
+            or artifact_id != draft.get("last_artifact_id")
+        ):
+            artifact["stale"] = True
+            artifact["verified_by_agent"] = False
+            return {
+                "artifact_id": artifact_id,
+                "draft_id": artifact.get("draft_id"),
+                "filename": artifact["filename"],
+                "size_bytes": len(data),
+                "verified": False,
+                "verified_by_agent": False,
+                "stale": True,
+                "verification": {"passed": False, "stale_artifact": True},
+                "repair_guidance": ["Le brouillon a changé depuis la création de ce fichier. Regénère le DOCX avec document_finalize, puis vérifie uniquement le nouvel artifact_id."],
+                "next_action": "Cet artefact est obsolète. Appelle document_finalize sur le même document_id, puis artifact_verify avec le nouvel artifact_id.",
+            }
         if kind == "docx":
             verification = await asyncio.to_thread(_verify_docx, data, artifact.get("expected_blocks", []), artifact.get("quality"))
         elif kind == "pdf":
@@ -1528,7 +1547,6 @@ async def _dispatch_tool(
             }
         artifact["verification"] = verification
         artifact["verified_by_agent"] = bool(verification.get("passed"))
-        draft = state.drafts.get(str(artifact.get("draft_id") or ""))
         if draft is not None:
             draft["last_verification"] = verification
             draft["last_artifact_id"] = artifact_id
