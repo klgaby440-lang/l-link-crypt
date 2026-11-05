@@ -433,6 +433,84 @@ def test_document_outline_enforces_order_and_requires_every_section_before_final
     asyncio.run(run())
 
 
+def test_failed_docx_quality_gate_opens_same_draft_repair_section_and_can_pass():
+    async def run():
+        state = work_agent.AgentState(user_request="Crée un rapport Word structuré.")
+        user = {"uid": "anonymous"}
+        await work_agent._dispatch_tool(
+            "document_plan",
+            {
+                "title": "Rapport avec correction",
+                "target_total_words": 100,
+                "sections": [
+                    {"id": "intro", "title": "Introduction", "purpose": "Présenter le sujet et ses objectifs.", "target_words": 30},
+                    {"id": "analysis", "title": "Analyse", "purpose": "Développer les informations principales.", "target_words": 30},
+                    {"id": "conclusion", "title": "Conclusion", "purpose": "Résumer les résultats essentiels.", "target_words": 30},
+                ],
+            },
+            state=state, request=None, user=user, db=None,
+        )
+        begin = await work_agent._dispatch_tool(
+            "document_begin",
+            {"filename": "rapport-reparation.docx", "title": "Rapport avec correction"},
+            state=state, request=None, user=user, db=None,
+        )
+        document_id = begin["document_id"]
+        for section_id, title, body in [
+            ("intro", "Introduction", "Cette introduction présente brièvement le sujet et ses objectifs."),
+            ("analysis", "Analyse", "L'analyse expose les éléments essentiels et leurs relations."),
+            ("conclusion", "Conclusion", "La conclusion résume les observations principales."),
+        ]:
+            await work_agent._dispatch_tool(
+                "document_add_blocks",
+                {"document_id": document_id, "section_id": section_id, "section_complete": True,
+                 "blocks": [
+                     {"type": "heading", "level": 1, "text": title},
+                     {"type": "paragraph", "text": body},
+                 ]},
+                state=state, request=None, user=user, db=None,
+            )
+
+        first = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": document_id},
+            state=state, request=None, user=user, db=None,
+        )
+        assert first["precheck_passed"] is False
+        assert first["repair_section_id"] == "quality-repair"
+        assert state.drafts[document_id]["current_section_index"] == 3
+
+        detailed_repair = (
+            "Cette partie apporte les compléments nécessaires au rapport. Elle précise le contexte, définit les notions "
+            "utilisées et explique les principales relations entre les éléments étudiés. Elle développe les conséquences "
+            "pratiques, distingue les faits établis des interprétations et rappelle les limites des informations disponibles. "
+            "Les exemples permettent d'illustrer les idées sans répéter les paragraphes précédents. Les critères de qualité "
+            "sont repris un par un afin de s'assurer que le contenu est suffisamment complet, clair, cohérent et utile au lecteur. "
+            "Cette correction renforce aussi les transitions entre les sections et fournit une synthèse plus approfondie du sujet. "
+        ) * 3
+        await work_agent._dispatch_tool(
+            "document_add_blocks",
+            {"document_id": document_id, "section_id": "quality-repair", "section_complete": True,
+             "blocks": [
+                 {"type": "heading", "level": 1, "text": "Compléments et corrections"},
+                 {"type": "paragraph", "text": detailed_repair},
+             ]},
+            state=state, request=None, user=user, db=None,
+        )
+        second = await work_agent._dispatch_tool(
+            "document_finalize", {"document_id": document_id},
+            state=state, request=None, user=user, db=None,
+        )
+        assert second["precheck_passed"] is True
+        verified = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": second["artifact_id"]},
+            state=state, request=None, user=user, db=None,
+        )
+        assert verified["verified"] is True
+        assert verified["draft_id"] == document_id
+
+    asyncio.run(run())
+
+
 def test_docx_artifact_from_an_older_revision_cannot_be_verified():
     async def run():
         state = work_agent.AgentState()
