@@ -523,6 +523,23 @@ def _infer_document_quality(message: str) -> dict[str, Any]:
         quality["required_headings"] = list(dict.fromkeys(
             quality["required_headings"] + course_headings
         ))[:20]
+    detailed_astronomy_document = (
+        re.search(
+            r"\\b(?:ast[eé]ro[iï]des?|astronomie|astrophysique|plan[eè]tes?|syst[eè]me solaire|com[eè]tes?|cosmologie|univers)\\b",
+            text,
+        )
+        and re.search(
+            r"\\b(?:d[eé]taill[eé](?:e|es|s)?|professionnel(?:le)?s?|complet(?:e|s)?|approfondi(?:e|s|es)?|scientifique(?:s)?|rapport|document)\\b",
+            text,
+        )
+    )
+    if detailed_astronomy_document:
+        quality["minimum_words"] = max(quality["minimum_words"], 1500)
+        quality["minimum_source_urls"] = max(quality["minimum_source_urls"], 3)
+        quality["require_bibliography"] = True
+        if "Bibliographie" not in quality["required_headings"]:
+            quality["required_headings"].append("Bibliographie")
+
     return quality
 
 
@@ -1353,12 +1370,26 @@ async def _dispatch_tool(
         draft["revision_count"] = int(draft.get("revision_count") or 0) + 1
         draft["last_verification"] = None
         newly_added = draft["blocks"][block_start:]
-        added_text = " ".join(str(item.get("text") or "") for item in newly_added if isinstance(item, dict))
-        added_words = len(added_text.split())
+        substantive_text: list[str] = []
+        for item in newly_added:
+            if not isinstance(item, dict):
+                continue
+            block_type = item.get("type")
+            if block_type in {"paragraph", "bullet", "numbered", "quote"}:
+                substantive_text.append(str(item.get("text") or ""))
+            elif block_type == "table":
+                rows = item.get("rows") or []
+                for row in rows:
+                    if isinstance(row, list):
+                        substantive_text.extend(str(cell or "") for cell in row)
+        added_words = len(re.findall(r"\\b[\\wÀ-ÿ'-]+\\b", " ".join(substantive_text)))
         section_result = None
         if active_section is not None:
             active_section["actual_words"] = int(active_section.get("actual_words") or 0) + added_words
-            if section_complete:
+            target_words = max(1, int(active_section.get("target_words") or 1))
+            minimum_section_words = max(1, (target_words * 7 + 9) // 10)
+            completion_rejected = section_complete and active_section["actual_words"] < minimum_section_words
+            if section_complete and not completion_rejected:
                 active_section["status"] = "completed"
                 active_section["completed_revision"] = draft["revision_count"]
                 draft["current_section_index"] = int(active_section_index or 0) + 1
@@ -1367,8 +1398,11 @@ async def _dispatch_tool(
                 "title": active_section["title"],
                 "status": active_section["status"],
                 "actual_words": active_section["actual_words"],
-                "target_words": active_section["target_words"],
-                "section_complete": section_complete and active_section["status"] == "completed",
+                "target_words": target_words,
+                "minimum_words_to_complete": minimum_section_words,
+                "words_remaining_to_complete": max(0, minimum_section_words - active_section["actual_words"]),
+                "section_complete": section_complete and not completion_rejected and active_section["status"] == "completed",
+                "completion_rejected": completion_rejected,
             }
         for artifact in state.artifacts.values():
             if artifact.get("draft_id") == document_id and int(artifact.get("revision_count", -1)) != draft["revision_count"]:
@@ -1385,6 +1419,11 @@ async def _dispatch_tool(
             "next_action": (
                 "Section terminée. Passe à la section suivante dans l'ordre."
                 if section_result and section_result["section_complete"]
+                else (
+                    f"Section trop courte : {section_result['actual_words']}/{section_result['minimum_words_to_complete']} mots minimum. "
+                    "Ajoute du contenu substantiel à cette même section, puis renvoie section_complete=true."
+                )
+                if section_result and section_result["completion_rejected"]
                 else "Continue cette même section avec le même section_id ; n'en commence pas une autre avant de la marquer terminée."
                 if section_result
                 else "Continue le brouillon puis finalise-le."
@@ -1915,6 +1954,7 @@ async def _run_agent(
                 break
 
             gemini_function_responses: list[Any] = []
+            document_write_calls_this_turn = 0
             for call in calls:
                 if state.tool_calls >= MAX_TOOL_CALLS:
                     raise RuntimeError("La limite de sécurité des appels d'outils est atteinte.")
@@ -1960,6 +2000,13 @@ async def _run_agent(
                     }.get(name, name)
                     await emit({"type": "tool_start", "tool": name, "label": label, "call_id": call_id})
                     try:
+                        if name == "document_add_blocks":
+                            document_write_calls_this_turn += 1
+                            if document_write_calls_this_turn > 1:
+                                raise PermissionError(
+                                    "Une seule livraison de blocs de document est autorisée par tour du modèle. "
+                                    "Attends le résultat de cette section avant le prochain lot."
+                                )
                         result = await _dispatch_tool(name, args, state=state, request=request, user=user, db=db)
                         status = "failed" if result.get("verified") is False or result.get("precheck_passed") is False or result.get("passed") is False else "done"
                     except PermissionError as exc:
@@ -2070,6 +2117,7 @@ async def _run_agent(
                 continue
             artifacts.append({
                 "artifact_id": artifact["artifact_id"],
+                "draft_id": artifact.get("draft_id"),
                 "filename": artifact["filename"],
                 "mime_type": artifact["mime_type"],
                 "size_bytes": len(artifact["data"]),
