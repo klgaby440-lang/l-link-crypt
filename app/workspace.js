@@ -179,6 +179,7 @@ async function upsertServerDocumentDraft(documentData,ans){
  const headings=payload.blocks.filter(b=>b?.type==="heading"&&String(b.text||"").trim()).map(b=>String(b.text).trim());
  const words=payload.blocks.reduce((total,b)=>total+(String(b?.text||"").match(/[A-Za-zÀ-ÿ0-9]+/g)||[]).length,0);
  ans.documentDraft={fileId:file.id,documentId:documentData.document_id,filename:file.name,status:"in_progress",blockCount:payload.blocks.length,wordCount:words,headings,revision:Number(documentData.revision_count||0),verification:null,repairGuidance:[]};
+ ans.documentDraft.outline=Array.isArray(documentData.outline)?documentData.outline:[];
  updateDocumentDraftSlot(ans);
 }
 function updateDocumentDraftVerification(ans,tool,result){
