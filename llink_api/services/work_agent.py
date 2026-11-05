@@ -127,6 +127,31 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "document_plan",
+            "description": "Create the ordered outline for a Word document BEFORE document_begin. Split the subject into 3 to 16 meaningful sections, give each a purpose and realistic word target, and set target_total_words close to the sum of section targets. The document must then be written one section at a time in this order.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "minLength": 2, "maxLength": 300},
+                    "target_total_words": {"type": "integer", "minimum": 100, "maximum": 20000},
+                    "sections": {"type": "array", "minItems": 3, "maxItems": 16, "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "minLength": 1, "maxLength": 40},
+                            "title": {"type": "string", "minLength": 2, "maxLength": 180},
+                            "purpose": {"type": "string", "minLength": 10, "maxLength": 500},
+                            "target_words": {"type": "integer", "minimum": 30, "maximum": 5000}
+                        },
+                        "required": ["id", "title", "purpose", "target_words"]
+                    }}
+                },
+                "required": ["title", "target_total_words", "sections"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "document_begin",
             "description": "Start a Word document draft. If the same filename already has an unverified draft in this task, resume it unless restart=true. Add small groups of blocks in separate calls.",
             "parameters": {"type": "object", "properties": {
@@ -374,6 +399,7 @@ class AgentState:
     })
     events: list[dict[str, Any]] = field(default_factory=list)
     drafts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    document_plan: dict[str, Any] | None = None
     artifacts: dict[str, dict[str, Any]] = field(default_factory=dict)
     images: dict[str, dict[str, Any]] = field(default_factory=dict)
     image_bytes: int = 0
@@ -1133,8 +1159,64 @@ async def _dispatch_tool(
             record_change=lambda item: _record_workspace_change(state, item),
         )
 
+    if name == "document_plan":
+        if state.drafts:
+            raise ValueError("Le plan doit être défini avant de commencer le brouillon Word.")
+        title = str(args.get("title") or "").strip()[:300]
+        sections = args.get("sections")
+        try:
+            target_total_words = int(args.get("target_total_words") or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("La cible de mots du document doit être un entier.") from exc
+        if not title or not isinstance(sections, list) or not 3 <= len(sections) <= 16:
+            raise ValueError("Le plan doit contenir un titre et entre 3 et 16 sections.")
+        if not 100 <= target_total_words <= 20_000:
+            raise ValueError("La longueur cible doit être comprise entre 100 et 20 000 mots.")
+        normalized_sections = []
+        seen_ids: set[str] = set()
+        for item in sections:
+            if not isinstance(item, dict):
+                raise ValueError("Chaque section du plan doit être un objet.")
+            section_id = str(item.get("id") or "").strip().lower()
+            section_title = str(item.get("title") or "").strip()[:180]
+            purpose = str(item.get("purpose") or "").strip()[:500]
+            try:
+                target_words = int(item.get("target_words") or 0)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("La cible de mots d'une section doit être un entier.") from exc
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", section_id):
+                raise ValueError("Chaque identifiant de section doit contenir uniquement des lettres minuscules, chiffres, tirets ou soulignements.")
+            if section_id in seen_ids:
+                raise ValueError(f"Identifiant de section dupliqué : {section_id}")
+            if not section_title or len(purpose) < 10 or not 30 <= target_words <= 5000:
+                raise ValueError(f"La section « {section_title or section_id} » doit avoir un titre, un objectif détaillé et une cible de 30 à 5 000 mots.")
+            seen_ids.add(section_id)
+            normalized_sections.append({
+                "id": section_id, "title": section_title, "purpose": purpose,
+                "target_words": target_words, "actual_words": 0, "status": "planned",
+            })
+        planned_words = sum(item["target_words"] for item in normalized_sections)
+        if planned_words > 20_000 or target_total_words < int(planned_words * 0.8):
+            raise ValueError("La cible totale doit être cohérente avec la somme des cibles des sections.")
+        state.document_plan = {
+            "title": title, "target_total_words": target_total_words,
+            "sections": normalized_sections,
+        }
+        return {
+            "planned": True, "title": title, "target_total_words": target_total_words,
+            "sections_count": len(normalized_sections),
+            "outline": copy.deepcopy(normalized_sections),
+            "next": "Le plan est prêt. Appelle document_begin, puis rédige les sections dans l'ordre avec document_add_blocks.",
+        }
+
     if name == "document_begin":
         filename = _safe_filename(str(args.get("filename") or "rapport.docx"), "rapport.docx")
+        if (
+            state.user_request.strip()
+            and _request_requires_artifact(state.user_request)
+            and not state.document_plan
+        ):
+            raise ValueError("Avant de créer ce document, établis son plan avec document_plan : 3 à 16 sections ordonnées et une cible de mots pour chacune.")
         if not bool(args.get("restart", False)):
             for existing_id, existing_draft in reversed(list(state.drafts.items())):
                 if str(existing_draft.get("filename") or "").casefold() != filename.casefold():
