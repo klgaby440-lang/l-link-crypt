@@ -525,11 +525,11 @@ def _infer_document_quality(message: str) -> dict[str, Any]:
         ))[:20]
     detailed_astronomy_document = (
         re.search(
-            r"\\b(?:ast[eé]ro[iï]des?|astronomie|astrophysique|plan[eè]tes?|syst[eè]me solaire|com[eè]tes?|cosmologie|univers)\\b",
+            r"\b(?:ast[eé]ro[iï]des?|astronomie|astrophysique|plan[eè]tes?|syst[eè]me solaire|com[eè]tes?|cosmologie|univers)\b",
             text,
         )
         and re.search(
-            r"\\b(?:d[eé]taill[eé](?:e|es|s)?|professionnel(?:le)?s?|complet(?:e|s)?|approfondi(?:e|s|es)?|scientifique(?:s)?|rapport|document)\\b",
+            r"\b(?:d[eé]taill[eé](?:e|es|s)?|professionnel(?:le)?s?|complet(?:e|s)?|approfondi(?:e|s|es)?|scientifique(?:s)?|rapport|document)\b",
             text,
         )
     )
