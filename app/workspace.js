@@ -142,7 +142,10 @@ function renderDocumentDraft(draft){
  const headings=(draft.headings||[]).slice(0,6);
  const checks=draft.verification||{};
  const diag=Array.isArray(draft.repairGuidance)?draft.repairGuidance.slice(0,3):[];
- return '<section class="work-document-draft is-'+esc(draft.status||"in_progress")+'"><div class="work-document-draft-top"><span><b>'+esc(draft.filename||"Document Word")+'</b><small>'+esc(labels[draft.status]||"Brouillon reçu")+' · '+Number(draft.blockCount||0)+' blocs · '+Number(draft.wordCount||0).toLocaleString("fr-FR")+' mots</small></span><button class="work-editor-action" data-act="open-document-draft" data-id="'+esc(draft.fileId)+'">Ouvrir dans l’éditeur</button></div>'+(headings.length?'<div class="work-document-draft-headings">'+headings.map(h=>'<span>'+esc(h)+'</span>').join("")+'</div>':"")+(checks.passed===false||diag.length?'<div class="work-document-draft-warning"><b>Vérification non validée</b>'+(diag.length?'<ul>'+diag.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>':(checks.missing_required_headings||[]).length?'<p>Sections manquantes : '+esc(checks.missing_required_headings.join(", "))+'</p>':'<p>Le brouillon reste disponible dans Work pour être corrigé.</p>')+'</div>':"")+'</section>';
+ const sections=Array.isArray(draft.sections)?draft.sections:[];
+ const completed=sections.filter(x=>x&&x.status==="completed").length;
+ const outline=sections.length?'<div class="work-document-outline"><div class="work-document-outline-head"><b>Plan de rédaction</b><small>'+completed+'/'+sections.length+' sections terminées</small></div>'+sections.map((section,index)=>{const status=section.status==="completed"?"completed":section.status==="in_progress"?"current":"pending";const stateLabel=status==="completed"?"Terminée":status==="current"?"En cours":"À venir";const actual=Number(section.actual_words||0),target=Number(section.target_words||0),ratio=target>0?Math.min(100,Math.round(actual/target*100)):0;return '<div class="work-document-section is-'+status+'"><span class="work-document-section-mark">'+(status==="completed"?"✓":String(index+1))+'</span><span class="work-document-section-main"><b>'+esc(section.title||"Section")+'</b><small>'+esc(stateLabel)+' · '+actual.toLocaleString("fr-FR")+'/'+target.toLocaleString("fr-FR")+' mots</small><span class="work-document-section-track"><i style="width:'+ratio+'%"></i></span></span></div>';}).join("")+'</div>':"";
+ return '<section class="work-document-draft is-'+esc(draft.status||"in_progress")+'"><div class="work-document-draft-top"><span><b>'+esc(draft.filename||"Document Word")+'</b><small>'+esc(labels[draft.status]||"Brouillon reçu")+' · '+Number(draft.blockCount||0)+' blocs · '+Number(draft.wordCount||0).toLocaleString("fr-FR")+' mots</small></span><button class="work-editor-action" data-act="open-document-draft" data-id="'+esc(draft.fileId)+'">Ouvrir dans l’éditeur</button></div>'+outline+(headings.length?'<div class="work-document-draft-headings">'+headings.map(h=>'<span>'+esc(h)+'</span>').join("")+'</div>':"")+(checks.passed===false||diag.length?'<div class="work-document-draft-warning"><b>Vérification non validée</b>'+(diag.length?'<ul>'+diag.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>':(checks.missing_required_headings||[]).length?'<p>Sections manquantes : '+esc(checks.missing_required_headings.join(", "))+'</p>':'<p>Le brouillon reste disponible dans Work pour être corrigé.</p>')+'</div>':"")+'</section>';
 }
 function updateDocumentDraftSlot(ans){
  const slot=$("work-messages")?.querySelector('[data-mid="'+esc(ans.id)+'"] .work-document-draft-slot');
@@ -158,12 +161,12 @@ async function upsertServerDocumentDraft(documentData,ans){
  const blob=window.LlinkDocumentEditor.createFromPayload(payload);
  if(!file){
   const safeName=uniqueBinaryName(payload.filename);
-  file=await createBinaryFile(safeName,blob,mime,{documentData:payload,agentDraftId:documentData.document_id,isAgentDraft:true,documentRevision:Number(documentData.revision_count||0),agentDraftStatus:"in_progress"});
+  file=await createBinaryFile(safeName,blob,mime,{documentData:payload,agentDraftId:documentData.document_id,isAgentDraft:true,documentRevision:Number(documentData.revision_count||0),agentDraftStatus:"in_progress",documentOutline:Array.isArray(documentData.outline)?documentData.outline:[],currentSectionIndex:Number(documentData.current_section_index||0)});
  }else if(S.file?.id===file.id&&S.file.dirty){
   ans.reasoning.limitations=[...(ans.reasoning.limitations||[]),"Le brouillon Word reçu a été conservé côté serveur, mais l’éditeur local contient des modifications non enregistrées. Enregistre-les ou compare-les avant de remplacer le contenu."];
  }else{
   file.documentData=payload;file.blob=blob;file.mimeType=mime;file.editorType="document";file.isBinary=true;
-  file.documentRevision=Number(documentData.revision_count||0);file.agentDraftStatus="in_progress";
+  file.documentRevision=Number(documentData.revision_count||0);file.agentDraftStatus="in_progress";file.documentOutline=Array.isArray(documentData.outline)?documentData.outline:[];file.currentSectionIndex=Number(documentData.current_section_index||0);
   file.sizeBytes=blob.size;file.updatedAt=new Date().toISOString();file.dirty=false;
   if(S.file?.id===file.id){
    if(S.binaryEditor?.setPayload)S.binaryEditor.setPayload(payload);
@@ -175,12 +178,14 @@ async function upsertServerDocumentDraft(documentData,ans){
  S.files=await filesLocal();renderFiles();
  const headings=payload.blocks.filter(b=>b?.type==="heading"&&String(b.text||"").trim()).map(b=>String(b.text).trim());
  const words=payload.blocks.reduce((total,b)=>total+(String(b?.text||"").match(/[A-Za-zÀ-ÿ0-9]+/g)||[]).length,0);
- ans.documentDraft={fileId:file.id,documentId:documentData.document_id,filename:file.name,status:"in_progress",blockCount:payload.blocks.length,wordCount:words,headings,revision:Number(documentData.revision_count||0),verification:null,repairGuidance:[]};
+ ans.documentDraft={fileId:file.id,documentId:documentData.document_id,filename:file.name,status:"in_progress",blockCount:payload.blocks.length,wordCount:words,headings,sections:Array.isArray(documentData.outline)?documentData.outline:[],currentSectionIndex:Number(documentData.current_section_index||0),revision:Number(documentData.revision_count||0),verification:null,repairGuidance:[]};
  updateDocumentDraftSlot(ans);
 }
 function updateDocumentDraftVerification(ans,tool,result){
  if(!ans.documentDraft||!result)return;
  if(result.verification)ans.documentDraft.verification=result.verification;
+ if(Array.isArray(result.outline))ans.documentDraft.sections=result.outline;
+ if(Number.isInteger(result.current_section_index))ans.documentDraft.currentSectionIndex=result.current_section_index;
  if(tool==="document_finalize"&&result.precheck_passed===false){
   ans.documentDraft.status="needs_revision";
   ans.documentDraft.repairGuidance=Array.isArray(result.repair_guidance)?result.repair_guidance:[];
@@ -190,12 +195,14 @@ function updateDocumentDraftVerification(ans,tool,result){
  }
  updateDocumentDraftSlot(ans);
 }
-async function storeVerifiedDocumentArtifact(filename,blob,mime,verification){
+async function storeVerifiedDocumentArtifact(filename,blob,mime,verification,draftId){
  const all=await filesLocal();
- let file=all.find(item=>item.isAgentDraft&&String(item.name).toLowerCase()===String(filename).toLowerCase());
+ let file=draftId
+  ?all.find(item=>item.isAgentDraft&&item.agentDraftId===draftId)
+  :all.find(item=>item.isAgentDraft&&String(item.name).toLowerCase()===String(filename).toLowerCase());
  if(file){
   if(S.file?.id===file.id&&S.file.dirty){
-   return await createBinaryFile(uniqueBinaryName(filename),blob,mime||blob.type,{agentDraftStatus:"verified",verification:verification||{passed:true}});
+   return await createBinaryFile(uniqueBinaryName(filename),blob,mime||blob.type,{agentDraftId:draftId||null,isAgentDraft:false,agentDraftStatus:"verified",verification:verification||{passed:true}});
   }
   const version=Math.max(1,Number(file.localRevision||1));
   if(file.blob instanceof Blob)await db.workFileVersions.add({fileId:file.id,version,blob:file.blob,mimeType:file.mimeType,createdAt:new Date().toISOString()});
@@ -553,7 +560,7 @@ if((artifact.mime_type||"").startsWith("text/")||["json","md","markdown","txt","
 const textContent=await blob.text();
 if(bytes(textContent)<=LIMIT)file=await createFile(uniqueBinaryName(filename),textContent);
 else file=await createBinaryFile(uniqueBinaryName(filename),blob,artifact.mime_type);
-}else if(ext(filename)==="docx")file=await storeVerifiedDocumentArtifact(filename,blob,artifact.mime_type,artifact.verification);
+}else if(ext(filename)==="docx")file=await storeVerifiedDocumentArtifact(filename,blob,artifact.mime_type,artifact.verification,artifact.draft_id);
 else file=await createBinaryFile(uniqueBinaryName(filename),blob,artifact.mime_type);
 if(file){
 downloaded++;
