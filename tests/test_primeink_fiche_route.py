@@ -107,3 +107,79 @@ def test_primeink_fiche_extract_requires_a_roster(client, monkeypatch):
         },
     )
     assert response.status_code == 422
+
+
+
+def test_primeink_fiche_extract_falls_back_to_gemini_38_after_primary_503(
+    client, monkeypatch
+):
+    payload_from_model = {
+        "document_type": "fiche_notes",
+        "school_name": "École test",
+        "class_name": "3e A",
+        "course_name": "Mathématiques",
+        "academic_year": "2026-2027",
+        "students": [
+            {
+                "matched_student_id": "student-1",
+                "student_name": "MUKENDI Jean",
+                "p1": 14,
+                "p2": None,
+                "ex1": None,
+                "p3": None,
+                "p4": None,
+                "ex2": None,
+                "confidence": 0.94,
+                "warning": None,
+            }
+        ],
+        "warnings": [],
+        "confidence": 0.88,
+    }
+
+    class ProviderUnavailable(Exception):
+        code = 503
+
+    class FakeModel:
+        def __init__(self, overloaded=False):
+            self.overloaded = overloaded
+
+        def generate_content(self, contents):
+            if self.overloaded:
+                raise ProviderUnavailable("503 UNAVAILABLE")
+            return type("FakeResponse", (), {"text": json.dumps(payload_from_model)})()
+
+    requested_models = []
+
+    def fake_get_model(**kwargs):
+        model_name = kwargs.get("model_name", "primary")
+        requested_models.append(model_name)
+        return FakeModel(overloaded=model_name == "primary")
+
+    async def no_quota(**kwargs):
+        return None
+
+    async def fake_reserve_slot():
+        return lambda: None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(media, "reserve_ai_slot", fake_reserve_slot)
+    monkeypatch.setattr(media, "get_gemini_model", fake_get_model)
+
+    response = client.post(
+        "/api/primeink/fiche-extract",
+        json={
+            "imageBase64": _jpeg_data_url(),
+            "class_name": "3e A",
+            "course_name": "Mathématiques",
+            "max_period_points": 20,
+            "max_exam_points": 40,
+            "students": [
+                {"student_id": "student-1", "full_name": "MUKENDI Jean"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["students"][0]["p1"] == 14
+    assert requested_models == ["primary", "gemini-3.8-flash"]
