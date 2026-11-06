@@ -129,6 +129,63 @@ La réponse doit respecter exactement le schéma JSON fourni par le serveur.
 """.strip()
 
 
+# Schéma volontairement compact pour la sortie structurée Gemini.
+# Les limites métier et les longueurs sont toujours contrôlées par Pydantic après génération.
+PRIMEINK_FICHE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "document_type": {"type": "string", "enum": ["fiche_notes", "other"]},
+        "school_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "class_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "course_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "academic_year": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "students": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "matched_student_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "student_name": {"type": "string"},
+                    "p1": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "p2": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "ex1": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "p3": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "p4": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "ex2": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "confidence": {"type": "number"},
+                    "warning": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                },
+                "required": [
+                    "matched_student_id",
+                    "student_name",
+                    "p1",
+                    "p2",
+                    "ex1",
+                    "p3",
+                    "p4",
+                    "ex2",
+                    "confidence",
+                    "warning",
+                ],
+            },
+        },
+        "warnings": {"type": "array", "maxItems": 100, "items": {"type": "string"}},
+        "confidence": {"type": "number"},
+    },
+    "required": [
+        "document_type",
+        "school_name",
+        "class_name",
+        "course_name",
+        "academic_year",
+        "students",
+        "warnings",
+        "confidence",
+    ],
+}
+
+
 @router.post("/api/primeink/fiche-extract", response_model=PrimeInkFicheExtraction)
 async def primeink_fiche_extract(
     payload: PrimeInkFicheRequest,
@@ -167,7 +224,7 @@ async def primeink_fiche_extract(
             system_instruction=PRIMEINK_FICHE_SYSTEM_INSTRUCTION,
             max_output_tokens=8192,
             response_mime_type="application/json",
-            response_json_schema=PrimeInkFicheExtraction.model_json_schema(),
+            response_json_schema=PRIMEINK_FICHE_RESPONSE_SCHEMA,
         )
         response = await asyncio.to_thread(
             model.generate_content,
