@@ -23,6 +23,8 @@ def create_app() -> FastAPI:
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
+        # Autorise aussi les URL de prévisualisation Vercel du seul projet PrimeInk.
+        allow_origin_regex=r"https://class-net-p(?:-[a-z0-9-]+)?\.vercel\.app",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],

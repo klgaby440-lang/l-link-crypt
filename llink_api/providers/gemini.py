@@ -54,21 +54,32 @@ class GeminiModelAdapter:
         system_instruction: str | None,
         effort: str,
         timeout_seconds: int,
+        max_output_tokens: int = 2048,
+        response_mime_type: str | None = None,
+        response_json_schema: dict[str, Any] | None = None,
     ) -> None:
         self.api_key = api_key
         self.model_name = model_name
         self.system_instruction = system_instruction
         self.effort = effort if effort in EFFORT_TO_THINKING_LEVEL else "normal"
         self.timeout_ms = max(1, int(timeout_seconds * 1000))
+        self.max_output_tokens = max(256, min(int(max_output_tokens), 8192))
+        self.response_mime_type = response_mime_type
+        self.response_json_schema = response_json_schema
 
     def _config(self) -> types.GenerateContentConfig:
-        return types.GenerateContentConfig(
-            system_instruction=self.system_instruction,
-            max_output_tokens=2048,
-            thinking_config=types.ThinkingConfig(
+        config: dict[str, Any] = {
+            "system_instruction": self.system_instruction,
+            "max_output_tokens": self.max_output_tokens,
+            "thinking_config": types.ThinkingConfig(
                 thinking_level=EFFORT_TO_THINKING_LEVEL[self.effort]
             ),
-        )
+        }
+        if self.response_mime_type:
+            config["response_mime_type"] = self.response_mime_type
+        if self.response_json_schema:
+            config["response_json_schema"] = self.response_json_schema
+        return types.GenerateContentConfig(**config)
 
     def _client(self):
         return genai.Client(
@@ -129,6 +140,9 @@ def get_gemini_model(
     system_instruction: str | None = None,
     model_name: str = MODEL_NAME,
     effort: str = "normal",
+    max_output_tokens: int = 2048,
+    response_mime_type: str | None = None,
+    response_json_schema: dict[str, Any] | None = None,
 ) -> GeminiModelAdapter:
     """Retourne l'adaptateur Gemini ou signale une configuration absente."""
     settings = get_settings()
@@ -140,4 +154,7 @@ def get_gemini_model(
         system_instruction=system_instruction,
         effort=effort,
         timeout_seconds=settings.provider_timeout_seconds,
+        max_output_tokens=max_output_tokens,
+        response_mime_type=response_mime_type,
+        response_json_schema=response_json_schema,
     )

@@ -28,6 +28,54 @@ class OCRResponse(BaseModel):
     response: str
 
 
+class PrimeInkFicheStudentReference(BaseModel):
+    """Élève connu de PrimeInk transmis comme référence de rapprochement."""
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: str = Field(min_length=1, max_length=100)
+    full_name: str = Field(min_length=1, max_length=240)
+
+
+class PrimeInkFicheRequest(BaseModel):
+    """Photo et contexte minimal nécessaires à l'extraction d'une fiche PrimeInk."""
+    imageBase64: str = Field(min_length=16, max_length=8_100_000)
+    class_name: str = Field(default="", max_length=160)
+    course_name: str = Field(default="", max_length=160)
+    max_period_points: float = Field(ge=0, le=1000)
+    max_exam_points: float = Field(ge=0, le=1000)
+    students: list[PrimeInkFicheStudentReference] = Field(default_factory=list, max_length=200)
+
+
+class PrimeInkExtractedStudent(BaseModel):
+    """Notes lues sur une ligne et association éventuelle à un élève connu."""
+    model_config = ConfigDict(extra="forbid")
+
+    matched_student_id: str | None = Field(default=None, max_length=100)
+    student_name: str = Field(default="", max_length=240)
+    p1: float | None = Field(default=None, ge=0, le=1000)
+    p2: float | None = Field(default=None, ge=0, le=1000)
+    ex1: float | None = Field(default=None, ge=0, le=1000)
+    p3: float | None = Field(default=None, ge=0, le=1000)
+    p4: float | None = Field(default=None, ge=0, le=1000)
+    ex2: float | None = Field(default=None, ge=0, le=1000)
+    confidence: float = Field(default=0, ge=0, le=1)
+    warning: str | None = Field(default=None, max_length=300)
+
+
+class PrimeInkFicheExtraction(BaseModel):
+    """Réponse structurée de Llink destinée à l'écran de vérification PrimeInk."""
+    model_config = ConfigDict(extra="forbid")
+
+    document_type: Literal["fiche_notes", "other"] = "other"
+    school_name: str | None = Field(default=None, max_length=180)
+    class_name: str | None = Field(default=None, max_length=160)
+    course_name: str | None = Field(default=None, max_length=160)
+    academic_year: str | None = Field(default=None, max_length=80)
+    students: list[PrimeInkExtractedStudent] = Field(default_factory=list, max_length=200)
+    warnings: list[str] = Field(default_factory=list, max_length=100)
+    confidence: float = Field(default=0, ge=0, le=1)
+
+
 class AudioResponse(BaseModel):
     text: str
 

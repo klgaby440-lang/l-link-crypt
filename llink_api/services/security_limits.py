@@ -30,6 +30,8 @@ DEFAULT_POLICIES: dict[tuple[str, bool], QuotaPolicy] = {
     ("chat", True): QuotaPolicy(12, 240),
     ("ocr", False): QuotaPolicy(1, 5),
     ("ocr", True): QuotaPolicy(5, 40),
+    ("fiche_extract", False): QuotaPolicy(1, 10),
+    ("fiche_extract", True): QuotaPolicy(5, 50),
     ("audio", False): QuotaPolicy(1, 3),
     ("audio", True): QuotaPolicy(3, 20),
     ("attachment", False): QuotaPolicy(2, 10),
