@@ -79,6 +79,20 @@ Le quota initial est de 1 démarrage/minute et 12/jour par compte. Les métrique
 
 Corps JSON : \`{"imageBase64": "data:image/jpeg;base64,..."}\`. Authorization facultative. Images JPEG, PNG ou WebP uniquement, 6 Mo décodés maximum. Réponse : \`{"response": "..."}\`. Erreurs : 400, 413, 415, 429, 502 ou 503.
 
+### POST /api/primeink/fiche-extract
+
+Route spécialisée utilisée par PrimeInk pour transformer une photo de fiche de notes en données contrôlables.
+
+Corps JSON :
+- imageBase64 : image JPEG, PNG ou WebP en Data URL ou Base64 (6 Mo décodés maximum).
+- class_name, course_name : contexte de la fiche.
+- max_period_points, max_exam_points : plafonds autorisés.
+- students : liste de référence des élèves (student_id, full_name, 200 au maximum).
+
+Réponse JSON : document_type, school_name, class_name, course_name, academic_year, students, warnings, confidence. Chaque ligne contient matched_student_id, student_name, les notes p1, p2, ex1, p3, p4, ex2 (null lorsqu'une case est vide ou illisible), confidence et éventuellement warning.
+
+Le serveur vérifie que les identifiants appartiennent à la liste de référence et écarte les notes au-dessus du barème transmis. L'image n'est pas enregistrée par cette route. La réponse doit toujours être vérifiée par l'enseignant avant son application dans PrimeInk. Authorization facultative ; quota anonyme : 1 appel/minute et 10/jour ; quota authentifié : 5/minute et 50/jour. Erreurs : 400, 413, 415, 422, 429, 502 ou 503.
+
 ### \`POST /api/audio\`
 
 Envoi multipart avec le champ fichier \`file\`. Authorization facultative. WebM, MP4, MP3, WAV, OGG et AAC acceptés, 12 Mo maximum. Réponse : \`{"text": "..."}\`. Erreurs : 400, 413, 415, 429, 502 ou 503.
