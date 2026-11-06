@@ -6,7 +6,7 @@ from llink_api.api.routes import media
 
 def _jpeg_data_url() -> str:
     # L'endpoint valide le type par signature ; le modèle est remplacé dans ce test.
-    raw = b"\\xff\\xd8\\xff" + b"primeink-test-image"
+    raw = b"\xff\xd8\xff" + b"primeink-test-image"
     return "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii")
 
 
