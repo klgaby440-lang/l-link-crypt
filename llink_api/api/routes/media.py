@@ -135,26 +135,25 @@ PRIMEINK_FICHE_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
         "document_type": {"type": "string", "enum": ["fiche_notes", "other"]},
-        "school_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-        "class_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-        "course_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-        "academic_year": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "school_name": {"type": ["string", "null"]},
+        "class_name": {"type": ["string", "null"]},
+        "course_name": {"type": ["string", "null"]},
+        "academic_year": {"type": ["string", "null"]},
         "students": {
             "type": "array",
-            "maxItems": 200,
             "items": {
                 "type": "object",
                 "properties": {
-                    "matched_student_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "matched_student_id": {"type": ["string", "null"]},
                     "student_name": {"type": "string"},
-                    "p1": {"anyOf": [{"type": "number"}, {"type": "null"}]},
-                    "p2": {"anyOf": [{"type": "number"}, {"type": "null"}]},
-                    "ex1": {"anyOf": [{"type": "number"}, {"type": "null"}]},
-                    "p3": {"anyOf": [{"type": "number"}, {"type": "null"}]},
-                    "p4": {"anyOf": [{"type": "number"}, {"type": "null"}]},
-                    "ex2": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "p1": {"type": ["number", "null"]},
+                    "p2": {"type": ["number", "null"]},
+                    "ex1": {"type": ["number", "null"]},
+                    "p3": {"type": ["number", "null"]},
+                    "p4": {"type": ["number", "null"]},
+                    "ex2": {"type": ["number", "null"]},
                     "confidence": {"type": "number"},
-                    "warning": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "warning": {"type": ["string", "null"]},
                 },
                 "required": [
                     "matched_student_id",
@@ -170,7 +169,7 @@ PRIMEINK_FICHE_RESPONSE_SCHEMA = {
                 ],
             },
         },
-        "warnings": {"type": "array", "maxItems": 100, "items": {"type": "string"}},
+        "warnings": {"type": "array", "items": {"type": "string"}},
         "confidence": {"type": "number"},
     },
     "required": [
@@ -226,13 +225,30 @@ async def primeink_fiche_extract(
             response_mime_type="application/json",
             response_json_schema=PRIMEINK_FICHE_RESPONSE_SCHEMA,
         )
-        response = await asyncio.to_thread(
-            model.generate_content,
-            [
-                prompt,
-                {"mime_type": mime_type, "data": image_bytes},
-            ],
-        )
+        image_contents = [
+            prompt,
+            {"mime_type": mime_type, "data": image_bytes},
+        ]
+        try:
+            response = await asyncio.to_thread(model.generate_content, image_contents)
+        except Exception as schema_error:
+            # Gemini peut rejeter un schéma structuré selon la version du modèle/API.
+            # On retente alors en mode JSON sans schéma ; Pydantic valide toujours
+            # intégralement la réponse avant qu'elle ne soit renvoyée à PrimeInk.
+            if getattr(schema_error, "code", None) != 400:
+                raise
+            logger.warning(
+                "Gemini a refusé le schéma JSON PrimeInk (400) ; nouvelle tentative en mode JSON simple."
+            )
+            fallback_model = get_gemini_model(
+                system_instruction=PRIMEINK_FICHE_SYSTEM_INSTRUCTION,
+                max_output_tokens=8192,
+                response_mime_type="application/json",
+            )
+            response = await asyncio.to_thread(
+                fallback_model.generate_content,
+                image_contents,
+            )
         response_text = getattr(response, "text", None)
         if not isinstance(response_text, str) or not response_text.strip():
             raise RuntimeError("Le modèle n'a retourné aucun contenu structuré.")
