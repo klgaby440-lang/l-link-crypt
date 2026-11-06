@@ -57,6 +57,7 @@ class GeminiModelAdapter:
         max_output_tokens: int = 2048,
         response_mime_type: str | None = None,
         response_json_schema: dict[str, Any] | None = None,
+        retry_attempts: int | None = None,
     ) -> None:
         self.api_key = api_key
         self.model_name = model_name
@@ -66,6 +67,9 @@ class GeminiModelAdapter:
         self.max_output_tokens = max(256, min(int(max_output_tokens), 8192))
         self.response_mime_type = response_mime_type
         self.response_json_schema = response_json_schema
+        self.retry_attempts = (
+            None if retry_attempts is None else max(1, min(int(retry_attempts), 5))
+        )
 
     def _config(self) -> types.GenerateContentConfig:
         config: dict[str, Any] = {
@@ -82,9 +86,22 @@ class GeminiModelAdapter:
         return types.GenerateContentConfig(**config)
 
     def _client(self):
+        retry_options = None
+        if self.retry_attempts is not None:
+            retry_options = types.HttpRetryOptions(
+                attempts=self.retry_attempts,
+                initial_delay=0.5,
+                max_delay=2.0,
+                exp_base=2.0,
+                jitter=0.25,
+                http_status_codes=[502, 503, 504],
+            )
         return genai.Client(
             api_key=self.api_key,
-            http_options=types.HttpOptions(timeout=self.timeout_ms),
+            http_options=types.HttpOptions(
+                timeout=self.timeout_ms,
+                retry_options=retry_options,
+            ),
         )
 
 
@@ -143,6 +160,7 @@ def get_gemini_model(
     max_output_tokens: int = 2048,
     response_mime_type: str | None = None,
     response_json_schema: dict[str, Any] | None = None,
+    retry_attempts: int | None = None,
 ) -> GeminiModelAdapter:
     """Retourne l'adaptateur Gemini ou signale une configuration absente."""
     settings = get_settings()
@@ -157,4 +175,5 @@ def get_gemini_model(
         max_output_tokens=max_output_tokens,
         response_mime_type=response_mime_type,
         response_json_schema=response_json_schema,
+        retry_attempts=retry_attempts,
     )
