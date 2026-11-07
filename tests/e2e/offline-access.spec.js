@@ -4,7 +4,7 @@ test("le Web n'importe jamais le moteur local et refuse le mode hors ligne", asy
   const nativeRequests = [];
   const pageErrors = [];
   page.on("request", request => {
-    if (/offline-engine\\.js|\\/vendor\\//i.test(request.url())) nativeRequests.push(request.url());
+    if (/offline-engine\.js|\/vendor\//i.test(request.url())) nativeRequests.push(request.url());
   });
   page.on("pageerror", error => pageErrors.push(error.message));
 

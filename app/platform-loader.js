@@ -8,7 +8,7 @@
       (capacitor && typeof capacitor.isNativePlatform === "function" && capacitor.isNativePlatform()) ||
       location.protocol === "capacitor:" ||
       location.protocol === "ionic:" ||
-      (location.hostname === "localhost" && /;\\s*wv\\)/i.test(navigator.userAgent))
+      (location.hostname === "localhost" && /;\s*wv\)/i.test(navigator.userAgent))
     );
   } catch (_) {
     isCapacitor = false;
@@ -24,7 +24,7 @@
   });
 
   function writeScript(src) {
-    document.write('<script src="' + src + '"><\\/script>');
+    document.write('<script src="' + src + '"></script>');
   }
 
   function writeLink(href) {
