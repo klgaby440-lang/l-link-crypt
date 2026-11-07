@@ -126,7 +126,7 @@ if (!(await fs.readdir(ortDestination)).some(file => file.endsWith(".wasm"))) {
 const tessRoot = packageRoot("tesseract.js");
 await copyPackageFile("tesseract.js", "dist/worker.min.js", "tesseract-worker.min.js");
 const coreRoot = packageRoot("tesseract.js-core");
-const coreDistribution = path.join(coreRoot, "dist");
+const coreDistribution = coreRoot;
 const coreDestination = path.join(vendorDirectory, "tesseract-core");
 await mkdir(coreDestination);
 for (const file of await fs.readdir(coreDistribution)) {
