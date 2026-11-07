@@ -8,6 +8,26 @@
   TILE.dataset.llia3dInit = "1";
 
   const fallback = TILE.querySelector(".elia-svg, .elia-avatar-3d");
+  let activeTile = TILE;
+  let resizeObserver = null;
+  let canvas = null;
+  function resolveActiveTile() {
+    if (ROOT.classList.contains("is-open")) return TILE;
+    if (document.body.classList.contains("live-mode-active")) return document.getElementById("live-avatar-stage");
+    return null;
+  }
+  function placeCanvas() {
+    const next = resolveActiveTile();
+    if (!next || !canvas) { stop(); return; }
+    if (canvas.parentElement !== next) {
+      next.insertBefore(canvas, next.firstChild);
+      if (fallback) fallback.classList.toggle("llia-fallback-hidden", next === TILE);
+      activeTile = next;
+      if (resizeObserver) { resizeObserver.disconnect(); resizeObserver.observe(activeTile); }
+      resize();
+    }
+    start();
+  }
   const REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let renderer = null;
   let raf = 0;
@@ -47,11 +67,7 @@
     });
   }
 
-  function isVisible() {
-    return ROOT.classList.contains("is-open") ||
-      (document.body.classList.contains("live-mode-active") &&
-       TILE.parentElement && TILE.parentElement.id === "live-avatar-stage");
-  }
+  function isVisible() { return !!resolveActiveTile(); }
 
   function start() {
     if (!ready || running || document.hidden || !isVisible()) return;
@@ -106,7 +122,7 @@
   let scene, camera, head, mouthCavity, upperLip, lowerLip, eyeGroups;
 
   function build(T) {
-    const canvas = document.createElement("canvas");
+    canvas = document.createElement("canvas");
     canvas.className = "llia-3d-canvas";
     canvas.tabIndex = 0;
     canvas.setAttribute("role", "img");
@@ -130,46 +146,39 @@
     renderer.setClearColor(0x000000, 0);
     renderer.outputEncoding = T.sRGBEncoding;
     renderer.toneMapping = T.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = 1.12;
 
     scene = new T.Scene();
     camera = new T.PerspectiveCamera(31, 1, 0.1, 100);
     camera.position.set(0, 0.02, zoom);
 
     scene.add(new T.HemisphereLight(0xffffff, 0x82766f, 1.5));
-    const key = new T.DirectionalLight(0xfff2e7, 2.1);
+    const key = new T.DirectionalLight(0xfff4e8, 2.15);
     key.position.set(-3, 4, 5);
     scene.add(key);
-    const fill = new T.DirectionalLight(0xffffff, 1.0);
+    const fill = new T.DirectionalLight(0xffffff, 1.05);
     fill.position.set(3, 1, 4);
     scene.add(fill);
-    const rim = new T.DirectionalLight(0xc9c2ff, 1.25);
+    const rim = new T.DirectionalLight(0xe8dfd2, 1.25);
     rim.position.set(1, 3, -3);
     scene.add(rim);
 
     head = new T.Group();
     scene.add(head);
 
-    const skin = new T.MeshStandardMaterial({ color: 0xf0d9c7, roughness: 0.52, metalness: 0.01 });
-    const skinLight = new T.MeshStandardMaterial({ color: 0xffeadc, roughness: 0.4 });
-    const hair = new T.MeshStandardMaterial({ color: 0x29212a, roughness: 0.82 });
-    const hairLight = new T.MeshStandardMaterial({ color: 0x40313d, roughness: 0.72 });
+    const skin = new T.MeshStandardMaterial({ color: 0xf1e9df, roughness: 0.48, metalness: 0.015 });
+    const skinLight = new T.MeshStandardMaterial({ color: 0xf8f2eb, roughness: 0.38 });
     const eyeWhite = new T.MeshStandardMaterial({ color: 0xfaf7f1, roughness: 0.25 });
     const irisMat = new T.MeshStandardMaterial({ color: 0x71513f, roughness: 0.3 });
     const pupilMat = new T.MeshStandardMaterial({ color: 0x191719, roughness: 0.2 });
     const lipMat = new T.MeshStandardMaterial({ color: 0x9f5e68, roughness: 0.44 });
     const mouthDark = new T.MeshStandardMaterial({ color: 0x392328, roughness: 0.86 });
-    const clothing = new T.MeshStandardMaterial({ color: 0x554b91, roughness: 0.7 });
 
     const make = (geometry, material, parent = head) => {
       const mesh = new T.Mesh(geometry, material);
       parent.add(mesh);
       return mesh;
     };
-
-    const shoulders = make(new T.SphereGeometry(1, 48, 32), clothing);
-    shoulders.position.set(0, -1.93, -0.12);
-    shoulders.scale.set(1.04, 0.40, 0.48);
 
     const neck = make(new T.CylinderGeometry(0.43, 0.58, 1.25, 40, 1), skin);
     neck.position.set(0, -1.48, -0.04);
@@ -212,24 +221,6 @@
     faceGeometry.computeVertexNormals();
     make(faceGeometry, skin);
 
-    /* Chevelure arrière et mèches latérales pour donner une vraie silhouette de tête. */
-    const hairCap = make(new T.SphereGeometry(1, 48, 32), hair);
-    hairCap.position.set(0, 0.83, -0.27);
-    hairCap.scale.set(0.99, 0.67, 0.66);
-    for (const side of [-1, 1]) {
-      const strand = make(new T.SphereGeometry(1, 32, 24), hair);
-      strand.position.set(side * 0.82, -0.13, -0.12);
-      strand.scale.set(0.19, 0.91, 0.19);
-      strand.rotation.z = side * -0.08;
-      const highlight = make(new T.SphereGeometry(1, 24, 16), hairLight);
-      highlight.position.set(side * 0.89, 0.23, -0.015);
-      highlight.scale.set(0.045, 0.47, 0.035);
-      highlight.rotation.z = side * -0.12;
-    }
-    const fringe = make(new T.SphereGeometry(1, 32, 20), hairLight);
-    fringe.position.set(0, 1.18, 0.20);
-    fringe.scale.set(0.62, 0.22, 0.24);
-
     for (const side of [-1, 1]) {
       const ear = make(new T.SphereGeometry(1, 32, 24), skin);
       ear.position.set(side * 0.91, -0.02, -0.005);
@@ -259,7 +250,7 @@
       pupil.scale.set(0.034, 0.042, 0.014);
       const glint = make(new T.SphereGeometry(0.014, 12, 8), eyeWhite, eyeGroup);
       glint.position.set(-0.022, 0.026, 0.168);
-      const brow = make(new T.SphereGeometry(1, 24, 16), hair, head);
+      const brow = make(new T.SphereGeometry(1, 24, 16), skin, head);
       brow.position.set(side * 0.37, 0.49, 0.59);
       brow.scale.set(0.23, 0.045, 0.035);
       brow.rotation.z = side * 0.08;
@@ -296,8 +287,8 @@
     head.position.y = 0.12;
 
     function resize() {
-      const width = Math.max(1, TILE.clientWidth);
-      const height = Math.max(1, TILE.clientHeight);
+      const width = Math.max(1, activeTile.clientWidth);
+      const height = Math.max(1, activeTile.clientHeight);
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
@@ -352,8 +343,10 @@
       if (event.key === "-") targetZoom = clamp(targetZoom + 0.3, 5.2, 10.5);
     });
 
-    if (window.ResizeObserver) new ResizeObserver(resize).observe(TILE);
-    else window.addEventListener("resize", resize, { passive: true });
+    if (window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(activeTile);
+    } else window.addEventListener("resize", resize, { passive: true });
     resize();
 
     canvas.addEventListener("webglcontextlost", event => {
@@ -368,16 +361,17 @@
     ready = true;
     if (fallback) fallback.classList.add("llia-fallback-hidden");
     window.llinkLiveAvatarStatus = "ready";
-    if (isVisible()) start();
+    placeCanvas();
   }
 
   const observer = new MutationObserver(() => {
-    if (isVisible() && !document.hidden) start();
-    else stop();
+    if (document.hidden) { stop(); return; }
+    placeCanvas();
   });
   observer.observe(ROOT, { attributes: true, attributeFilter: ["class"] });
   observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-  window.llinkLiveAvatarController = { start, stop };
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.llinkLiveAvatarController = { start, stop, placeCanvas };
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stop();
     else start();
