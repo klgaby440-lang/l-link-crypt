@@ -1699,9 +1699,18 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
             toggleComposer(false);
             const input = document.getElementById('user-msg');
             if (input) input.blur();
-            // Si le microphone était actif, on lui demande de s’arrêter avant de quitter Live.
-            if (currentMode === 'voice' && mode !== 'voice' && isRecording && typeof window.handleVoice === 'function') {
-                try { await window.handleVoice(); } catch (e) { console.warn('Arrêt du mode vocal:', e); }
+            // Le même WebSocket sert au Live audio et au Live vidéo. On ne coupe la session
+            // qu'en quittant réellement le mode Live.
+            if (currentMode === 'voice' && mode !== 'voice') {
+                const call = document.getElementById('llcall');
+                if (call && call.classList.contains('is-open') && typeof window.closeLiveVideoCall === 'function') {
+                    try { window.closeLiveVideoCall(); } catch (e) { console.warn('Fermeture de la vue vidéo:', e); }
+                }
+                if (typeof window.disconnectLlinkLiveSession === 'function') {
+                    try { await window.disconnectLlinkLiveSession(); } catch (e) { console.warn('Arrêt de la session Live:', e); }
+                } else if (isRecording && typeof window.handleVoice === 'function') {
+                    try { await window.handleVoice(); } catch (e) { console.warn('Arrêt du mode vocal:', e); }
+                }
             }
             if (mode === 'voice' && currentMode !== 'voice') previousModeBeforeLive = currentMode || 'chat';
             currentMode = mode;
@@ -1727,10 +1736,17 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                       <button type="button" onclick="returnFromLive()" aria-label="Retour" title="Retour"><i data-lucide="arrow-left"></i></button>
                       <button type="button" class="live-chat-button" onclick="selectAppMode('chat')" aria-label="Ouvrir le chat" title="Chat"><i data-lucide="message-circle"></i></button>
                     </div>
-                    <div class="live-visual effect-waves" id="live-visual" aria-label="Barres de fréquence">
-                      <div class="live-wave-lines" role="button" tabindex="0" aria-label="Toucher pour changer les barres de fréquence" title="Toucher pour changer les barres de fréquence" onclick="cycleLiveEffect(event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();cycleLiveEffect(event)}">${Array.from({length:43}, (_, i) => { const h=7 + Math.abs(Math.sin(i * .73)) * (i % 7 === 0 ? 48 : 31); const angle=(i/43)*360; const radius=28 + Math.abs(Math.sin(i*.73))*25; const y=Math.sin(i*.48)*34; return `<span style="--i:${i};--h:${h}px;--angle:${angle}deg;--radius:${radius}px;--y:${y}px;--delay:${(i % 11) * -.09}s;--speed:${.55 + (i % 6) * .12}s"></span>`; }).join('')}</div>
+                    <div class="live-visual live-avatar-visual" id="live-visual" aria-label="Visage 3D animé d'Elia">
+                      <div id="live-avatar-stage" class="live-avatar-stage" aria-label="Visage 3D interactif d'Elia"></div>
+                      <div class="live-avatar-caption">
+                        <span class="live-avatar-name">Elia</span>
+                        <span id="live-avatar-status" class="live-avatar-status" aria-live="polite">Connexion au service Live…</span>
+                      </div>
+                      <div id="live-avatar-transcript" class="live-avatar-transcript" aria-live="polite"></div>
                     </div>
-                    <div class="live-bottom-actions" aria-label="Commandes Live">
+                    <div class="live-bottom-actions live-avatar-controls" aria-label="Commandes Live">
+                      <button type="button" id="live-voice-mic" class="live-avatar-control live-avatar-mic" onclick="toggleLlinkLiveMic()" aria-label="Activer le microphone" aria-pressed="false" title="Activer le microphone"><i data-lucide="mic"></i></button>
+                      <button type="button" id="live-voice-video" class="live-avatar-control" onclick="openLiveVideoCall()" aria-label="Ouvrir l'appel vidéo" title="Ouvrir l'appel vidéo"><i data-lucide="video"></i></button>
                       <button type="button" class="live-plus-button" id="live-plus-button" onclick="toggleLiveEffects()" aria-label="Ouvrir les options Live" aria-expanded="false" title="Options Live"><i data-lucide="plus"></i></button>
                     </div>
                     <div id="live-more-menu" class="live-more-menu" role="menu" aria-label="Autres options Live" hidden></div>
@@ -1747,6 +1763,15 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                     </div>
                   </section>`;
                 lucide.createIcons();
+                const videoFallback = document.querySelector('#llcall-tile-ai .elia-svg, #llcall-tile-ai .elia-avatar-3d');
+                const voiceFallback = document.getElementById('live-avatar-stage');
+                if (videoFallback && voiceFallback) {
+                    const clone = videoFallback.cloneNode(true);
+                    clone.classList.remove('llia-fallback-hidden');
+                    voiceFallback.appendChild(clone);
+                }
+                if (window.llinkLiveAvatarController?.placeCanvas) window.llinkLiveAvatarController.placeCanvas();
+                if (typeof window.connectLlinkLiveSession === 'function') window.connectLlinkLiveSession();
                 window.setLiveEffect(currentLiveEffect);
             } else if (mode === 'work') {
                 document.getElementById('chat-window').innerHTML = '<div id="work-workspace"></div>';
@@ -4972,14 +4997,22 @@ let userTranscript='', assistantTranscript='', closing=false;
 
 function status(message){
   window.llinkLiveStatus=message||'';
-  const node=$('llcall-state');
-  if(node&&message)node.textContent=message;
+  const nodes=[$('llcall-state'),$('live-avatar-status')].filter(Boolean);
+  nodes.forEach(node=>{if(message)node.textContent=message;});
 }
 function setMicUi(on){
   micOn=!!on;
   window.llinkLiveMicOn=micOn;
   micButton.classList.toggle('on',micOn);
   micButton.innerHTML='<i data-lucide="'+(micOn?'mic-off':'mic')+'"></i>';
+  const voiceButton=$('live-voice-mic');
+  if(voiceButton){
+    voiceButton.classList.toggle('on',micOn);
+    voiceButton.setAttribute('aria-pressed',micOn?'true':'false');
+    voiceButton.setAttribute('aria-label',micOn?'Désactiver le microphone':'Activer le microphone');
+    voiceButton.title=micOn?'Désactiver le microphone':'Activer le microphone';
+    voiceButton.innerHTML='<i data-lucide="'+(micOn?'mic-off':'mic')+'"></i>';
+  }
   if(window.lucide)window.lucide.createIcons();
 }
 function wsUrl(){
@@ -5010,6 +5043,8 @@ function stopPlayback(){
   playbackNodes.clear();
   if(playbackContext)playbackCursor=playbackContext.currentTime;
   dialog.classList.remove('speaking');
+  $('live-avatar-stage')?.classList.remove('speaking');
+  window.llinkLiveOutputLevel=0;
 }
 async function ensurePlayback(){
   if(!playbackContext){
@@ -5025,6 +5060,9 @@ async function playPcm(base64,sampleRate){
   const count=Math.floor(raw.byteLength/2);
   if(!count)return;
   const samples=new Int16Array(raw.buffer,raw.byteOffset,count);
+  let energy=0;
+  for(let i=0;i<samples.length;i+=8){const n=samples[i]/32768;energy+=n*n;}
+  window.llinkLiveOutputLevel=Math.min(1,Math.sqrt(energy/Math.max(1,Math.ceil(samples.length/8)))*3.6);
   const audioBuffer=playbackContext.createBuffer(1,count,sampleRate||24000);
   const channel=audioBuffer.getChannelData(0);
   for(let i=0;i<count;i++)channel[i]=samples[i]/32768;
@@ -5035,10 +5073,15 @@ async function playPcm(base64,sampleRate){
   playbackCursor=startAt+audioBuffer.duration;
   playbackNodes.add(source);
   dialog.classList.add('speaking');
+  $('live-avatar-stage')?.classList.add('speaking');
   source.onended=()=>{
     playbackNodes.delete(source);
     try{source.disconnect();}catch(_){}
-    if(!playbackNodes.size)dialog.classList.remove('speaking');
+    if(!playbackNodes.size){
+      dialog.classList.remove('speaking');
+      $('live-avatar-stage')?.classList.remove('speaking');
+      window.llinkLiveOutputLevel=0;
+    }
   };
   source.start(startAt);
 }
@@ -5094,9 +5137,16 @@ function handleServerMessage(message){
     return;
   }
   if(message.type==='transcript'){
-    if(message.speaker==='user')userTranscript+=String(message.text||'');
-    else if(message.speaker==='assistant')assistantTranscript+=String(message.text||'');
-    if(message.speaker==='user')status('Tu parles…');
+    const chunk=String(message.text||'');
+    if(message.speaker==='user')userTranscript+=chunk;
+    else if(message.speaker==='assistant')assistantTranscript+=chunk;
+    const transcript=$('live-avatar-transcript');
+    if(transcript){
+      const userLine=userTranscript.trim();
+      const assistantLine=assistantTranscript.trim();
+      transcript.textContent=(userLine?'Toi : '+userLine:'')+(userLine&&assistantLine?'   ·   ':'')+(assistantLine?'Elia : '+assistantLine:'');
+    }
+    if(message.speaker==='user')status('Je t’écoute…');
     else status('Elia répond…');
     return;
   }
@@ -5163,7 +5213,7 @@ async function startMicrophone(){
     captureContext=new AudioContextClass({sampleRate:targetRate});
     if(captureContext.state==='suspended')await captureContext.resume();
     captureSource=captureContext.createMediaStreamSource(micStream);
-    captureProcessor=captureContext.createScriptProcessor(4096,1,1);
+    captureProcessor=captureContext.createScriptProcessor(2048,1,1);
     silentGain=captureContext.createGain();
     silentGain.gain.value=0;
     captureProcessor.onaudioprocess=event=>{
@@ -5249,9 +5299,13 @@ async function disconnectLive(){
   userTranscript='';assistantTranscript='';
   status('');
 }
+window.connectLlinkLiveSession=connectLive;
+window.disconnectLlinkLiveSession=disconnectLive;
+window.toggleLlinkLiveMic=toggleMicrophone;
+window.sendLlinkLiveText=text=>send({type:'text',text:String(text||'').slice(0,8000)});
 const oldVoice=window.handleVoice;
 window.handleVoice=function(){
-  if(dialog.classList.contains('is-open'))return toggleMicrophone();
+  if(dialog.classList.contains('is-open')||document.body.classList.contains('live-mode-active'))return toggleMicrophone();
   return oldVoice?oldVoice.apply(this,arguments):undefined;
 };
 const oldOpen=window.openLiveVideoCall;
@@ -5262,7 +5316,8 @@ window.openLiveVideoCall=function(){
 };
 const oldClose=window.closeLiveVideoCall;
 window.closeLiveVideoCall=function(){
-  disconnectLive();
+  // La vue vidéo est un panneau du Live audio : fermer l'image ne coupe pas la conversation.
+  if(!document.body.classList.contains('live-mode-active'))disconnectLive();
   return oldClose&&oldClose.apply(this,arguments);
 };
 $('llcall-form').addEventListener('submit',event=>{
@@ -5542,4 +5597,37 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script src="./presentation-editor.js?v=work-sequential-documents-1"></script>
 <script src="./binary-editors.js?v=work-sequential-documents-1"></script>
 <script src="./workspace.js?v=work-sequential-documents-1"></script>
+<script src="./live-avatar.js?v=live-face-3d-20261107"></script>
+<style id="llink-live-avatar-ui">
+#live-avatar-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:320px;touch-action:pan-y}
+#live-avatar-stage .llia-3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:2;touch-action:none;cursor:grab}
+#live-avatar-stage .llia-3d-canvas:active{cursor:grabbing}
+#live-avatar-stage .elia-svg{height:88%;width:auto;max-width:85%;object-fit:contain;filter:grayscale(1);opacity:.9}
+.live-avatar-visual{height:clamp(340px,56vh,620px)!important;min-height:300px!important;max-width:900px!important;margin:auto;position:relative!important;overflow:visible!important}
+.live-avatar-visual::before,.live-avatar-visual::after{display:none!important}
+.live-avatar-caption{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:9px;white-space:nowrap;padding:6px 12px;border:1px solid var(--live-border);border-radius:999px;background:color-mix(in srgb,var(--live-surface) 88%,transparent);backdrop-filter:blur(12px);font-size:11px}
+.live-avatar-name{font-weight:800;color:var(--live-fg)}
+.live-avatar-status{color:var(--live-muted)}
+.live-avatar-transcript{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);width:min(620px,88%);max-height:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;color:var(--live-muted);font-size:12px;line-height:1.5;z-index:5}
+#live-avatar-stage .elia-svg{position:relative;z-index:1;display:block;max-height:100%;margin:auto}
+.live-avatar-controls{display:flex!important;align-items:center;justify-content:center;gap:14px!important;pointer-events:none}
+.live-avatar-controls .live-avatar-control{pointer-events:auto;width:52px!important;height:52px!important;min-height:52px!important;border-radius:50%!important;background:var(--live-surface)!important;color:var(--live-fg)!important;border:1px solid var(--live-border)!important;display:grid!important;place-items:center!important;box-shadow:0 5px 18px #0002!important}
+.live-avatar-controls .live-avatar-control svg{width:20px!important;height:20px!important}
+.live-avatar-controls .live-avatar-mic{width:58px!important;height:58px!important;background:var(--live-fg)!important;color:var(--live-bg)!important}
+.live-avatar-controls .live-avatar-mic.on{background:#c9574b!important;color:#fff!important;border-color:#c9574b!important}
+.live-avatar-controls .live-plus-button{position:static!important;transform:none!important;width:44px!important;height:44px!important;min-height:44px!important;display:grid!important;place-items:center!important;background:var(--live-surface)!important;color:var(--live-fg)!important;border:1px solid var(--live-border)!important;border-radius:50%!important}
+#llcall .llia-3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:2;touch-action:none;cursor:grab}
+#llcall .llia-3d-canvas:active{cursor:grabbing}
+#llcall .llcall-ai{position:relative;overflow:hidden}
+#llcall .elia-svg.llia-fallback-hidden{display:none!important}
+#llcall .llia-3d-canvas:focus-visible{outline:2px solid var(--llink-accent);outline-offset:-4px}
+@media(max-width:600px){
+  .live-avatar-visual{height:clamp(300px,52vh,500px)!important;min-height:280px!important}
+  .live-avatar-controls{gap:10px!important}
+  .live-avatar-controls .live-avatar-control{width:46px!important;height:46px!important;min-height:46px!important}
+  .live-avatar-controls .live-avatar-mic{width:54px!important;height:54px!important}
+  .live-avatar-transcript{bottom:47px;font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){.live-avatar-controls .live-avatar-control{transition:none!important}}
+</style>
 </html>
