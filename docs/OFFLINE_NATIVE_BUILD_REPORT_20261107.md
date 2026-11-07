@@ -149,7 +149,29 @@ Puis compiler `desktop/installer/Llink.iss` avec Inno Setup 6.
 
 - Fichier : `Llink-Android-offline.apk`.
 - Taille : 163 319 783 octets.
-- SHA-256 : `52e567dd206a8854458819c35b49b30edf7560c9a19baf57238150d2c6598e5b`.
+- SHA-256 : `62588cadfb9ea3c797f94f74cc2a04eec600994f622e2cb3d59acc3711dcf0d5`.
 - [Workflow Android et artefact GitHub Actions](https://github.com/klgaby440-lang/l-link-crypt/actions/runs/42379582748).
 
 La fusion permet de poursuivre les essais sur `main`. Elle ne remplace pas la recette sur appareils physiques : connexion Google dans les WebViews, inférence réelle SmolLM sur téléphone/PC, OCR en mode avion, mémoire, chauffe et performances restent à tester.
+
+
+## Mise à jour finale après compilation de `main`
+
+Vérification effectuée sur `main` après fusion de la PR #17.
+
+- Commit de fusion : `f006f272c9344a85c2ee687d08b5a74a0ff02e16`.
+- Tête de `main` après mise à jour du rapport : `77e5e7fad1c08ffd2893df3d1d20df211edbde6d`.
+- Tests backend : réussis sur `main` (run `42380053266`).
+- Tests d'interface Playwright : réussis sur `main` (run `42380053415`).
+- Build APK Android debug : réussi sur `main` (run `42380053580`).
+- L'APK de ce run a été extrait et inspecté : il contient `model_q4.onnx` (180 581 125 octets), `offline-engine.js`, `transformers.min.js`, `firebase-runtime.js`, ainsi que `fra.traineddata` et `eng.traineddata`.
+- APK : 163 319 783 octets. SHA-256 : `62588cadfb9ea3c797f94f74cc2a04eec600994f622e2cb3d59acc3711dcf0d5`.
+- Build Windows : workflow `42380053277` toujours en cours à l'étape `Build Tauri Windows executable (Inno Setup creates the installer)` au dernier contrôle. Aucun EXE ni `Llink-Setup.exe` n'a encore été publié ; ne pas les considérer comme livrés.
+
+Liens des validations sur `main` :
+- [Workflow Android / APK](https://github.com/klgaby440-lang/l-link-crypt/actions/runs/42380053580)
+- [Tests Playwright](https://github.com/klgaby440-lang/l-link-crypt/actions/runs/42380053415)
+- [Tests backend](https://github.com/klgaby440-lang/l-link-crypt/actions/runs/42380053266)
+- [Build Tauri + Inno Setup](https://github.com/klgaby440-lang/l-link-crypt/actions/runs/42380053277)
+
+Ces résultats automatisés ne remplacent pas les tests physiques : OAuth Google dans les WebViews, inférence locale SmolLM en mode avion, OCR hors connexion, mesure mémoire et performances restent à effectuer sur les appareils cibles.
