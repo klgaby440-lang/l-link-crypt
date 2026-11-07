@@ -130,6 +130,26 @@ npx tauri build --config src-tauri/tauri.conf.json
 
 Puis compiler `desktop/installer/Llink.iss` avec Inno Setup 6.
 
-## 6. État de fusion
+## 6. État de fusion et de livraison
 
-Les modifications sont préparées sur `feature/work-live-interface-refresh-20261107`. Elles doivent passer les contrôles CI et la validation de l'authentification native avant d'être fusionnées sur `main`. Ne pas considérer les APK/EXE comme prêts au téléchargement avant qu'un workflow ait publié et vérifié chaque artefact.
+- Branche de travail : `feature/work-live-interface-refresh-20261107`.
+- PR #17 : fusionnée dans `main` le 7 novembre 2026 à 14:06 UTC.
+- Commit de fusion : `f006f272c9344a85c2ee687d08b5a74a0ff02e16`.
+- La branche `main` pointe maintenant sur ce commit.
+
+### Résultats CI sur le dernier commit de fonctionnalité
+
+- Tests backend : réussis.
+- Tests Playwright interface / règles d'accès hors ligne : réussis.
+- Build Android Capacitor debug : réussi.
+- APK extrait, reconnu comme paquet Android et inspecté : le modèle ONNX Q4, Transformers.js, Firebase local, Tesseract et les données linguistiques FR/EN sont présents.
+- Build Windows Tauri + Inno Setup : **en cours au dernier contrôle** ; aucun EXE ou installateur Windows n'est déclaré disponible tant que le workflow ne l'a pas publié.
+
+### APK Android de test
+
+- Fichier : `Llink-Android-offline.apk`.
+- Taille : 163 319 783 octets.
+- SHA-256 : `52e567dd206a8854458819c35b49b30edf7560c9a19baf57238150d2c6598e5b`.
+- [Workflow Android et artefact GitHub Actions](https://github.com/klgaby440-lang/l-link-crypt/actions/runs/42379582748).
+
+La fusion permet de poursuivre les essais sur `main`. Elle ne remplace pas la recette sur appareils physiques : connexion Google dans les WebViews, inférence réelle SmolLM sur téléphone/PC, OCR en mode avion, mémoire, chauffe et performances restent à tester.
