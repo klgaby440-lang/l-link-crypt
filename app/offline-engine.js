@@ -8,17 +8,8 @@
   let ocrPromise = null;
 
   function isInstalledApp() {
-    if (window.__TAURI_INTERNALS__ || window.__TAURI__) return true;
-    const cap = window.Capacitor;
-    if (!cap) return false;
-    try {
-      if (typeof cap.isNativePlatform === "function" && cap.isNativePlatform()) {
-        return typeof cap.getPlatform !== "function" || cap.getPlatform() === "android";
-      }
-      return typeof cap.getPlatform === "function" && cap.getPlatform() === "android";
-    } catch (_) {
-      return false;
-    }
+    // La plateforme est identifiée une seule fois par platform-loader.js.
+    return window.LLINK_PLATFORM?.isNative === true;
   }
 
   function hasGoogleAccount() {
