@@ -18,14 +18,22 @@
   }
   function placeCanvas() {
     const next = resolveActiveTile();
-    if (!next || !canvas) { stop(); return; }
+    if (!canvas) return;
+    if (!next) {
+      stop();
+      if (fallback) fallback.classList.remove("llia-fallback-hidden");
+      document.querySelector("#live-avatar-stage .elia-svg, #live-avatar-stage .elia-avatar-3d")?.classList.remove("llia-fallback-hidden");
+      return;
+    }
     if (canvas.parentElement !== next) {
       next.insertBefore(canvas, next.firstChild);
-      if (fallback) fallback.classList.toggle("llia-fallback-hidden", next === TILE);
       activeTile = next;
       if (resizeObserver) { resizeObserver.disconnect(); resizeObserver.observe(activeTile); }
       resize();
     }
+    if (fallback) fallback.classList.toggle("llia-fallback-hidden", next === TILE);
+    const localFallback = next.querySelector(".elia-svg, .elia-avatar-3d");
+    if (localFallback) localFallback.classList.add("llia-fallback-hidden");
     start();
   }
   const REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -97,7 +105,7 @@
     camera.lookAt(0, -0.16, 0);
 
     const outputLevel = clamp(Number(window.llinkLiveOutputLevel) || 0, 0, 1);
-    const speaking = ROOT.classList.contains("speaking");
+    const speaking = ROOT.classList.contains("speaking") || activeTile.classList.contains("speaking");
     const mouthOpen = speaking
       ? 0.018 + Math.max(outputLevel, 0.035) * 0.36
       : 0.012 + (REDUCED_MOTION ? 0 : Math.sin(now * 0.0017) * 0.002);
@@ -359,7 +367,6 @@
     }, { once: true });
 
     ready = true;
-    if (fallback) fallback.classList.add("llia-fallback-hidden");
     window.llinkLiveAvatarStatus = "ready";
     placeCanvas();
   }
