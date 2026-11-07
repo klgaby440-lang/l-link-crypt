@@ -47,8 +47,14 @@
     });
   }
 
+  function isVisible() {
+    return ROOT.classList.contains("is-open") ||
+      (document.body.classList.contains("live-mode-active") &&
+       TILE.parentElement && TILE.parentElement.id === "live-avatar-stage");
+  }
+
   function start() {
-    if (!ready || running || document.hidden || !ROOT.classList.contains("is-open")) return;
+    if (!ready || running || document.hidden || !isVisible()) return;
     running = true;
     lastFrame = 0;
     raf = requestAnimationFrame(frame);
@@ -362,14 +368,16 @@
     ready = true;
     if (fallback) fallback.classList.add("llia-fallback-hidden");
     window.llinkLiveAvatarStatus = "ready";
-    if (ROOT.classList.contains("is-open")) start();
+    if (isVisible()) start();
   }
 
   const observer = new MutationObserver(() => {
-    if (ROOT.classList.contains("is-open") && !document.hidden) start();
+    if (isVisible() && !document.hidden) start();
     else stop();
   });
   observer.observe(ROOT, { attributes: true, attributeFilter: ["class"] });
+  observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  window.llinkLiveAvatarController = { start, stop };
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stop();
     else start();
