@@ -11,6 +11,7 @@
   let activeTile = TILE;
   let resizeObserver = null;
   let canvas = null;
+  let resizeCurrent = () => {};
   function resolveActiveTile() {
     if (ROOT.classList.contains("is-open")) return TILE;
     if (document.body.classList.contains("live-mode-active")) return document.getElementById("live-avatar-stage");
@@ -29,7 +30,7 @@
       next.insertBefore(canvas, next.firstChild);
       activeTile = next;
       if (resizeObserver) { resizeObserver.disconnect(); resizeObserver.observe(activeTile); }
-      resize();
+      resizeCurrent();
     }
     if (fallback) fallback.classList.toggle("llia-fallback-hidden", next === TILE);
     const localFallback = next.querySelector(".elia-svg, .elia-avatar-3d");
@@ -301,6 +302,7 @@
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
     }
+    resizeCurrent = resize;
 
     canvas.addEventListener("pointerdown", event => {
       try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
@@ -362,6 +364,7 @@
       stop();
       canvas.remove();
       if (fallback) fallback.classList.remove("llia-fallback-hidden");
+      document.querySelector("#live-avatar-stage .elia-svg, #live-avatar-stage .elia-avatar-3d")?.classList.remove("llia-fallback-hidden");
       ready = false;
       window.llinkLiveAvatarStatus = "fallback";
     }, { once: true });
