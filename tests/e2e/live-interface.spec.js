@@ -15,7 +15,7 @@ test("Live restaure les commandes vocales de référence et le portrait fixe dan
 
   await page.evaluate(() => window.selectAppMode("voice"));
   await expect(page.locator("#live-visual")).toBeVisible();
-  await expect(page.locator("#live-wave-lines")).toBeVisible();
+  await expect(page.locator(".live-wave-lines")).toBeVisible();
   await expect(page.locator("#live-wave-lines span")).toHaveCount(43);
   await expect(page.locator("#live-plus-button")).toBeVisible();
 
