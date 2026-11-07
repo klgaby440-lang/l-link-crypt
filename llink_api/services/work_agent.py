@@ -830,8 +830,8 @@ async def _gemini_generate_content(
         if not mime.startswith("image/"):
             raise ValueError("Le fichier source n'est pas une image.")
         parts.append({
-            "inline_data": {
-                "mime_type": mime,
+            "inlineData": {
+                "mimeType": mime,
                 "data": base64.b64encode(raw).decode("ascii"),
             }
         })
