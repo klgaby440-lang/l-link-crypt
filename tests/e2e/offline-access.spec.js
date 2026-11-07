@@ -84,3 +84,22 @@ test("Tauri Windows est une application installée, mais exige toujours Google",
   expect(results.anonymous).toBe(false);
   expect(results.google).toBe(true);
 });
+
+
+test("Tauri accepte une connexion Google confirmée par le custom claim Firebase", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__TAURI_INTERNALS__ = {};
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => typeof window.canUseLlinkOffline === "function");
+  const result = await page.evaluate(() => {
+    window.auth = { currentUser: { uid: "desktop-google-user", providerData: [] } };
+    window.LLINK_GOOGLE_AUTH_UID = "desktop-google-user";
+    return {
+      platform: window.LLINK_PLATFORM.kind,
+      accepted: window.canUseLlinkOffline()
+    };
+  });
+  expect(result.platform).toBe("tauri");
+  expect(result.accepted).toBe(true);
+});

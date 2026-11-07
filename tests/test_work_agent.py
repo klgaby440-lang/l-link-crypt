@@ -1417,3 +1417,97 @@ def test_readable_html_exposes_page_title_and_safe_navigation_links():
         {"label": "User Guide", "url": "https://example.com/guide"},
         {"label": "API Reference", "url": "https://docs.example.org/api"},
     ]
+
+
+def test_google_image_search_preserves_the_image_and_landing_page_urls(monkeypatch):
+    seen = {}
+
+    async def fake_generate(prompt, **kwargs):
+        seen["prompt"] = prompt
+        seen.update(kwargs)
+        return {
+            "content": {"parts": [{"text": "Images correspondantes trouvées."}]},
+            "groundingMetadata": {
+                "groundingChunks": [{
+                    "image": {
+                        "uri": "https://example.org/source-page",
+                        "image_uri": "https://images.example.org/photo.png",
+                        "title": "Photo de référence",
+                    }
+                }],
+                "searchEntryPoint": {"renderedContent": "<div>Google Search</div>"},
+            },
+        }
+
+    async def fake_resolve(url):
+        assert url == "https://images.example.org/photo.png"
+        return {"data_url": "data:image/png;base64,AA==", "size_bytes": 1, "mime_type": "image/png"}
+
+    monkeypatch.setattr(work_agent, "_gemini_generate_content", fake_generate)
+    monkeypatch.setattr(work_agent, "_resolve_public_image", fake_resolve)
+
+    async def run():
+        state = work_agent.AgentState()
+        result = await work_agent._search_work_images("cellule végétale", 3, state)
+        assert result["count"] == 1
+        assert result["images"][0]["source_url"] == "https://example.org/source-page"
+        assert result["images"][0]["image_url"] == "https://images.example.org/photo.png"
+        assert result["search_suggestions_html"] == "<div>Google Search</div>"
+        assert "imageSearch" in seen["tools"][0]["google_search"]["searchTypes"]
+        assert state.image_bytes == 1
+
+    asyncio.run(run())
+
+
+def test_image_edit_sends_the_uploaded_image_to_gemini_and_stores_the_result(monkeypatch):
+    from PIL import Image
+
+    def make_png(color):
+        output = io.BytesIO()
+        Image.new("RGB", (8, 8), color).save(output, format="PNG")
+        return output.getvalue()
+
+    source_image = make_png("blue")
+    edited_image = make_png("red")
+    seen = {}
+
+    async def fake_generate(prompt, **kwargs):
+        seen["prompt"] = prompt
+        seen.update(kwargs)
+        return {
+            "content": {
+                "parts": [{
+                    "inlineData": {
+                        "mimeType": "image/png",
+                        "data": base64.b64encode(edited_image).decode("ascii"),
+                    }
+                }]
+            }
+        }
+
+    monkeypatch.setattr(work_agent, "_gemini_generate_content", fake_generate)
+
+    async def run():
+        state = work_agent.AgentState(input_images=[{
+            "filename": "photo-source.png",
+            "mime_type": "image/png",
+            "data": source_image,
+        }])
+        result = await work_agent._generate_work_image(
+            "Ajoute un fond blanc propre et conserve le sujet principal.",
+            "photo-retouchee.png",
+            "1:1",
+            "standard",
+            state,
+            source_index=0,
+        )
+        assert seen["image_inputs"][0]["data"] == source_image
+        assert "MODIFICATION D'IMAGE" in seen["prompt"]
+        assert result["source_image_index"] == 0
+        assert result["filename"] == "photo-retouchee.png"
+        assert result["verified"] is False
+        assert result["artifact_id"] in state.artifacts
+        assert state.images[result["image_id"]]["mime_type"] == "image/png"
+
+    asyncio.run(run())
+

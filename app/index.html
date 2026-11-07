@@ -15,7 +15,7 @@
     
     <!-- Le chargeur sélectionne les dépendances Web (CDN) ou natives (vendor local). -->
     <script src="./platform-loader.js?v=web-native-split-2"></script>
-    <link rel="stylesheet" href="./workspace.css?v=web-native-split-2">
+    <link rel="stylesheet" href="./workspace.css?v=live-auth-work-tools-20261107">
     
 
  
@@ -1030,6 +1030,15 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                         console.error("Retour sécurisé vers Llink impossible :", error);
                     }
                 }
+                if (window.LLINK_PLATFORM?.isTauri && !window.LLINK_PLATFORM?.isCapacitor) {
+                    try {
+                        const tokenResult = await user.getIdTokenResult(true);
+                        window.LLINK_GOOGLE_AUTH_UID = tokenResult.claims?.llink_google_verified === true ? user.uid : null;
+                    } catch (error) {
+                        window.LLINK_GOOGLE_AUTH_UID = null;
+                        console.warn("Impossible de lire les autorisations hors ligne :", error);
+                    }
+                }
                 window.isLoggedIn = true;
                 window.dispatchEvent(new Event('llink-auth-state-changed'));
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
@@ -1048,6 +1057,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 window.authToken = null; 
                 window.uid = "anonymous";
                 window.isOfflineValid = false;
+                window.LLINK_GOOGLE_AUTH_UID = null;
                 window.dispatchEvent(new Event('llink-auth-state-changed'));
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
                 if (authBtn) authBtn.innerHTML = `<i data-lucide="log-in" class="w-[1.25rem] h-[1.25rem]"></i>`;
@@ -1698,7 +1708,6 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                   </section>`;
                 lucide.createIcons();
                 window.setLiveEffect(currentLiveEffect);
-                if (typeof window.connectLlinkLiveSession === 'function') window.connectLlinkLiveSession();
             } else if (mode === 'work') {
                 document.getElementById('chat-window').innerHTML = '<div id="work-workspace"></div>';
                 if (window.lucide) lucide.createIcons();
@@ -4755,6 +4764,7 @@ button svg,button i,[role="button"] svg,[role="button"] i,.rail-item svg,.rail-i
       <div class="llcall-nocam"><i data-lucide="user-round"></i></div>
       <span class="llcall-name">Moi</span>
     </div>
+    <div class="llcall-look" id="llcall-look" role="menu" aria-label="Apparence d'Elia"></div>
     <div class="llcall-controls">
       <button type="button" class="llcall-btn" data-c="chat" id="llcall-btn-chat" aria-label="Messagerie"><i data-lucide="message-circle"></i></button>
       <button type="button" class="llcall-btn on" data-c="cam" id="llcall-btn-cam" aria-label="Caméra"><i data-lucide="video"></i></button>
@@ -4762,7 +4772,7 @@ button svg,button i,[role="button"] svg,[role="button"] i,.rail-item svg,.rail-i
       <button type="button" class="llcall-btn" data-c="mic" id="llcall-btn-mic" aria-label="Micro"><i data-lucide="mic"></i></button>
       <button type="button" class="llcall-btn" data-c="look" id="llcall-btn-look" aria-label="Visage ou vibrations"><i data-lucide="audio-lines"></i></button>
       <button type="button" class="llcall-btn" data-c="swap" aria-label="Échanger les écrans"><i data-lucide="arrow-left-right"></i></button>
-      <button type="button" class="llcall-btn hang" data-c="hang" aria-label="Terminer la conversation"><i data-lucide="phone-off"></i></button>
+      <button type="button" class="llcall-btn hang" data-c="hang" aria-label="Raccrocher"><i data-lucide="phone-off"></i></button>
     </div>
   </section>
 </div>
@@ -5402,7 +5412,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script src="./document-editor.js?v=work-sequential-documents-1"></script>
 <script src="./presentation-editor.js?v=work-sequential-documents-1"></script>
 <script src="./binary-editors.js?v=work-sequential-documents-1"></script>
-<script src="./workspace.js?v=web-native-split-2"></script>
+<script src="./workspace.js?v=live-auth-work-tools-20261107"></script>
 <!-- Avatar statique fourni par l'utilisateur : aucune animation 3D. -->
 
 </html>

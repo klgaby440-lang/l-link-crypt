@@ -27,19 +27,23 @@ router = APIRouter()
 async def exchange_desktop_firebase_token(
     request: Request,
     user: dict = Depends(require_authenticated_user),
+    db: Any | None = Depends(get_db),
 ):
-    """Échange un ID token Firebase du navigateur système contre un custom token."""
-    provider_data = user.get("firebase") if isinstance(user.get("firebase"), dict) else {}
-    if provider_data.get("sign_in_provider") != "google.com":
+    """Échange un ID token Google vérifié dans le navigateur système contre un custom token."""
+    await enforce_endpoint_quota(
+        request=request, user=user, db=db, scope="auth_desktop_exchange"
+    )
+    firebase_claims = user.get("firebase") or {}
+    if not isinstance(firebase_claims, dict) or firebase_claims.get("sign_in_provider") != "google.com":
         raise HTTPException(
             status_code=403,
-            detail="La connexion de l'application Windows doit utiliser un compte Google.",
+            detail="Cette connexion de bureau exige une authentification Google vérifiée.",
         )
-    await enforce_endpoint_quota(
-        request=request, user=user, db=None, scope="auth_desktop_exchange"
-    )
     try:
-        custom_token = firebase_auth.create_custom_token(str(user["uid"]))
+        custom_token = firebase_auth.create_custom_token(
+            str(user["uid"]),
+            developer_claims={"llink_google_verified": True},
+        )
         if isinstance(custom_token, bytes):
             custom_token = custom_token.decode("utf-8")
         if not isinstance(custom_token, str) or not custom_token:

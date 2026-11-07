@@ -890,16 +890,10 @@ async def _search_work_images(query: str, max_images: int, state: AgentState) ->
     stored: list[dict[str, Any]] = []
     seen: set[str] = set()
     for chunk in chunks:
-        image = (
-            chunk.get("image")
-            if isinstance(chunk, dict) and isinstance(chunk.get("image"), dict)
-            else chunk
-        )
+        image = chunk.get("image") if isinstance(chunk, dict) else None
         if not isinstance(image, dict):
             continue
         nested_image = image.get("image") if isinstance(image.get("image"), dict) else image
-        if not any(key in nested_image for key in ("imageUri", "image_uri")):
-            continue
         image_url = str(nested_image.get("imageUri") or nested_image.get("image_uri") or nested_image.get("uri") or "").strip()
         source_url = str(nested_image.get("sourceUri") or nested_image.get("source_uri") or image.get("uri") or image.get("source_url") or "").strip()
         if not image_url.startswith("https://") or not source_url.startswith("https://") or image_url in seen:
