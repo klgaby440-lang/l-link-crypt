@@ -4,10 +4,24 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
       - 'phase-1/**'
     paths:
       - 'app/**'
       - 'capacitor/**'
+      - 'build-tools/**'
+      - 'scripts/**'
+      - 'tailwind.config.cjs'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'capacitor/**'
+      - 'build-tools/**'
+      - 'scripts/**'
+      - 'tailwind.config.cjs'
       - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
@@ -20,67 +34,64 @@ concurrency:
 
 jobs:
   build-android:
-    name: Build Llink APK
+    name: Build Llink Android APK with local SmolLM
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 75
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v6
-
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: capacitor/package-lock.json
-
       - name: Set up Java
         uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: '21'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
-
-      - name: Install Android 16 SDK packages
+      - name: Install Android SDK 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v6
-
+      - name: Install pinned build dependencies
+        working-directory: build-tools
+        run: npm install --no-audit --no-fund
+      - name: Prepare local runtime, SmolLM ONNX, Firebase, Tesseract and CSS
+        run: |
+          node scripts/prepare-offline-assets.mjs
+          npx --yes tailwindcss@3.4.17 -c tailwind.config.cjs -i scripts/tailwind.input.css -o app/vendor/tailwind.min.css --minify
+      - name: Verify local assets
+        run: |
+          test -s app/vendor/firebase-runtime.js
+          test -s app/vendor/transformers.min.js
+          test -s app/vendor/tesseract.min.js
+          test -s app/vendor/tailwind.min.css
+          test -s app/models/onnx-community/SmolLM-135M-Instruct-ONNX/onnx/model_q4.onnx
+          test -s app/tessdata/fra.traineddata
+          test -s app/tessdata/eng.traineddata
       - name: Install Capacitor dependencies
         working-directory: capacitor
         run: npm ci
-
-      - name: Verify the selected web application
-        working-directory: capacitor
-        run: |
-          test -f ../app/index.html
-          echo "Capacitor webDir points to ../app/index.html"
-
       - name: Add Android platform when missing
         working-directory: capacitor
         run: |
           if [ ! -d android ]; then
             npx cap add android
           fi
-
-      - name: Sync app/index.html into Android project
+      - name: Copy application and native assets
         working-directory: capacitor
         run: npx cap sync android
-
       - name: Build debug APK
         working-directory: capacitor/android
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon assembleDebug
-
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
-          name: Llink-Android-debug-${{ github.sha }}
+          name: Llink-Android-debug-offline-${{ github.sha }}
           path: capacitor/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

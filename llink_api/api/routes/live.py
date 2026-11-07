@@ -69,6 +69,8 @@ def build_live_config() -> dict[str, Any]:
     return {
         "response_modalities": ["AUDIO"],
         "media_resolution": types.MediaResolution.MEDIA_RESOLUTION_LOW,
+        # Réduit le risque d'épuiser le contexte lors des sessions audio/vidéo longues.
+        "context_window_compression": {"sliding_window": {}},
         "speech_config": {
             "voice_config": {
                 "prebuilt_voice_config": {"voice_name": "Kore"}

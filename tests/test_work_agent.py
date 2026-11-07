@@ -214,6 +214,32 @@ def test_workspace_tools_are_native_and_are_only_advertised_to_authenticated_use
     assert not (expected & anonymous)
 
 
+def test_image_generation_is_advertised_to_authenticated_users_without_subscription_gate(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        work_agent,
+        "get_settings",
+        lambda: SimpleNamespace(zai_api_key="zai-test"),
+    )
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("E2B_API_KEY", raising=False)
+
+    authenticated = {
+        item["function"]["name"]
+        for item in work_agent._available_tool_definitions({"uid": "student-account"})
+    }
+    anonymous = {
+        item["function"]["name"]
+        for item in work_agent._available_tool_definitions({"uid": "anonymous"})
+    }
+
+    # L'outil est exposé à tout compte authentifié si Z.ai est configuré.
+    # Le registre ne reçoit aucune formule d'abonnement et ne filtre pas cet outil par plan.
+    assert "image_generate" in authenticated
+    assert "image_generate" not in anonymous
+
+
 def test_workspace_dispatch_creates_reads_and_updates_real_workspace_files(monkeypatch):
     from llink_api.api.routes import work as work_routes
 

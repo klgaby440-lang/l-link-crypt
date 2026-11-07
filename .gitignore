@@ -9,16 +9,23 @@ venv/
 .env.*
 !.env.example
 
-# Node / Capacitor
+# Node / Capacitor / desktop
 node_modules/
+build-tools/node_modules/
+desktop/node_modules/
 capacitor/node_modules/
 capacitor/android/
 capacitor/local.properties
 capacitor/.gradle/
+desktop/src-tauri/target/
 
-# Local model weights (do not commit large model files)
+# Generated offline assets (downloaded during native CI builds; never commit binaries)
 app/models/
+app/vendor/
+app/tessdata/
+app/offline-assets-manifest.json
 
-# Build outputs
+# Build outputs and installers
 dist/
 build/
+artifacts/

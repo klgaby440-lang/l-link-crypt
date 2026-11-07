@@ -18,6 +18,7 @@ def test_live_config_uses_audio_modalities_and_transcriptions():
     assert config["response_modalities"] == ["AUDIO"]
     assert config["input_audio_transcription"] == {}
     assert config["output_audio_transcription"] == {}
+    assert config["context_window_compression"] == {"sliding_window": {}}
     assert config["speech_config"]["voice_config"]["prebuilt_voice_config"]["voice_name"] == "Kore"
     assert LIVE_MODEL == "gemini-3.8-live"
 

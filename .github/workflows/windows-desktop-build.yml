@@ -1,0 +1,93 @@
+name: Llink Windows Desktop Build
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+    paths:
+      - 'app/**'
+      - 'desktop/**'
+      - 'build-tools/**'
+      - 'scripts/**'
+      - 'tailwind.config.cjs'
+      - '.github/workflows/windows-desktop-build.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'desktop/**'
+      - 'build-tools/**'
+      - 'scripts/**'
+      - 'tailwind.config.cjs'
+      - '.github/workflows/windows-desktop-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: llink-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Tauri desktop + Inno Setup
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install offline asset dependencies
+        working-directory: build-tools
+        run: npm install --no-audit --no-fund
+      - name: Prepare SmolLM, Transformers.js, Firebase, Tesseract and CSS
+        run: |
+          node scripts/prepare-offline-assets.mjs
+          .\build-tools\node_modules\.bin\tailwindcss.cmd -c tailwind.config.cjs -i scripts/tailwind.input.css -o app/vendor/tailwind.min.css --minify
+      - name: Verify model and local browser libraries
+        shell: pwsh
+        run: |
+          if ((Get-Item app/vendor/firebase-runtime.js).Length -le 0) { throw "Firebase bundle absent" }
+          if ((Get-Item app/vendor/transformers.min.js).Length -le 0) { throw "Transformers.js absent" }
+          if ((Get-Item app/vendor/tesseract.min.js).Length -le 0) { throw "Tesseract.js absent" }
+          if ((Get-Item app/vendor/tailwind.min.css).Length -le 0) { throw "Tailwind CSS absent" }
+          if ((Get-Item app/models/onnx-community/SmolLM-135M-Instruct-ONNX/onnx/model_q4.onnx).Length -lt 100000000) { throw "SmolLM ONNX Q4 absent" }
+      - name: Install Tauri CLI
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+      - name: Build Tauri Windows executable (Inno Setup creates the installer)
+        working-directory: desktop
+        run: npx tauri build --no-bundle --config src-tauri/tauri.conf.json
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe" }
+          if (!(Test-Path $iscc)) { throw "ISCC.exe introuvable après installation d'Inno Setup." }
+          & $iscc desktop/installer/Llink.iss
+          if ($LASTEXITCODE -ne 0) { throw "La compilation Inno Setup a échoué." }
+      - name: Upload Tauri Windows executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: Llink-Tauri-Windows-${{ github.sha }}
+          path: desktop/src-tauri/target/release/llink.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload Inno Setup installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Llink-Inno-Setup-${{ github.sha }}
+          path: artifacts/Llink-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
