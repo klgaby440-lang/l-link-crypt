@@ -33,7 +33,7 @@ test("le Web n'importe jamais le moteur local et refuse le mode hors ligne", asy
   }));
   await page.route("https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js", route => route.fulfill({
     status: 200, contentType: "application/javascript",
-    body: "export const getAuth=()=>({currentUser:null}); export const signInWithPopup=async()=>null; export class GoogleAuthProvider{}; export const onAuthStateChanged=(auth,cb)=>{Promise.resolve().then(()=>cb(null));return ()=>{};}; export const signOut=async()=>{};"
+    body: `export const getAuth=()=>({currentUser:null}); export const signInWithPopup=async()=>null; export const signInWithCustomToken=async()=>({user:{uid:"desktop-user"}}); export class GoogleAuthProvider{}; export const onAuthStateChanged=(auth,cb)=>{Promise.resolve().then(()=>cb(null));return ()=>{};}; export const signOut=async()=>{};`
   }));
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -83,4 +83,17 @@ test("Tauri Windows est une application installée, mais exige toujours Google",
   expect(results.platform).toBe("tauri");
   expect(results.anonymous).toBe(false);
   expect(results.google).toBe(true);
+});
+
+test("Tauri accepte une connexion Google confirmée par le custom claim Firebase", async ({ page }) => {
+  await page.addInitScript(() => { window.__TAURI_INTERNALS__ = {}; });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => typeof window.canUseLlinkOffline === "function");
+  const result = await page.evaluate(() => {
+    window.auth = { currentUser: { uid: "desktop-google-user", providerData: [] } };
+    window.LLINK_GOOGLE_AUTH_UID = "desktop-google-user";
+    return { platform: window.LLINK_PLATFORM.kind, accepted: window.canUseLlinkOffline() };
+  });
+  expect(result.platform).toBe("tauri");
+  expect(result.accepted).toBe(true);
 });

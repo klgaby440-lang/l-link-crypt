@@ -4,7 +4,53 @@ import pytest
 from fastapi import HTTPException
 
 from llink_api import security
+from llink_api.api.routes import users
 
+
+
+
+def test_tauri_desktop_exchange_requires_a_verified_firebase_user_and_returns_custom_token(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setattr(security, "_decode_firebase_token", lambda _token: {
+        "uid": "desktop-user",
+        "firebase": {"sign_in_provider": "google.com"},
+    })
+    seen = {}
+
+    def create_custom_token(uid, developer_claims):
+        seen["uid"] = uid
+        seen["developer_claims"] = developer_claims
+        return b"firebase-custom-token"
+
+    monkeypatch.setattr(users.firebase_auth, "create_custom_token", create_custom_token)
+    response = client.post(
+        "/api/auth/desktop-exchange",
+        headers={"Authorization": "Bearer verified-firebase-id-token"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"customToken": "firebase-custom-token"}
+    assert seen == {
+        "uid": "desktop-user",
+        "developer_claims": {"llink_google_verified": True},
+    }
+
+
+def test_tauri_desktop_exchange_rejects_non_google_provider(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setattr(security, "_decode_firebase_token", lambda _token: {
+        "uid": "desktop-user",
+        "firebase": {"sign_in_provider": "password"},
+    })
+    response = client.post(
+        "/api/auth/desktop-exchange",
+        headers={"Authorization": "Bearer verified-firebase-id-token"},
+    )
+    assert response.status_code == 403
+
+
+def test_tauri_desktop_exchange_rejects_anonymous_users(client):
+    response = client.post("/api/auth/desktop-exchange")
+    assert response.status_code == 401
 
 def test_history_read_requires_authentication(client):
     response = client.get("/api/history")

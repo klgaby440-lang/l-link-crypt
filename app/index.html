@@ -15,7 +15,7 @@
     
     <!-- Le chargeur sélectionne les dépendances Web (CDN) ou natives (vendor local). -->
     <script src="./platform-loader.js?v=web-native-split-2"></script>
-    <link rel="stylesheet" href="./workspace.css?v=web-native-split-2">
+    <link rel="stylesheet" href="./workspace.css?v=work-image-workflow-20261108">
     
 
  
@@ -25,7 +25,7 @@
             50% { filter: brightness(0.4); opacity: 0.6; }
             100% { filter: brightness(1); opacity: 1; }
         }
-        .logo-anim { animation: logoBlink 2.5s infinite; }
+        .logo-anim { animation:none !important; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
@@ -566,28 +566,7 @@
         html:not(.dark) .live-top-actions button, html:not(.dark) .live-bottom-actions button { background:var(--live-surface,#fff) !important;color:var(--live-fg,#202124) !important; }
 
 
-/* Live v2 : commandes latérales, lisibles, sans menu collé en bas ni demi-cercle minuscule. */
-body.live-mode-active #mic-btn,
-body.live-mode-active #mobile-dock,
-body.live-mode-active #quick-options,
-body.live-mode-active #dock-main-button { display:none !important; }
-body.live-mode-active .live-orb-wrap { padding-top:58px !important; padding-right:0 !important; }
-body.live-mode-active .live-top-actions { position:fixed !important; top:calc(10px + env(safe-area-inset-top)) !important; left:14px !important; right:14px !important; z-index:180 !important; width:auto !important; }
-body.live-mode-active .live-top-actions button { width:42px !important;height:42px !important;min-height:42px !important;border-radius:15px !important;background:rgba(38,40,44,.94) !important;color:#fff !important;border:1px solid rgba(255,255,255,.26) !important;box-shadow:0 5px 20px #0006 !important; }
-body.live-mode-active .live-side-toggle-wrap { position:fixed !important;right:10px !important;top:50% !important;transform:translateY(-50%) !important;z-index:190 !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button { width:46px !important;height:54px !important;min-height:54px !important;border-radius:16px 0 0 16px !important;border:1px solid rgba(255,255,255,.42) !important;border-right:0 !important;background:#292c32 !important;color:#fff !important;box-shadow:0 6px 24px #0009 !important;font-size:18px !important;display:grid !important;place-items:center !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button svg { width:20px !important;height:20px !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button.is-open { background:#f2f3f5 !important;color:#17181a !important;transform:none !important; }
-body.live-mode-active .live-bottom-actions { display:none !important; }
-body.live-mode-active .live-more-menu { display:flex !important;position:fixed !important;top:50% !important;right:55px !important;bottom:auto !important;left:auto !important;transform:translate(12px,-50%) !important;opacity:0;visibility:hidden;pointer-events:none;width:min(235px,calc(100vw - 86px)) !important;padding:10px !important;gap:5px !important;flex-direction:column !important;border-radius:18px !important;border:1px solid rgba(255,255,255,.2) !important;background:rgba(25,27,31,.97) !important;color:#fff !important;box-shadow:0 12px 38px #0009 !important;backdrop-filter:blur(18px) !important;z-index:189 !important; }
-body.live-mode-active .live-more-menu.is-open { transform:translate(0,-50%) !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important; }
-body.live-mode-active .live-more-menu button { display:flex !important;align-items:center !important;gap:12px !important;width:100% !important;min-height:43px !important;padding:10px 11px !important;border-radius:12px !important;background:rgba(255,255,255,.08) !important;color:#fff !important;font-size:12px !important;text-align:left !important;border:1px solid rgba(255,255,255,.08) !important; }
-body.live-mode-active .live-more-menu button:active { background:rgba(255,255,255,.18) !important; }
-body.live-mode-active .live-more-menu button svg { width:17px !important;height:17px !important;flex:0 0 17px !important; }
-.live-side-menu-title { font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.68;padding:4px 9px 7px; }
-body.live-mode-active .live-effects-menu { display:none !important; }
-body.live-mode-active .live-voice-picker { right:64px !important;left:auto !important;max-width:calc(100vw - 82px) !important; }
-@media(max-width:380px){body.live-mode-active .live-side-toggle-wrap{right:5px!important}body.live-mode-active .live-more-menu{right:49px!important;width:min(220px,calc(100vw - 64px))!important}body.live-mode-active .live-top-actions button{width:38px!important;height:38px!important}}
+
 
 
 /* Live v3 : radial et ripple réellement distincts + sélecteur vocal compact */
@@ -651,29 +630,6 @@ body.live-mode-active .live-voice-list .voice-choice.is-selected{background:var(
   #sidebar .rail-label { font-size:10px !important; }
 }
 
-/* Live v2 : commandes latérales, lisibles, sans menu collé en bas ni demi-cercle minuscule. */
-body.live-mode-active #mic-btn,
-body.live-mode-active #mobile-dock,
-body.live-mode-active #quick-options,
-body.live-mode-active #dock-main-button { display:none !important; }
-body.live-mode-active .live-orb-wrap { padding-top:58px !important; padding-right:0 !important; }
-body.live-mode-active .live-top-actions { position:fixed !important; top:calc(10px + env(safe-area-inset-top)) !important; left:14px !important; right:14px !important; z-index:180 !important; width:auto !important; }
-body.live-mode-active .live-top-actions button { width:42px !important;height:42px !important;min-height:42px !important;border-radius:15px !important;background:rgba(38,40,44,.94) !important;color:#fff !important;border:1px solid rgba(255,255,255,.26) !important;box-shadow:0 5px 20px #0006 !important; }
-body.live-mode-active .live-side-toggle-wrap { position:fixed !important;right:10px !important;top:50% !important;transform:translateY(-50%) !important;z-index:190 !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button { width:46px !important;height:54px !important;min-height:54px !important;border-radius:16px 0 0 16px !important;border:1px solid rgba(255,255,255,.42) !important;border-right:0 !important;background:#292c32 !important;color:#fff !important;box-shadow:0 6px 24px #0009 !important;font-size:18px !important;display:grid !important;place-items:center !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button svg { width:20px !important;height:20px !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button.is-open { background:#f2f3f5 !important;color:#17181a !important;transform:none !important; }
-body.live-mode-active .live-bottom-actions { display:none !important; }
-body.live-mode-active .live-more-menu { display:flex !important;position:fixed !important;top:50% !important;right:55px !important;bottom:auto !important;left:auto !important;transform:translate(12px,-50%) !important;opacity:0;visibility:hidden;pointer-events:none;width:min(235px,calc(100vw - 86px)) !important;padding:10px !important;gap:5px !important;flex-direction:column !important;border-radius:18px !important;border:1px solid rgba(255,255,255,.2) !important;background:rgba(25,27,31,.97) !important;color:#fff !important;box-shadow:0 12px 38px #0009 !important;backdrop-filter:blur(18px) !important;z-index:189 !important; }
-body.live-mode-active .live-more-menu.is-open { transform:translate(0,-50%) !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important; }
-body.live-mode-active .live-more-menu button { display:flex !important;align-items:center !important;gap:12px !important;width:100% !important;min-height:43px !important;padding:10px 11px !important;border-radius:12px !important;background:rgba(255,255,255,.08) !important;color:#fff !important;font-size:12px !important;text-align:left !important;border:1px solid rgba(255,255,255,.08) !important; }
-body.live-mode-active .live-more-menu button:active { background:rgba(255,255,255,.18) !important; }
-body.live-mode-active .live-more-menu button svg { width:17px !important;height:17px !important;flex:0 0 17px !important; }
-.live-side-menu-title { font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.68;padding:4px 9px 7px; }
-body.live-mode-active .live-effects-menu { display:none !important; }
-body.live-mode-active .live-voice-picker { right:64px !important;left:auto !important;max-width:calc(100vw - 82px) !important; }
-@media(max-width:380px){body.live-mode-active .live-side-toggle-wrap{right:5px!important}body.live-mode-active .live-more-menu{right:49px!important;width:min(220px,calc(100vw - 64px))!important}body.live-mode-active .live-top-actions button{width:38px!important;height:38px!important}}
-
 </style>
 
 
@@ -690,29 +646,6 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
   #sidebar .rail-label { font-size:10.5px !important; }
   #sidebar .rail-bottom .rail-icon { width:36px !important; height:36px !important; flex-basis:36px !important; }
 }
-
-/* Live v2 : commandes latérales, lisibles, sans menu collé en bas ni demi-cercle minuscule. */
-body.live-mode-active #mic-btn,
-body.live-mode-active #mobile-dock,
-body.live-mode-active #quick-options,
-body.live-mode-active #dock-main-button { display:none !important; }
-body.live-mode-active .live-orb-wrap { padding-top:58px !important; padding-right:0 !important; }
-body.live-mode-active .live-top-actions { position:fixed !important; top:calc(10px + env(safe-area-inset-top)) !important; left:14px !important; right:14px !important; z-index:180 !important; width:auto !important; }
-body.live-mode-active .live-top-actions button { width:42px !important;height:42px !important;min-height:42px !important;border-radius:15px !important;background:rgba(38,40,44,.94) !important;color:#fff !important;border:1px solid rgba(255,255,255,.26) !important;box-shadow:0 5px 20px #0006 !important; }
-body.live-mode-active .live-side-toggle-wrap { position:fixed !important;right:10px !important;top:50% !important;transform:translateY(-50%) !important;z-index:190 !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button { width:46px !important;height:54px !important;min-height:54px !important;border-radius:16px 0 0 16px !important;border:1px solid rgba(255,255,255,.42) !important;border-right:0 !important;background:#292c32 !important;color:#fff !important;box-shadow:0 6px 24px #0009 !important;font-size:18px !important;display:grid !important;place-items:center !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button svg { width:20px !important;height:20px !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button.is-open { background:#f2f3f5 !important;color:#17181a !important;transform:none !important; }
-body.live-mode-active .live-bottom-actions { display:none !important; }
-body.live-mode-active .live-more-menu { display:flex !important;position:fixed !important;top:50% !important;right:55px !important;bottom:auto !important;left:auto !important;transform:translate(12px,-50%) !important;opacity:0;visibility:hidden;pointer-events:none;width:min(235px,calc(100vw - 86px)) !important;padding:10px !important;gap:5px !important;flex-direction:column !important;border-radius:18px !important;border:1px solid rgba(255,255,255,.2) !important;background:rgba(25,27,31,.97) !important;color:#fff !important;box-shadow:0 12px 38px #0009 !important;backdrop-filter:blur(18px) !important;z-index:189 !important; }
-body.live-mode-active .live-more-menu.is-open { transform:translate(0,-50%) !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important; }
-body.live-mode-active .live-more-menu button { display:flex !important;align-items:center !important;gap:12px !important;width:100% !important;min-height:43px !important;padding:10px 11px !important;border-radius:12px !important;background:rgba(255,255,255,.08) !important;color:#fff !important;font-size:12px !important;text-align:left !important;border:1px solid rgba(255,255,255,.08) !important; }
-body.live-mode-active .live-more-menu button:active { background:rgba(255,255,255,.18) !important; }
-body.live-mode-active .live-more-menu button svg { width:17px !important;height:17px !important;flex:0 0 17px !important; }
-.live-side-menu-title { font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.68;padding:4px 9px 7px; }
-body.live-mode-active .live-effects-menu { display:none !important; }
-body.live-mode-active .live-voice-picker { right:64px !important;left:auto !important;max-width:calc(100vw - 82px) !important; }
-@media(max-width:380px){body.live-mode-active .live-side-toggle-wrap{right:5px!important}body.live-mode-active .live-more-menu{right:49px!important;width:min(220px,calc(100vw - 64px))!important}body.live-mode-active .live-top-actions button{width:38px!important;height:38px!important}}
 
 </style>
 
@@ -739,29 +672,6 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
  .hub-form-input{width:100%;background:#1d1e21;color:#fff;border:1px solid #ffffff20;border-radius:14px;padding:13px;margin:7px 0 12px;outline:none}.hub-primary{width:100%;padding:14px;border-radius:15px;background:#3c68f4;color:white;font-weight:750}
  @media(min-width:768px){.hub-overlay{left:50%;right:auto;width:min(720px,100%);transform:translateX(-50%);border-left:1px solid #ffffff20;border-right:1px solid #ffffff20}.hub-content{padding-left:28px;padding-right:28px}.library-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
  
-/* Live v2 : commandes latérales, lisibles, sans menu collé en bas ni demi-cercle minuscule. */
-body.live-mode-active #mic-btn,
-body.live-mode-active #mobile-dock,
-body.live-mode-active #quick-options,
-body.live-mode-active #dock-main-button { display:none !important; }
-body.live-mode-active .live-orb-wrap { padding-top:58px !important; padding-right:0 !important; }
-body.live-mode-active .live-top-actions { position:fixed !important; top:calc(10px + env(safe-area-inset-top)) !important; left:14px !important; right:14px !important; z-index:180 !important; width:auto !important; }
-body.live-mode-active .live-top-actions button { width:42px !important;height:42px !important;min-height:42px !important;border-radius:15px !important;background:rgba(38,40,44,.94) !important;color:#fff !important;border:1px solid rgba(255,255,255,.26) !important;box-shadow:0 5px 20px #0006 !important; }
-body.live-mode-active .live-side-toggle-wrap { position:fixed !important;right:10px !important;top:50% !important;transform:translateY(-50%) !important;z-index:190 !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button { width:46px !important;height:54px !important;min-height:54px !important;border-radius:16px 0 0 16px !important;border:1px solid rgba(255,255,255,.42) !important;border-right:0 !important;background:#292c32 !important;color:#fff !important;box-shadow:0 6px 24px #0009 !important;font-size:18px !important;display:grid !important;place-items:center !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button svg { width:20px !important;height:20px !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button.is-open { background:#f2f3f5 !important;color:#17181a !important;transform:none !important; }
-body.live-mode-active .live-bottom-actions { display:none !important; }
-body.live-mode-active .live-more-menu { display:flex !important;position:fixed !important;top:50% !important;right:55px !important;bottom:auto !important;left:auto !important;transform:translate(12px,-50%) !important;opacity:0;visibility:hidden;pointer-events:none;width:min(235px,calc(100vw - 86px)) !important;padding:10px !important;gap:5px !important;flex-direction:column !important;border-radius:18px !important;border:1px solid rgba(255,255,255,.2) !important;background:rgba(25,27,31,.97) !important;color:#fff !important;box-shadow:0 12px 38px #0009 !important;backdrop-filter:blur(18px) !important;z-index:189 !important; }
-body.live-mode-active .live-more-menu.is-open { transform:translate(0,-50%) !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important; }
-body.live-mode-active .live-more-menu button { display:flex !important;align-items:center !important;gap:12px !important;width:100% !important;min-height:43px !important;padding:10px 11px !important;border-radius:12px !important;background:rgba(255,255,255,.08) !important;color:#fff !important;font-size:12px !important;text-align:left !important;border:1px solid rgba(255,255,255,.08) !important; }
-body.live-mode-active .live-more-menu button:active { background:rgba(255,255,255,.18) !important; }
-body.live-mode-active .live-more-menu button svg { width:17px !important;height:17px !important;flex:0 0 17px !important; }
-.live-side-menu-title { font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.68;padding:4px 9px 7px; }
-body.live-mode-active .live-effects-menu { display:none !important; }
-body.live-mode-active .live-voice-picker { right:64px !important;left:auto !important;max-width:calc(100vw - 82px) !important; }
-@media(max-width:380px){body.live-mode-active .live-side-toggle-wrap{right:5px!important}body.live-mode-active .live-more-menu{right:49px!important;width:min(220px,calc(100vw - 64px))!important}body.live-mode-active .live-top-actions button{width:38px!important;height:38px!important}}
-
 </style>
 
 
@@ -803,29 +713,6 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
 #settings-modal .settings-panel [class*="bg-campagne"],#settings-modal .settings-panel [class*="bg-surface"]{background:var(--llink-panel-card) !important;color:var(--llink-panel-text) !important}
 #settings-modal .settings-panel .hub-pill{color:var(--llink-panel-muted) !important;border-color:var(--llink-panel-border) !important}
 @media(max-width:480px){.hub-overlay{width:calc(100vw - 24px) !important;height:68dvh !important;border-radius:23px !important}.hub-top{padding:10px 12px !important;min-height:56px !important}.hub-content{padding:8px 12px 16px !important}#settings-modal .settings-panel{max-height:68dvh !important;width:calc(100vw - 28px) !important}}
-
-/* Live v2 : commandes latérales, lisibles, sans menu collé en bas ni demi-cercle minuscule. */
-body.live-mode-active #mic-btn,
-body.live-mode-active #mobile-dock,
-body.live-mode-active #quick-options,
-body.live-mode-active #dock-main-button { display:none !important; }
-body.live-mode-active .live-orb-wrap { padding-top:58px !important; padding-right:0 !important; }
-body.live-mode-active .live-top-actions { position:fixed !important; top:calc(10px + env(safe-area-inset-top)) !important; left:14px !important; right:14px !important; z-index:180 !important; width:auto !important; }
-body.live-mode-active .live-top-actions button { width:42px !important;height:42px !important;min-height:42px !important;border-radius:15px !important;background:rgba(38,40,44,.94) !important;color:#fff !important;border:1px solid rgba(255,255,255,.26) !important;box-shadow:0 5px 20px #0006 !important; }
-body.live-mode-active .live-side-toggle-wrap { position:fixed !important;right:10px !important;top:50% !important;transform:translateY(-50%) !important;z-index:190 !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button { width:46px !important;height:54px !important;min-height:54px !important;border-radius:16px 0 0 16px !important;border:1px solid rgba(255,255,255,.42) !important;border-right:0 !important;background:#292c32 !important;color:#fff !important;box-shadow:0 6px 24px #0009 !important;font-size:18px !important;display:grid !important;place-items:center !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button svg { width:20px !important;height:20px !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button.is-open { background:#f2f3f5 !important;color:#17181a !important;transform:none !important; }
-body.live-mode-active .live-bottom-actions { display:none !important; }
-body.live-mode-active .live-more-menu { display:flex !important;position:fixed !important;top:50% !important;right:55px !important;bottom:auto !important;left:auto !important;transform:translate(12px,-50%) !important;opacity:0;visibility:hidden;pointer-events:none;width:min(235px,calc(100vw - 86px)) !important;padding:10px !important;gap:5px !important;flex-direction:column !important;border-radius:18px !important;border:1px solid rgba(255,255,255,.2) !important;background:rgba(25,27,31,.97) !important;color:#fff !important;box-shadow:0 12px 38px #0009 !important;backdrop-filter:blur(18px) !important;z-index:189 !important; }
-body.live-mode-active .live-more-menu.is-open { transform:translate(0,-50%) !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important; }
-body.live-mode-active .live-more-menu button { display:flex !important;align-items:center !important;gap:12px !important;width:100% !important;min-height:43px !important;padding:10px 11px !important;border-radius:12px !important;background:rgba(255,255,255,.08) !important;color:#fff !important;font-size:12px !important;text-align:left !important;border:1px solid rgba(255,255,255,.08) !important; }
-body.live-mode-active .live-more-menu button:active { background:rgba(255,255,255,.18) !important; }
-body.live-mode-active .live-more-menu button svg { width:17px !important;height:17px !important;flex:0 0 17px !important; }
-.live-side-menu-title { font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.68;padding:4px 9px 7px; }
-body.live-mode-active .live-effects-menu { display:none !important; }
-body.live-mode-active .live-voice-picker { right:64px !important;left:auto !important;max-width:calc(100vw - 82px) !important; }
-@media(max-width:380px){body.live-mode-active .live-side-toggle-wrap{right:5px!important}body.live-mode-active .live-more-menu{right:49px!important;width:min(220px,calc(100vw - 64px))!important}body.live-mode-active .live-top-actions button{width:38px!important;height:38px!important}}
 
 </style>
 
@@ -1061,12 +948,22 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                 getApp: firebaseAppSDK.getApp,
                 getAuth: firebaseAuthSDK.getAuth,
                 signInWithPopup: firebaseAuthSDK.signInWithPopup,
+                signInWithCustomToken: firebaseAuthSDK.signInWithCustomToken,
                 GoogleAuthProvider: firebaseAuthSDK.GoogleAuthProvider,
                 onAuthStateChanged: firebaseAuthSDK.onAuthStateChanged,
                 signOut: firebaseAuthSDK.signOut
             };
         }
-        const { initializeApp, getApps, getApp, getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } = firebaseSDK;
+        const { initializeApp, getApps, getApp, getAuth, signInWithPopup, signInWithCustomToken, GoogleAuthProvider, onAuthStateChanged, signOut } = firebaseSDK;
+        const desktopAuthBridge = (() => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const port = Number(params.get("llink_desktop_auth_port"));
+                const state = params.get("llink_desktop_auth_state") || "";
+                if (!Number.isInteger(port) || port < 1024 || port > 65535 || !/^[a-f0-9]{64}$/.test(state)) return null;
+                return { port, state, submitted: false };
+            } catch (_) { return null; }
+        })();
         const firebaseConfig = { 
             apiKey: "AIzaSyDJPf1206nZjpw58OOnCpX4Gq9YFFQ0nUU", 
             authDomain: "llink-ee40e.firebaseapp.com", 
@@ -1077,17 +974,71 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         const provider = new GoogleAuthProvider();
         window.auth = auth;
 
-        window.handleAuth = async () => { 
-            if (window.isLoggedIn) { 
+        window.handleAuth = async () => {
+            if (window.isLoggedIn) {
                 try { await signOut(auth); } catch (e) { console.error("Erreur déconnexion:", e); }
-            } else { 
-                try { await signInWithPopup(auth, provider); } catch (e) { console.error("Erreur Auth:", e); } 
+                return;
             }
+            if (window.LLINK_PLATFORM?.isTauri && !window.LLINK_PLATFORM?.isCapacitor) {
+                try {
+                    const invoke = window.__TAURI__?.core?.invoke;
+                    if (typeof invoke !== "function") throw new Error("Le module natif de connexion Google n'est pas chargé.");
+                    const browserIdToken = await invoke("begin_desktop_google_auth");
+                    const exchangeResponse = await fetch((window.LLINK_SERVER_URL || "https://llink-usz9.onrender.com") + "/api/auth/desktop-exchange", {
+                        method: "POST",
+                        headers: { "Authorization": "Bearer " + browserIdToken }
+                    });
+                    const exchange = await exchangeResponse.json().catch(() => ({}));
+                    if (!exchangeResponse.ok || !exchange.customToken) {
+                        throw new Error(exchange.detail || "Le serveur n'a pas pu finaliser la connexion.");
+                    }
+                    await signInWithCustomToken(auth, exchange.customToken);
+                } catch (e) {
+                    console.error("Erreur Auth Google Tauri:", e);
+                    alert(e?.message || "La connexion Google n'a pas abouti.");
+                }
+                return;
+            }
+            try { await signInWithPopup(auth, provider); }
+            catch (e) { console.error("Erreur Auth:", e); }
         };
 
         onAuthStateChanged(auth, async (user) => {
             const authBtn = document.getElementById('auth-btn');
             if (user) {
+                if (desktopAuthBridge && !desktopAuthBridge.submitted) {
+                    desktopAuthBridge.submitted = true;
+                    try {
+                        const form = document.createElement("form");
+                        form.method = "POST";
+                        form.action = "http://127.0.0.1:" + desktopAuthBridge.port + "/complete";
+                        form.style.display = "none";
+                        const stateField = document.createElement("input");
+                        stateField.type = "hidden";
+                        stateField.name = "state";
+                        stateField.value = desktopAuthBridge.state;
+                        const tokenField = document.createElement("input");
+                        tokenField.type = "hidden";
+                        tokenField.name = "id_token";
+                        tokenField.value = await user.getIdToken(true);
+                        form.append(stateField, tokenField);
+                        document.body.appendChild(form);
+                        form.submit();
+                        return;
+                    } catch (error) {
+                        desktopAuthBridge.submitted = false;
+                        console.error("Retour sécurisé vers Llink impossible :", error);
+                    }
+                }
+                if (window.LLINK_PLATFORM?.isTauri && !window.LLINK_PLATFORM?.isCapacitor) {
+                    try {
+                        const tokenResult = await user.getIdTokenResult(true);
+                        window.LLINK_GOOGLE_AUTH_UID = tokenResult.claims?.llink_google_verified === true ? user.uid : null;
+                    } catch (error) {
+                        window.LLINK_GOOGLE_AUTH_UID = null;
+                        console.warn("Impossible de lire les autorisations hors ligne :", error);
+                    }
+                }
                 window.isLoggedIn = true;
                 window.dispatchEvent(new Event('llink-auth-state-changed'));
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
@@ -1106,6 +1057,7 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                 window.authToken = null; 
                 window.uid = "anonymous";
                 window.isOfflineValid = false;
+                window.LLINK_GOOGLE_AUTH_UID = null;
                 window.dispatchEvent(new Event('llink-auth-state-changed'));
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
                 if (authBtn) authBtn.innerHTML = `<i data-lucide="log-in" class="w-[1.25rem] h-[1.25rem]"></i>`;
@@ -1735,17 +1687,10 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                       <button type="button" onclick="returnFromLive()" aria-label="Retour" title="Retour"><i data-lucide="arrow-left"></i></button>
                       <button type="button" class="live-chat-button" onclick="selectAppMode('chat')" aria-label="Ouvrir le chat" title="Chat"><i data-lucide="message-circle"></i></button>
                     </div>
-                    <div class="live-visual live-avatar-visual" id="live-visual" aria-label="Visage 3D animé d'Elia">
-                      <div id="live-avatar-stage" class="live-avatar-stage" aria-label="Visage 3D interactif d'Elia"></div>
-                      <div class="live-avatar-caption">
-                        <span class="live-avatar-name">Elia</span>
-                        <span id="live-avatar-status" class="live-avatar-status" aria-live="polite">Connexion au service Live…</span>
-                      </div>
-                      <div id="live-avatar-transcript" class="live-avatar-transcript" aria-live="polite"></div>
+                    <div class="live-visual effect-waves" id="live-visual" aria-label="Barres de fréquence">
+                      <div class="live-wave-lines" role="button" tabindex="0" aria-label="Toucher pour changer les barres de fréquence" title="Toucher pour changer les barres de fréquence" onclick="cycleLiveEffect(event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();cycleLiveEffect(event)}">${Array.from({length:43}, (_, i) => { const h=7 + Math.abs(Math.sin(i * .73)) * (i % 7 === 0 ? 48 : 31); const angle=(i/43)*360; const radius=28 + Math.abs(Math.sin(i*.73))*25; const y=Math.sin(i*.48)*34; return `<span style="--i:${i};--h:${h}px;--angle:${angle}deg;--radius:${radius}px;--y:${y}px;--delay:${(i % 11) * -.09}s;--speed:${.55 + (i % 6) * .12}s"></span>`; }).join('')}</div>
                     </div>
-                    <div class="live-bottom-actions live-avatar-controls" aria-label="Commandes Live">
-                      <button type="button" id="live-voice-mic" class="live-avatar-control live-avatar-mic" onclick="toggleLlinkLiveMic()" aria-label="Activer le microphone" aria-pressed="false" title="Activer le microphone"><i data-lucide="mic"></i></button>
-                      <button type="button" id="live-voice-video" class="live-avatar-control" onclick="openLiveVideoCall()" aria-label="Ouvrir l'appel vidéo" title="Ouvrir l'appel vidéo"><i data-lucide="video"></i></button>
+                    <div class="live-bottom-actions" aria-label="Commandes Live">
                       <button type="button" class="live-plus-button" id="live-plus-button" onclick="toggleLiveEffects()" aria-label="Ouvrir les options Live" aria-expanded="false" title="Options Live"><i data-lucide="plus"></i></button>
                     </div>
                     <div id="live-more-menu" class="live-more-menu" role="menu" aria-label="Autres options Live" hidden></div>
@@ -1762,16 +1707,8 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
                     </div>
                   </section>`;
                 lucide.createIcons();
-                const videoFallback = document.querySelector('#llcall-tile-ai .elia-svg, #llcall-tile-ai .elia-avatar-3d');
-                const voiceFallback = document.getElementById('live-avatar-stage');
-                if (videoFallback && voiceFallback) {
-                    const clone = videoFallback.cloneNode(true);
-                    clone.classList.remove('llia-fallback-hidden');
-                    voiceFallback.appendChild(clone);
-                }
-                if (window.llinkLiveAvatarController?.placeCanvas) window.llinkLiveAvatarController.placeCanvas();
-                if (typeof window.connectLlinkLiveSession === 'function') window.connectLlinkLiveSession();
                 window.setLiveEffect(currentLiveEffect);
+                if (typeof window.connectLlinkLiveSession === 'function') window.connectLlinkLiveSession();
             } else if (mode === 'work') {
                 document.getElementById('chat-window').innerHTML = '<div id="work-workspace"></div>';
                 if (window.lucide) lucide.createIcons();
@@ -2467,29 +2404,6 @@ html:not(.dark) #settings-modal .settings-panel .bg-surface-light,html:not(.dark
         .subscription-submit { width:100%;padding:11px;border-radius:11px;background:#202124;color:white;font-weight:800;font-size:12px; }.dark .subscription-submit { background:#f4f4f4;color:#171717; }
         .payment-note { margin-top:8px;font-size:9px;line-height:1.4;opacity:.7; }
         @media(max-width:380px) { .subscription-plans { gap:5px; }.subscription-plan { padding:8px 5px; }.subscription-plan strong { font-size:10px; }.subscription-plan small,.plan-price { font-size:8px; } }
-
-/* Live v2 : commandes latérales, lisibles, sans menu collé en bas ni demi-cercle minuscule. */
-body.live-mode-active #mic-btn,
-body.live-mode-active #mobile-dock,
-body.live-mode-active #quick-options,
-body.live-mode-active #dock-main-button { display:none !important; }
-body.live-mode-active .live-orb-wrap { padding-top:58px !important; padding-right:0 !important; }
-body.live-mode-active .live-top-actions { position:fixed !important; top:calc(10px + env(safe-area-inset-top)) !important; left:14px !important; right:14px !important; z-index:180 !important; width:auto !important; }
-body.live-mode-active .live-top-actions button { width:42px !important;height:42px !important;min-height:42px !important;border-radius:15px !important;background:rgba(38,40,44,.94) !important;color:#fff !important;border:1px solid rgba(255,255,255,.26) !important;box-shadow:0 5px 20px #0006 !important; }
-body.live-mode-active .live-side-toggle-wrap { position:fixed !important;right:10px !important;top:50% !important;transform:translateY(-50%) !important;z-index:190 !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button { width:46px !important;height:54px !important;min-height:54px !important;border-radius:16px 0 0 16px !important;border:1px solid rgba(255,255,255,.42) !important;border-right:0 !important;background:#292c32 !important;color:#fff !important;box-shadow:0 6px 24px #0009 !important;font-size:18px !important;display:grid !important;place-items:center !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button svg { width:20px !important;height:20px !important; }
-body.live-mode-active .live-side-toggle-wrap .live-plus-button.is-open { background:#f2f3f5 !important;color:#17181a !important;transform:none !important; }
-body.live-mode-active .live-bottom-actions { display:none !important; }
-body.live-mode-active .live-more-menu { display:flex !important;position:fixed !important;top:50% !important;right:55px !important;bottom:auto !important;left:auto !important;transform:translate(12px,-50%) !important;opacity:0;visibility:hidden;pointer-events:none;width:min(235px,calc(100vw - 86px)) !important;padding:10px !important;gap:5px !important;flex-direction:column !important;border-radius:18px !important;border:1px solid rgba(255,255,255,.2) !important;background:rgba(25,27,31,.97) !important;color:#fff !important;box-shadow:0 12px 38px #0009 !important;backdrop-filter:blur(18px) !important;z-index:189 !important; }
-body.live-mode-active .live-more-menu.is-open { transform:translate(0,-50%) !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important; }
-body.live-mode-active .live-more-menu button { display:flex !important;align-items:center !important;gap:12px !important;width:100% !important;min-height:43px !important;padding:10px 11px !important;border-radius:12px !important;background:rgba(255,255,255,.08) !important;color:#fff !important;font-size:12px !important;text-align:left !important;border:1px solid rgba(255,255,255,.08) !important; }
-body.live-mode-active .live-more-menu button:active { background:rgba(255,255,255,.18) !important; }
-body.live-mode-active .live-more-menu button svg { width:17px !important;height:17px !important;flex:0 0 17px !important; }
-.live-side-menu-title { font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.68;padding:4px 9px 7px; }
-body.live-mode-active .live-effects-menu { display:none !important; }
-body.live-mode-active .live-voice-picker { right:64px !important;left:auto !important;max-width:calc(100vw - 82px) !important; }
-@media(max-width:380px){body.live-mode-active .live-side-toggle-wrap{right:5px!important}body.live-mode-active .live-more-menu{right:49px!important;width:min(220px,calc(100vw - 64px))!important}body.live-mode-active .live-top-actions button{width:38px!important;height:38px!important}}
 
 </style>
 
@@ -4791,7 +4705,7 @@ html.dark #llcall{--c-bg:#101113;--c-card:#1b1c1f;--c-text:#f6f7f9;--c-mut:#a5a8
 .llcall-tile.is-main{z-index:1}
 .llcall-tile.is-pip{z-index:3;right:10px;bottom:calc(var(--ctl-h) + 12px);width:36%;height:30%;min-width:64px;border-radius:14px;border:2px solid var(--c-bg);box-shadow:0 6px 22px rgba(0,0,0,.35);cursor:pointer}
 .llcall-ai{background:linear-gradient(160deg,var(--ai-a),var(--ai-b));display:flex;align-items:center;justify-content:center}
-.llcall-ai .elia-svg{height:min(80%,540px);width:auto;max-width:92%;margin-bottom:var(--ai-shift,0)}
+.llcall-ai .elia-svg{height:min(80%,540px);width:auto;max-width:92%;object-fit:contain;display:block;margin-bottom:var(--ai-shift,0)}
 .llcall-ai.is-main{--ai-shift:calc(var(--ctl-h)*.35)}
 .llcall-ai.is-pip .elia-svg{height:88%}
 .llcall-me{background:var(--c-card)}
@@ -4833,7 +4747,7 @@ button svg,button i,[role="button"] svg,[role="button"] i,.rail-item svg,.rail-i
 @keyframes eliaBlink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
 @keyframes eliaTalk{from{transform:scaleY(.3)}to{transform:scaleY(1.7)}}
 </style>
-<div id="llcall" class="llcall" role="dialog" aria-modal="true" aria-label="Appel vidéo avec Elia" aria-hidden="true">
+<div id="llcall" class="llcall" role="dialog" aria-modal="true" aria-label="Appel vidéo avec Lia" aria-hidden="true">
   <section class="llcall-chat" id="llcall-chatpane">
     <header class="llcall-chat-head"><span>Messagerie</span><button type="button" class="llcall-ico" data-c="chat" aria-label="Masquer la messagerie"><i data-lucide="panel-left-close"></i></button></header>
     <div class="llcall-chat-body" id="llcall-chatbody"><div id="llcall-hint">Parle ou écris à Elia : vos messages apparaissent ici.</div></div>
@@ -4843,35 +4757,19 @@ button svg,button i,[role="button"] svg,[role="button"] i,.rail-item svg,.rail-i
     <div class="llcall-top"><span id="llcall-timer">00:00</span><span id="llcall-state">Connecté</span></div>
     <div class="llcall-tile llcall-ai is-main" id="llcall-tile-ai" data-tile="ai">
       <!-- Avatar provisoire : à remplacer par l'avatar définitif d'Elia -->
-      <svg class="elia-svg" viewBox="0 0 200 240" role="img" aria-label="Avatar d'Elia">
-        <defs>
-          <linearGradient id="eliaSkin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2cfb3"/><stop offset="1" stop-color="#d9a982"/></linearGradient>
-          <linearGradient id="eliaCloth" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d5bd0"/><stop offset="1" stop-color="#3f338f"/></linearGradient>
-        </defs>
-        <path d="M20 240c4-48 38-70 80-70s76 22 80 70z" fill="url(#eliaCloth)"/>
-        <rect x="86" y="140" width="28" height="38" rx="12" fill="#cf9d76"/>
-        <ellipse cx="100" cy="100" rx="52" ry="60" fill="url(#eliaSkin)"/>
-        <path d="M46 98c-6-52 30-76 62-72 34 4 52 32 46 74-8-30-30-44-56-44-24 0-44 14-52 42z" fill="#2b2433"/>
-        <ellipse class="elia-eye" cx="80" cy="106" rx="6" ry="7.5" fill="#2a2130"/>
-        <ellipse class="elia-eye" cx="120" cy="106" rx="6" ry="7.5" fill="#2a2130"/>
-        <path d="M70 92q10-7 20-2M110 90q10-5 20 2" fill="none" stroke="#2b2433" stroke-width="3" stroke-linecap="round"/>
-        <path d="M100 112q-4 12 2 16" fill="none" stroke="#c18f68" stroke-width="2.5" stroke-linecap="round"/>
-        <ellipse class="elia-mouth" cx="100" cy="140" rx="14" ry="6" fill="#8f3b4a"/>
-      </svg>
-      <span class="llcall-name">Elia</span>
+      <img class="elia-svg lia-svg elia-avatar-3d" src="./assets/lia-avatar.png" alt="Lia, visage humain en trois dimensions" draggable="false">
+      <span class="llcall-name">Lia</span>
     </div>
     <div class="llcall-tile llcall-me is-pip" id="llcall-tile-me" data-tile="me">
       <video id="llcall-video" class="llcall-video" autoplay muted playsinline></video>
       <div class="llcall-nocam"><i data-lucide="user-round"></i></div>
       <span class="llcall-name">Moi</span>
     </div>
-    <div class="llcall-look" id="llcall-look" role="menu" aria-label="Apparence d'Elia"></div>
-      <div class="llcall-controls">
+    <div class="llcall-controls">
       <button type="button" class="llcall-btn" data-c="chat" id="llcall-btn-chat" aria-label="Messagerie"><i data-lucide="message-circle"></i></button>
       <button type="button" class="llcall-btn on" data-c="cam" id="llcall-btn-cam" aria-label="Caméra"><i data-lucide="video"></i></button>
       <button type="button" class="llcall-btn" data-c="flip" aria-label="Retourner la caméra"><i data-lucide="switch-camera"></i></button>
       <button type="button" class="llcall-btn" data-c="mic" id="llcall-btn-mic" aria-label="Micro"><i data-lucide="mic"></i></button>
-      <button type="button" class="llcall-btn" data-c="look" id="llcall-btn-look" aria-label="Visage ou vibrations"><i data-lucide="audio-lines"></i></button>
       <button type="button" class="llcall-btn" data-c="swap" aria-label="Échanger les écrans"><i data-lucide="arrow-left-right"></i></button>
       <button type="button" class="llcall-btn hang" data-c="hang" aria-label="Terminer la conversation"><i data-lucide="phone-off"></i></button>
     </div>
@@ -5351,109 +5249,7 @@ $('llcall-form').addEventListener('submit',event=>{
 })();
 </script>
 
-<script id="llink-call-looks">
-(function(){
-'use strict';
-var el=document.getElementById('llcall'),tile=document.getElementById('llcall-tile-ai'),pop=document.getElementById('llcall-look');
-if(!el||!tile||!pop)return;
-var LOOKS=[['face','Visage','user-round'],['waves','Ondes','audio-lines'],['serpent','Serpent','activity'],['radial','Radial','sun'],['ripple','Ripple','circle-dot'],['soft','Aura','sparkles']];
-var look='face';try{look=localStorage.getItem('llink_call_look')||'face';}catch(e){}
-if(!LOOKS.some(function(l){return l[0]===look;}))look='face';
-var cv,cx,W=0,H=0,dpr=1,raf=0,lvl=0,rings=[],lastRing=0,PAL=null,palT=0,dkF=null,bands=[],i;
-for(i=0;i<64;i++)bands.push({p:Math.random()*6.28,s:2+Math.random()*5,w:.55+.45*Math.random()});
-pop.innerHTML=LOOKS.map(function(l){return '<button type="button" class="llcall-lk" data-look="'+l[0]+'" aria-pressed="false"><span class="llcall-lk-dot"><i data-lucide="'+l[2]+'"></i></span><em>'+l[1]+'</em></button>';}).join('');
-if(window.lucide)window.lucide.createIcons();
-function palette(){var dark=document.documentElement.classList.contains('dark');PAL={dark:dark,h:38,s:dark?.62:.5,l:dark?.84:.46};}
-function col(ho,lo,al){return 'hsla('+(PAL.h+ho*.18).toFixed(0)+','+(PAL.s*100).toFixed(0)+'%,'+Math.max(12,Math.min(96,(PAL.l+(lo||0))*100)).toFixed(0)+'%,'+(al==null?1:al)+')';}
-function hgrad(a){var g=cx.createLinearGradient(0,0,W,0);g.addColorStop(0,col(-40,0,a));g.addColorStop(.5,col(0,.05,a));g.addColorStop(1,col(45,.03,a));return g;}
-function V(k,t,lv){var b=bands[((k%64)+64)%64];return Math.max(.02,lv*(.3+.7*Math.abs(Math.sin(t*b.s+b.p)))*b.w);}
-function glow(on,c,px){cx.shadowBlur=on&&PAL.dark?px:0;cx.shadowColor=c;}
-var DRAW={
-  waves:function(t,lv){
-    var n=W<420?31:47,bw=W*.84/n,x0=(W-n*bw)/2+bw/2,mid=H*.46,k,pos,env,h;
-    cx.lineCap='round';cx.lineWidth=Math.max(3,bw*.52);cx.strokeStyle=hgrad(.95);glow(1,col(0,0,.9),14);
-    for(k=0;k<n;k++){pos=k/(n-1);env=Math.pow(Math.sin(pos*Math.PI),1.15);h=8+V(k*3+Math.floor(t*0),t,lv)*H*.5*env+lv*H*.08*env;
-      var x=x0+k*bw;cx.beginPath();cx.moveTo(x,mid-h/2);cx.lineTo(x,mid+h/2);cx.stroke();}
-  },
-  serpent:function(t,lv){
-    var r,x,y,st=W<420?5:4,amp=H*.16*(.18+lv*1.25),mid=H*.46;
-    cx.lineCap='round';cx.lineJoin='round';if(PAL.dark)cx.globalCompositeOperation='lighter';
-    for(r=0;r<5;r++){
-      cx.beginPath();
-      for(x=0;x<=W+st;x+=st){var p=x/W,env=Math.pow(Math.sin(Math.min(1,p)*Math.PI),1.4);
-        y=mid+env*amp*(Math.sin(p*(5+r*1.7)+t*(1.3+r*.45)+r*1.3)*.7+Math.sin(p*(11+r*2)-t*(2+r*.3))*.3*(r%2?1:-1));
-        x?cx.lineTo(x,y):cx.moveTo(x,y);}
-      cx.lineWidth=2+(4-r)*1.1;cx.strokeStyle=hgrad(.85-r*.13);glow(1,col(r*20,0,.8),10);cx.stroke();
-    }
-    cx.globalCompositeOperation='source-over';
-  },
-  radial:function(t,lv){
-    var R=Math.min(W,H)*.17,ox=W/2,oy=H*.46,n=88,k,a,len,g;
-    g=cx.createRadialGradient(ox,oy,0,ox,oy,R*(1.1+lv*.5));g.addColorStop(0,col(0,.1,.35+lv*.3));g.addColorStop(1,col(30,0,0));
-    cx.fillStyle=g;cx.beginPath();cx.arc(ox,oy,R*(1.1+lv*.5),0,7);cx.fill();
-    cx.lineCap='round';cx.lineWidth=Math.max(2,R*.045);
-    for(k=0;k<n;k++){a=k/n*6.2832+t*.1;len=R*.1+V(k*2+Math.floor(k/3),t,lv)*R*1.1;
-      cx.strokeStyle=col(Math.sin(a*2+t*.4)*45,0,.9);glow(1,col(0,0,.8),8);
-      cx.beginPath();cx.moveTo(ox+Math.cos(a)*R,oy+Math.sin(a)*R);cx.lineTo(ox+Math.cos(a)*(R+len),oy+Math.sin(a)*(R+len));cx.stroke();}
-    glow(0);cx.strokeStyle=col(0,.05,.55);cx.lineWidth=2;cx.beginPath();cx.arc(ox,oy,R*.93,0,7);cx.stroke();
-  },
-  ripple:function(t,lv){
-    var R=Math.min(W,H)*.13,ox=W/2,oy=H*.46,k,g;
-    if(t-lastRing>(1.5-lv*1.1)){rings.push({t:t});lastRing=t;}
-    for(k=rings.length-1;k>=0;k--){var age=(t-rings[k].t)/2.8;if(age>1){rings.splice(k,1);continue;}
-      cx.strokeStyle=col(age*50,0,Math.pow(1-age,1.6)*.8);cx.lineWidth=1.5+(1-age)*3.5;glow(1,col(0,0,.7),12);
-      cx.beginPath();cx.arc(ox,oy,R*(.7+age*3.4*(1+lv*.45)),0,7);cx.stroke();}
-    glow(0);var rr=R*(.62+lv*.4);g=cx.createRadialGradient(ox,oy,0,ox,oy,rr);g.addColorStop(0,col(20,.12,1));g.addColorStop(.6,col(0,0,.85));g.addColorStop(1,col(-30,0,0));
-    cx.fillStyle=g;cx.beginPath();cx.arc(ox,oy,rr,0,7);cx.fill();
-    for(k=0;k<14;k++){var a=k/14*6.2832+t*.35;cx.fillStyle=col(k*8,.08,.85);cx.beginPath();cx.arc(ox+Math.cos(a)*R*1.35,oy+Math.sin(a)*R*1.35,2+V(k,t,lv)*4.5,0,7);cx.fill();}
-  },
-  soft:function(t,lv){
-    var R=Math.min(W,H)*.2,ox=W/2,oy=H*.46,b,k,a,rd,g;
-    if(PAL.dark)cx.globalCompositeOperation='lighter';
-    for(b=0;b<4;b++){
-      var bx=ox+Math.cos(t*.4+b*1.6)*R*.28,by=oy+Math.sin(t*.5+b*2.1)*R*.24,base=R*(1.05-b*.1)*(1+lv*.45);
-      cx.beginPath();
-      for(k=0;k<=72;k++){a=k/72*6.2832;rd=base*(1+lv*.3*Math.sin(a*3+t*(1.1+b*.4)+b)+.07*Math.sin(a*5-t*1.6+b*2)+.03*Math.sin(a*8+t*2.3));
-        var px=bx+Math.cos(a)*rd,py=by+Math.sin(a)*rd;k?cx.lineTo(px,py):cx.moveTo(px,py);}
-      g=cx.createRadialGradient(bx,by,base*.1,bx,by,base*1.1);g.addColorStop(0,col(b*35-50,.1,PAL.dark?.75:.8));g.addColorStop(1,col(b*35-50,0,0));
-      cx.fillStyle=g;cx.fill();
-    }
-    cx.globalCompositeOperation='source-over';
-  }
-};
-function frame(ts){
-  raf=requestAnimationFrame(frame);var t=ts/1000;
-  var d=document.documentElement.classList.contains('dark');if(!PAL||d!==dkF||t-palT>3){dkF=d;palT=t;palette();}
-  var sp=el.classList.contains('speaking'),ls=el.classList.contains('listening');
-  var tg=sp?.6+.4*Math.min(1,Math.abs(Math.sin(t*3.1)*Math.sin(t*1.7+1)+Math.sin(t*7.3)*.4)):(ls?.3+.15*Math.sin(t*2.2)*Math.sin(t*5.1):.08+.035*Math.sin(t*1.1));
-  lvl+=(tg-lvl)*(tg>lvl?.22:.07);
-  cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);cx.globalAlpha=1;
-  (DRAW[look]||DRAW.waves)(t,lvl);cx.shadowBlur=0;
-}
-function size(){if(!cv)return;W=tile.clientWidth;H=tile.clientHeight;dpr=Math.min(window.devicePixelRatio||1,2);cv.width=Math.max(1,W*dpr);cv.height=Math.max(1,H*dpr);}
-function ensure(){
-  if(cv)return;cv=document.createElement('canvas');cv.className='elia-vibe';tile.insertBefore(cv,tile.firstChild);cx=cv.getContext('2d');
-  if(window.ResizeObserver)new ResizeObserver(size).observe(tile);window.addEventListener('resize',size);size();
-}
-function run(){if(look==='face'||!el.classList.contains('is-open')){stop();return;}ensure();size();if(!raf)raf=requestAnimationFrame(frame);}
-function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}}
-function apply(){
-  tile.classList.toggle('vibe-on',look!=='face');
-  pop.querySelectorAll('[data-look]').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.look===look?'true':'false');});
-  rings=[];run();
-}
-el.addEventListener('click',function(e){
-  var lk=e.target.closest('[data-look]');
-  if(lk){look=lk.dataset.look;try{localStorage.setItem('llink_call_look',look);}catch(_){}apply();pop.classList.remove('open');return;}
-  if(e.target.closest('[data-c="look"]')){pop.classList.toggle('open');return;}
-  if(!e.target.closest('#llcall-look'))pop.classList.remove('open');
-});
-var o=window.openLiveVideoCall,c0=window.closeLiveVideoCall;
-window.openLiveVideoCall=function(){o.apply(this,arguments);apply();};
-window.closeLiveVideoCall=function(){c0.apply(this,arguments);pop.classList.remove('open');stop();};
-apply();
-})();
-</script>
+
 <style id="llink-ui-polish">
 /* Sélecteur de réflexion + choix des langues : même style que le reste de l'app */
 #model-selector{display:none!important}
@@ -5615,38 +5411,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script src="./document-editor.js?v=work-sequential-documents-1"></script>
 <script src="./presentation-editor.js?v=work-sequential-documents-1"></script>
 <script src="./binary-editors.js?v=work-sequential-documents-1"></script>
-<script src="./workspace.js?v=web-native-split-2"></script>
-<script src="./live-avatar.js?v=live-face-3d-20261107"></script>
-<style id="llink-live-avatar-ui">
-#live-avatar-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:320px;touch-action:pan-y}
-#live-avatar-stage .llia-3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:2;touch-action:none;cursor:grab}
-#live-avatar-stage .llia-3d-canvas:active{cursor:grabbing}
-#live-avatar-stage .elia-svg{height:88%;width:auto;max-width:85%;object-fit:contain;filter:grayscale(1);opacity:.9}
-.live-avatar-visual{height:clamp(340px,56vh,620px)!important;min-height:300px!important;max-width:900px!important;width:min(100%,900px)!important;margin:auto;position:relative!important;top:auto!important;left:auto!important;right:auto!important;transform:none!important;overflow:visible!important}
-.live-avatar-visual::before,.live-avatar-visual::after{display:none!important}
-.live-avatar-caption{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:9px;white-space:nowrap;padding:6px 12px;border:1px solid var(--live-border);border-radius:999px;background:color-mix(in srgb,var(--live-surface) 88%,transparent);backdrop-filter:blur(12px);font-size:11px}
-.live-avatar-name{font-weight:800;color:var(--live-fg)}
-.live-avatar-status{color:var(--live-muted)}
-.live-avatar-transcript{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);width:min(620px,88%);max-height:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;color:var(--live-muted);font-size:12px;line-height:1.5;z-index:5}
-#live-avatar-stage .elia-svg{position:relative;z-index:1;display:block;max-height:100%;margin:auto}
-.live-avatar-controls{display:flex!important;align-items:center;justify-content:center;gap:14px!important;pointer-events:none}
-.live-avatar-controls .live-avatar-control{pointer-events:auto;width:52px!important;height:52px!important;min-height:52px!important;border-radius:50%!important;background:var(--live-surface)!important;color:var(--live-fg)!important;border:1px solid var(--live-border)!important;display:grid!important;place-items:center!important;box-shadow:0 5px 18px #0002!important}
-.live-avatar-controls .live-avatar-control svg{width:20px!important;height:20px!important}
-.live-avatar-controls .live-avatar-mic{width:58px!important;height:58px!important;background:var(--live-fg)!important;color:var(--live-bg)!important}
-.live-avatar-controls .live-avatar-mic.on{background:#c9574b!important;color:#fff!important;border-color:#c9574b!important}
-.live-avatar-controls .live-plus-button{position:static!important;transform:none!important;width:44px!important;height:44px!important;min-height:44px!important;display:grid!important;place-items:center!important;background:var(--live-surface)!important;color:var(--live-fg)!important;border:1px solid var(--live-border)!important;border-radius:50%!important}
-#llcall .llia-3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:2;touch-action:none;cursor:grab}
-#llcall .llia-3d-canvas:active{cursor:grabbing}
-#llcall .llcall-ai{position:relative;overflow:hidden}
-#llcall .elia-svg.llia-fallback-hidden{display:none!important}
-#llcall .llia-3d-canvas:focus-visible{outline:2px solid var(--llink-accent);outline-offset:-4px}
-@media(max-width:600px){
-  .live-avatar-visual{height:clamp(300px,52vh,500px)!important;min-height:280px!important}
-  .live-avatar-controls{gap:10px!important}
-  .live-avatar-controls .live-avatar-control{width:46px!important;height:46px!important;min-height:46px!important}
-  .live-avatar-controls .live-avatar-mic{width:54px!important;height:54px!important}
-  .live-avatar-transcript{bottom:47px;font-size:10px}
-}
-@media(prefers-reduced-motion:reduce){.live-avatar-controls .live-avatar-control{transition:none!important}}
-</style>
+<script src="./workspace.js?v=work-image-workflow-20261108"></script>
+<!-- Avatar statique fourni par l'utilisateur : aucune animation 3D. -->
+
 </html>

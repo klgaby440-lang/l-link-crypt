@@ -172,7 +172,7 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
 def test_agent_tool_registry_is_general_and_uses_native_function_schemas():
     names = {item["function"]["name"] for item in work_agent.TOOLS}
     assert {
-        "update_plan", "web_search", "web_open", "image_search", "image_generate", "python",
+        "update_plan", "web_search", "web_open", "image_search", "image_generate", "image_edit", "python",
         "document_plan", "document_begin", "document_add_blocks", "document_finalize",
         "artifact_verify", "create_text_file", "export_file",
     }.issubset(names)
@@ -196,6 +196,8 @@ def test_web_open_rejects_local_and_non_http_urls(url):
 
 
 def test_workspace_tools_are_native_and_are_only_advertised_to_authenticated_users(monkeypatch):
+    from types import SimpleNamespace
+
     expected = {
         "workspace_list_projects", "workspace_list_files", "workspace_read_file",
         "workspace_search_files", "workspace_create_project",
@@ -208,6 +210,12 @@ def test_workspace_tools_are_native_and_are_only_advertised_to_authenticated_use
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("E2B_API_KEY", raising=False)
     monkeypatch.delenv("ZAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        work_agent,
+        "get_settings",
+        lambda: SimpleNamespace(gemini_api_key="", zai_api_key=""),
+    )
     authenticated = {item["function"]["name"] for item in work_agent._available_tool_definitions({"uid": "work-user"})}
     anonymous = {item["function"]["name"] for item in work_agent._available_tool_definitions({"uid": "anonymous"})}
     assert expected.issubset(authenticated)
@@ -220,7 +228,7 @@ def test_image_generation_is_advertised_to_authenticated_users_without_subscript
     monkeypatch.setattr(
         work_agent,
         "get_settings",
-        lambda: SimpleNamespace(zai_api_key="zai-test"),
+        lambda: SimpleNamespace(gemini_api_key="gemini-test", zai_api_key=""),
     )
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("E2B_API_KEY", raising=False)
@@ -234,10 +242,12 @@ def test_image_generation_is_advertised_to_authenticated_users_without_subscript
         for item in work_agent._available_tool_definitions({"uid": "anonymous"})
     }
 
-    # L'outil est exposé à tout compte authentifié si Z.ai est configuré.
+    # L'outil est exposé à tout compte authentifié dès que Gemini est configuré.
     # Le registre ne reçoit aucune formule d'abonnement et ne filtre pas cet outil par plan.
     assert "image_generate" in authenticated
+    assert "image_edit" in authenticated
     assert "image_generate" not in anonymous
+    assert "image_edit" not in anonymous
 
 
 def test_workspace_dispatch_creates_reads_and_updates_real_workspace_files(monkeypatch):
@@ -792,101 +802,127 @@ def test_public_host_resolution_rejects_private_dns(monkeypatch):
 
 
 def test_available_tool_registry_respects_session_and_server_keys(monkeypatch):
-    import os
+    from types import SimpleNamespace
 
-    monkeypatch.setenv("TAVILY_API_KEY", "tavily-test")
+    monkeypatch.setattr(
+        work_agent,
+        "get_settings",
+        lambda: SimpleNamespace(gemini_api_key="gemini-test"),
+    )
     monkeypatch.setenv("E2B_API_KEY", "e2b-test")
-    monkeypatch.setenv("ZAI_API_KEY", "zai-test")
     names = {
         item["function"]["name"]
         for item in work_agent._available_tool_definitions({"uid": "firebase-user"})
     }
-    assert {"web_search", "web_open", "image_search", "image_generate", "python"}.issubset(names)
+    expected = {"web_search", "web_open", "image_search", "image_generate", "image_edit", "python"}
+    assert expected.issubset(names)
+
     anonymous_names = {
         item["function"]["name"]
         for item in work_agent._available_tool_definitions({"uid": "anonymous"})
     }
-    assert not ({"web_search", "web_open", "image_search", "image_generate", "python"} & anonymous_names)
+    assert not (expected & anonymous_names)
 
-    monkeypatch.delenv("TAVILY_API_KEY")
+    monkeypatch.setattr(
+        work_agent,
+        "get_settings",
+        lambda: SimpleNamespace(gemini_api_key=""),
+    )
     monkeypatch.delenv("E2B_API_KEY")
-    monkeypatch.delenv("ZAI_API_KEY")
     limited_names = {
         item["function"]["name"]
         for item in work_agent._available_tool_definitions({"uid": "firebase-user"})
     }
-    assert "image_generate" not in limited_names
-    assert "image_search" not in limited_names
-    assert "python" not in limited_names
+    assert not ({"web_search", "image_search", "image_generate", "image_edit", "python"} & limited_names)
 
 
-def test_glm_image_tool_generates_and_prepares_an_image_artifact(monkeypatch):
-    import asyncio
+def test_gemini_image_tools_generate_and_edit_verified_artifacts(monkeypatch):
     import base64
     from types import SimpleNamespace
 
     from PIL import Image
 
+    output = io.BytesIO()
+    Image.new("RGB", (32, 24), (80, 130, 55)).save(output, format="PNG")
+    png_bytes = output.getvalue()
+    encoded_image = base64.b64encode(png_bytes).decode("ascii")
+    source_image = {"filename": "source.png", "mime_type": "image/png", "data": png_bytes}
+    seen_requests = []
+
     async def no_quota(**_kwargs):
         return None
 
-    output = io.BytesIO()
-    Image.new("RGB", (32, 24), (80, 130, 55)).save(output, format="PNG")
-    data_url = "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
-
-    class FakeResponse:
-        status_code = 200
-
-        def json(self):
-            return {"data": [{"url": "https://images.example/generated.png"}], "content_filter": [{"level": 3}]}
-
-    class FakeClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args):
-            return None
-
-        async def post(self, url, headers, json):
-            assert url == "https://api.z.ai/api/paas/v4/images/generations"
-            assert json["model"] == "glm-image"
-            assert json["quality"] == "standard"
-            return FakeResponse()
+    async def fake_generate_content(prompt, **kwargs):
+        seen_requests.append({"prompt": prompt, **kwargs})
+        assert kwargs["model"] == "gemini-3.1-flash-image"
+        return {
+            "content": {
+                "parts": [{
+                    "inlineData": {
+                        "mimeType": "image/png",
+                        "data": encoded_image,
+                    }
+                }]
+            }
+        }
 
     async def run():
         monkeypatch.setattr(work_agent, "enforce_endpoint_quota", no_quota)
         monkeypatch.setattr(
-            work_agent, "get_settings",
-            lambda: SimpleNamespace(zai_api_key="zai-test", zai_base_url="https://api.z.ai/api/paas/v4")
+            work_agent,
+            "get_settings",
+            lambda: SimpleNamespace(gemini_api_key="gemini-test"),
         )
-        monkeypatch.setattr(work_agent.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
-        monkeypatch.setattr(
-            work_agent, "_resolve_public_image",
-            lambda _url: asyncio.sleep(0, result={
-                "data_url": data_url, "size_bytes": len(output.getvalue()), "mime_type": "image/png"
-            })
-        )
-        state = work_agent.AgentState()
-        result = await work_agent._dispatch_tool(
-            "image_generate",
-            {"prompt": "Illustration botanique d'un pin sylvestre isolé", "filename": "pin-sylvestre.png", "size": "1280x1280", "quality": "standard"},
-            state=state, request=None, user={"uid": "firebase-user"}, db=None,
-        )
-        assert result["verified"] is False
-        assert result["status"] == "image_ready_pending_independent_verification"
-        assert result["image_id"] in state.images
-        assert result["artifact_id"] in state.artifacts
+        monkeypatch.setattr(work_agent, "_gemini_generate_content", fake_generate_content)
 
-        verify = await work_agent._dispatch_tool(
-            "artifact_verify", {"artifact_id": result["artifact_id"]},
-            state=state, request=None, user={"uid": "firebase-user"}, db=None,
+        generated_state = work_agent.AgentState()
+        generated = await work_agent._dispatch_tool(
+            "image_generate",
+            {
+                "prompt": "Illustration botanique d'un pin sylvestre isolé",
+                "filename": "pin-sylvestre.png",
+                "aspect_ratio": "1:1",
+                "quality": "standard",
+            },
+            state=generated_state, request=None, user={"uid": "firebase-user"}, db=None,
         )
-        assert verify["verified_by_agent"] is True
-        assert verify["verification"]["format"] == "PNG"
+        assert generated["verified"] is False
+        assert generated["status"] == "image_ready_pending_independent_verification"
+        assert generated["image_id"] in generated_state.images
+        assert generated["artifact_id"] in generated_state.artifacts
+        assert seen_requests[-1]["image_inputs"] == []
+
+        verified_generation = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": generated["artifact_id"]},
+            state=generated_state, request=None, user={"uid": "firebase-user"}, db=None,
+        )
+        assert verified_generation["verified_by_agent"] is True
+        assert verified_generation["verification"]["format"] == "PNG"
+
+        edit_state = work_agent.AgentState(input_images=[source_image])
+        edited = await work_agent._dispatch_tool(
+            "image_edit",
+            {
+                "prompt": "Remplace le fond par un arrière-plan naturel vert doux.",
+                "filename": "pin-retouche.png",
+                "source_index": 0,
+                "aspect_ratio": "1:1",
+                "quality": "standard",
+            },
+            state=edit_state, request=None, user={"uid": "firebase-user"}, db=None,
+        )
+        assert edited["source_image_index"] == 0
+        assert seen_requests[-1]["image_inputs"][0]["data"] == png_bytes
+        assert "MODIFICATION D'IMAGE" in seen_requests[-1]["prompt"]
+
+        verified_edit = await work_agent._dispatch_tool(
+            "artifact_verify", {"artifact_id": edited["artifact_id"]},
+            state=edit_state, request=None, user={"uid": "firebase-user"}, db=None,
+        )
+        assert verified_edit["verified_by_agent"] is True
+        assert verified_edit["verification"]["format"] == "PNG"
 
     asyncio.run(run())
-
-
 def test_docx_quality_gate_checks_word_count_images_tables_sources_and_headings():
     from PIL import Image
     from llink_api.services.document_engine import build_structured_docx

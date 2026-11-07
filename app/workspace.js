@@ -34,7 +34,7 @@ const m=document.getElementById("model-selector"),s=$("work-model");if(m&&s){s.i
 }
 function renderToolStatus(){
 const el=$("work-tool-status");if(!el)return;
-const names={web_search:"Recherche Web",web_open:"Lecture Web",image_search:"Images",image_generate:"Image Gen",python:"Python isolé",document_begin:"DOCX",document_add_blocks:"Rédaction DOCX",document_finalize:"Export DOCX",artifact_verify:"Vérification",create_text_file:"Fichiers texte",export_file:"PDF/Excel",workspace_list_projects:"Projets",workspace_list_files:"Fichiers",workspace_read_file:"Lecture fichiers",workspace_search_files:"Recherche fichiers",workspace_create_project:"Créer projet",workspace_create_file:"Créer fichier",workspace_update_file:"Modifier fichier",project_sandbox_open:"Terminal isolé",project_run:"Exécution de commande",project_list_files:"Fichiers du projet",project_read_file:"Lire un résultat",project_sync_files:"Enregistrer le code"};
+const names={web_search:"Recherche Web",web_open:"Lecture Web",image_search:"Images Google",image_generate:"Image Gen",image_edit:"Retouche image",python:"Python isolé",document_begin:"DOCX",document_add_blocks:"Rédaction DOCX",document_finalize:"Export DOCX",artifact_verify:"Vérification",create_text_file:"Fichiers texte",export_file:"PDF/Excel",workspace_list_projects:"Projets",workspace_list_files:"Fichiers",workspace_read_file:"Lecture fichiers",workspace_search_files:"Recherche fichiers",workspace_create_project:"Créer projet",workspace_create_file:"Créer fichier",workspace_update_file:"Modifier fichier",project_sandbox_open:"Terminal isolé",project_run:"Exécution de commande",project_list_files:"Fichiers du projet",project_read_file:"Lire un résultat",project_sync_files:"Enregistrer le code"};
 const active=S.agentTools.map(name=>names[name]||name);
 const agent=S.agentVersion?"Agent natif "+S.agentVersion:(S.agentStatusError?"Agent à actualiser":"Agent Work");
 const depth=S.agentEffort?" · Réflexion "+S.agentEffort:"";
@@ -44,7 +44,7 @@ const imageButton=$("work-image-generate");
 if(imageButton){
  const enabled=S.agentTools.includes("image_generate");
  imageButton.classList.toggle("hidden",!enabled);
- imageButton.title=enabled?"Créer une illustration originale avec GLM-Image (disponible indépendamment de la formule d'abonnement, selon les quotas).":"Configure ZAI_API_KEY pour activer GLM-Image.";
+ imageButton.title=enabled?"Créer une illustration originale avec Gemini Image. Pour retoucher une image, joins-la puis décris les modifications souhaitées.":"La génération et la retouche d'images nécessitent la configuration Gemini du serveur.";
 }
 }
 async function loadTools(){S.agentEffort=window.llThink?.agentEffort?window.llThink.agentEffort():"extra";S.tools=Object.assign({web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}try{const agent=await api("/api/work/agent/status");if(agent.protocol==="native_function_calling"){S.agentVersion=String(agent.version||"");S.agentTools=Array.isArray(agent.tools)?agent.tools:[];S.agentStatusError=false;}else{S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}}catch(e){S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}renderToolStatus();}
@@ -103,12 +103,12 @@ function normalizeToolResult(tool,result){
  if(!result||typeof result!=="object")return null;
  const item={tool,label:tool.replace(/_/g," "),kind:"summary",text:"",sources:[],images:[]};
  if(tool==="web_search"&&Array.isArray(result.results)){
-  item.kind="sources";item.sources=result.results.slice(0,8).map(x=>({title:String(x.title||x.url||"Source").slice(0,180),url:safeToolUrl(x.url),snippet:String(x.snippet||"").slice(0,450)})).filter(x=>x.url);
+  item.kind="sources";item.text=String(result.answer||"").slice(0,5000);item.suggestionsHtml=String(result.search_suggestions_html||"").slice(0,12000);item.sources=result.results.slice(0,8).map(x=>({title:String(x.title||x.url||"Source").slice(0,180),url:safeToolUrl(x.url),snippet:String(x.snippet||"").slice(0,450)})).filter(x=>x.url);
  }else if(tool==="web_open"){
   item.kind="opened";item.title=String(result.title||"Page ouverte").slice(0,180);item.url=safeToolUrl(result.url);item.text=String(result.text||"").slice(0,1800);
   item.sources=(Array.isArray(result.links)?result.links.slice(0,6):[]).map(x=>({title:String(x.title||x.url||"Lien").slice(0,160),url:safeToolUrl(x.url)})).filter(x=>x.url);
  }else if(tool==="image_search"&&Array.isArray(result.images)){
-  item.kind="images";item.images=result.images.slice(0,4).map(x=>({description:String(x.description||"Image").slice(0,200),url:safeToolUrl(x.source_url),title:String(x.source_title||"Source image").slice(0,160)}));
+  item.kind="images";item.text=String(result.summary||"").slice(0,1800);item.suggestionsHtml=String(result.search_suggestions_html||"").slice(0,12000);item.images=result.images.slice(0,4).map(x=>({description:String(x.description||"Image").slice(0,200),url:safeToolUrl(x.source_url),imageUrl:safeToolUrl(x.image_url),title:String(x.source_title||"Source image").slice(0,160)}));
  }else if(tool==="python"||tool==="project_run"||tool==="workspace_read_file"||tool==="project_read_file"){
   item.kind="output";item.text=[result.content,result.text,result.result,result.stdout,result.stderr,result.error].filter(x=>typeof x==="string"&&x.trim()).join("\n").slice(0,8000);
   if(result.exit_code!==undefined)item.exitCode=result.exit_code;
@@ -123,9 +123,15 @@ function renderToolResults(items){
  if(!Array.isArray(items)||!items.length)return "";
  return '<div class="work-tool-results">'+items.slice(-8).map(item=>{
   let body="";
-  if(item.kind==="sources")body='<div class="work-result-list">'+item.sources.map(x=>'<a class="work-result-source" href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer"><b>'+esc(x.title)+'</b>'+(x.snippet?'<small>'+esc(x.snippet)+'</small>':"")+'</a>').join("")+'</div>';
+  if(item.kind==="sources"){
+   const suggestions=item.suggestionsHtml&&window.DOMPurify?window.DOMPurify.sanitize(item.suggestionsHtml,{ADD_TAGS:["style"],ADD_ATTR:["style"]}):"";
+   body=(item.text?'<p class="work-result-summary">'+esc(item.text)+'</p>':"")+'<div class="work-result-list">'+item.sources.map(x=>'<a class="work-result-source" href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer"><b>'+esc(x.title)+'</b>'+(x.snippet?'<small>'+esc(x.snippet)+'</small>':"")+'</a>').join("")+'</div>'+(suggestions?'<div class="work-google-search-suggestions">'+suggestions+'</div>':"");
+  }
   else if(item.kind==="opened")body='<div class="work-result-opened">'+(item.url?'<a href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer">'+esc(item.title)+'</a>':'<b>'+esc(item.title)+'</b>')+'<p>'+esc(item.text||"Page ouverte.")+'</p>'+(item.sources.length?'<div class="work-result-list">'+item.sources.map(x=>'<a class="work-result-source" href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>').join("")+'</div>':"")+'</div>';
-  else if(item.kind==="images")body='<div class="work-result-list">'+item.images.map(x=>'<div class="work-result-image"><b>'+esc(x.description)+'</b>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>':"")+'</div>').join("")+'</div>';
+  else if(item.kind==="images"){
+   const suggestions=item.suggestionsHtml&&window.DOMPurify?window.DOMPurify.sanitize(item.suggestionsHtml,{ADD_TAGS:["style"],ADD_ATTR:["style"]}):"";
+   body=(item.text?'<p class="work-result-summary">'+esc(item.text)+'</p>':"")+'<div class="work-result-list">'+item.images.map(x=>'<div class="work-result-image">'+(x.imageUrl&&x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir la page source de l’image"><img src="'+esc(x.imageUrl)+'" loading="lazy" alt="'+esc(x.description)+'"></a>':"")+'<b>'+esc(x.description)+'</b>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title)+'</a>':"")+'</div>').join("")+'</div>'+(suggestions?'<div class="work-google-search-suggestions">'+suggestions+'</div>':"");
+  }
   else if(item.kind==="output")body='<pre class="work-result-output">'+esc(item.text||"Aucune sortie texte.")+'</pre>';
   else body='<p class="work-result-summary">'+esc(item.text||"Résultat reçu.")+'</p>';
   return '<section class="work-result-card"><div class="work-result-title">'+esc(item.label||item.tool||"Résultat outil")+'</div>'+body+'</section>';

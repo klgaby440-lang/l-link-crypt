@@ -1,6 +1,10 @@
 """Routes de compte, état d'abonnement et validation de paiement."""
 
 import logging
+
+from firebase_admin import auth as firebase_auth
+
+from firebase_admin import auth as firebase_auth
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -17,6 +21,42 @@ from llink_api.services.security_limits import enforce_endpoint_quota
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+
+
+@router.post("/api/auth/desktop-exchange")
+async def exchange_desktop_firebase_token(
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
+    db: Any | None = Depends(get_db),
+):
+    """Échange un jeton Google vérifié dans le navigateur système contre un custom token."""
+    await enforce_endpoint_quota(
+        request=request, user=user, db=db, scope="auth_desktop_exchange"
+    )
+    firebase_claims = user.get("firebase") or {}
+    if not isinstance(firebase_claims, dict) or firebase_claims.get("sign_in_provider") != "google.com":
+        raise HTTPException(
+            status_code=403,
+            detail="Cette connexion de bureau exige une authentification Google vérifiée.",
+        )
+    try:
+        custom_token = firebase_auth.create_custom_token(
+            str(user["uid"]),
+            developer_claims={"llink_google_verified": True},
+        )
+        if isinstance(custom_token, bytes):
+            custom_token = custom_token.decode("utf-8")
+        if not isinstance(custom_token, str) or not custom_token:
+            raise ValueError("Firebase Admin a retourné un custom token vide.")
+        return {"customToken": custom_token}
+    except Exception as exc:
+        logger.exception("Échec de l'échange du jeton pour l'application Tauri.")
+        raise HTTPException(
+            status_code=503,
+            detail="Impossible de finaliser la connexion Google sur cette installation.",
+        ) from exc
 
 
 @router.get("/api/user/status", response_model=UserStatusResponse, response_model_exclude_unset=True)

@@ -14,8 +14,10 @@
 
   function hasGoogleAccount() {
     const user = window.auth && window.auth.currentUser;
-    return !!(user && Array.isArray(user.providerData) &&
-      user.providerData.some(item => item && item.providerId === "google.com"));
+    return !!(user && (
+      (Array.isArray(user.providerData) && user.providerData.some(item => item && item.providerId === "google.com")) ||
+      window.LLINK_GOOGLE_AUTH_UID === user.uid
+    ));
   }
 
   function canUseOffline() {

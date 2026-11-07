@@ -305,9 +305,10 @@ def test_multipart_work_attachments_dispatch_to_native_work_agent(client, monkey
     async def allow_quota(**_kwargs):
         return None
 
-    async def fake_work_agent(payload, request, user, db):
+    async def fake_work_agent(payload, request, user, db, media_parts=None):
         captured["mode"] = payload.mode
         captured["message"] = payload.message
+        captured["media_parts"] = media_parts or []
         return JSONResponse({"agent": "native-work"})
 
     monkeypatch.setattr(attachment_routes, "enforce_endpoint_quota", allow_quota)
@@ -332,3 +333,4 @@ def test_multipart_work_attachments_dispatch_to_native_work_agent(client, monkey
     assert response.headers["x-llink-attachment-count"] == "1"
     assert captured["mode"] == "work"
     assert "Le contenu doit atteindre l'agent natif." in captured["message"]
+    assert captured["media_parts"] == []
