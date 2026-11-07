@@ -4854,7 +4854,7 @@ button svg,button i,[role="button"] svg,[role="button"] i,.rail-item svg,.rail-i
       <button type="button" class="llcall-btn" data-c="mic" id="llcall-btn-mic" aria-label="Micro"><i data-lucide="mic"></i></button>
       <button type="button" class="llcall-btn" data-c="look" id="llcall-btn-look" aria-label="Visage ou vibrations"><i data-lucide="audio-lines"></i></button>
       <button type="button" class="llcall-btn" data-c="swap" aria-label="Échanger les écrans"><i data-lucide="arrow-left-right"></i></button>
-      <button type="button" class="llcall-btn hang" data-c="hang" aria-label="Raccrocher"><i data-lucide="phone-off"></i></button>
+      <button type="button" class="llcall-btn hang" data-c="hang" aria-label="Terminer la conversation"><i data-lucide="phone-off"></i></button>
     </div>
   </section>
 </div>
@@ -4967,7 +4967,7 @@ el.addEventListener('click',function(e){
     else if(k==='flip'){facing=facing==='user'?'environment':'user';camOn=true;startCam(true);}
     else if(k==='mic'){if(window.handleVoice)window.handleVoice();}
     else if(k==='swap')setMain(main==='ai'?'me':'ai');
-    else if(k==='hang')window.closeLiveVideoCall();
+    else if(k==='hang'){if(typeof window.returnFromLive==='function')window.returnFromLive();else window.closeLiveVideoCall();}
     return;
   }
   var t=e.target.closest('.llcall-tile.is-pip');
