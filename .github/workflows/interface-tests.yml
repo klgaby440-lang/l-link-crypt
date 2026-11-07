@@ -4,10 +4,14 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
       - 'phase-6/**'
     paths:
       - 'app/**'
       - 'tests/e2e/**'
+      - 'build-tools/**'
+      - 'scripts/**'
+      - 'tailwind.config.cjs'
       - '.github/workflows/interface-tests.yml'
   pull_request:
     branches:
@@ -15,6 +19,9 @@ on:
     paths:
       - 'app/**'
       - 'tests/e2e/**'
+      - 'build-tools/**'
+      - 'scripts/**'
+      - 'tailwind.config.cjs'
       - '.github/workflows/interface-tests.yml'
   workflow_dispatch:
 
@@ -27,40 +34,45 @@ concurrency:
 
 jobs:
   browser-tests:
-    name: Work UI — Chromium
+    name: Work / Live / Offline UI — Chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 40
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: tests/e2e/package.json
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-
+      - name: Install offline asset build dependencies
+        run: npm --prefix build-tools install --no-audit --no-fund
+      - name: Prepare local browser libraries (model download skipped for UI tests)
+        run: |
+          node scripts/prepare-offline-assets.mjs --skip-model
+          npx --yes tailwindcss@3.4.17 -c tailwind.config.cjs -i scripts/tailwind.input.css -o app/vendor/tailwind.min.css --minify
+      - name: Verify locally served frontend dependencies
+        run: |
+          test -s app/vendor/firebase-runtime.js
+          test -s app/vendor/dexie.min.js
+          test -s app/vendor/lucide.min.js
+          test -s app/vendor/marked.umd.js
+          test -s app/vendor/purify.min.js
+          test -s app/vendor/tailwind.min.css
       - name: Install Playwright test runner
         working-directory: tests/e2e
         run: npm install --no-package-lock --no-audit --no-fund
-
       - name: Install Chromium and Linux dependencies
         working-directory: tests/e2e
         run: npx playwright install --with-deps chromium
-
-      - name: Run Llink Work browser tests
+      - name: Run Llink browser tests
         working-directory: tests/e2e
         env:
           CI: 'true'
         run: npx playwright test
-
       - name: Upload browser test evidence
         if: always()
         uses: actions/upload-artifact@v7
