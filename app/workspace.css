@@ -369,3 +369,125 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
 .work-document-draft.is-verified{border-color:#3b9870}
 .work-document-draft.is-verified .work-document-draft-top small{color:#26835a}
 @media(max-width:540px){.work-document-draft-top{align-items:flex-start;flex-direction:column}.work-document-draft-top .work-editor-action{align-self:flex-end}}
+
+
+
+/* Llink Work — interface harmonisée avec la référence Llink Gaby. */
+:root{
+  --work-bg:#f7f6f2;
+  --work-panel:#fdfbf7;
+  --work-panel-soft:#f0eee8;
+  --work-line:#e1ded6;
+  --work-text:#242321;
+  --work-muted:#77736b;
+  --work-accent:#55534d;
+  --work-accent-soft:#ebe8df;
+  --work-shadow:0 8px 24px rgba(28,27,24,.055);
+}
+.dark{
+  --work-bg:#111214;
+  --work-panel:#171819;
+  --work-panel-soft:#202123;
+  --work-line:#303133;
+  --work-text:#f1f0ed;
+  --work-muted:#a5a29b;
+  --work-accent:#dedbd2;
+  --work-accent-soft:#2a2a28;
+  --work-shadow:0 8px 24px rgba(0,0,0,.2);
+}
+#work-workspace{background:var(--work-bg)}
+.work-topbar{
+  height:58px;min-height:58px;padding:0 clamp(12px,1.6vw,22px);
+  background:var(--work-panel);border-bottom:1px solid var(--work-line)
+}
+.work-brand-mark{border-radius:50%;background:var(--work-panel-soft);color:var(--work-text)}
+.work-brand-title{font-size:13px;letter-spacing:-.015em}
+.work-brand-subtitle{font-size:10px;color:var(--work-muted)}
+.work-top-actions{gap:6px}
+.work-sync-pill,.work-tools-pill{font-size:9px;min-height:26px}
+.work-top-button,.work-icon-button,.work-editor-action,.work-file-action{
+  min-height:33px;border-radius:999px;border-color:var(--work-line);
+  background:transparent;color:var(--work-text);font-size:10px
+}
+.work-top-button.primary,.work-editor-action.primary{
+  background:var(--work-text);color:var(--work-panel);border-color:var(--work-text)
+}
+.work-layout{grid-template-columns:minmax(190px,238px) minmax(300px,.92fr) minmax(360px,1.12fr)}
+.work-files-pane,.work-editor-pane{background:var(--work-panel)}
+.work-chat-pane{background:var(--work-bg)}
+.work-pane-head,.work-chat-head,.work-editor-head{border-color:var(--work-line)}
+.work-pane-kicker{font-size:9px;letter-spacing:.12em}
+.work-file-item{border-radius:8px;padding:8px 9px}
+.work-file-item.is-active{background:var(--work-accent-soft);border-color:var(--work-line)}
+.work-file-icon{border-radius:50%;background:var(--work-panel-soft);border-color:transparent}
+.work-chat-head{background:var(--work-panel)}
+.work-agent-avatar{border-radius:50%;background:var(--work-text);color:var(--work-panel);border:0}
+.work-agent-name{font-size:12px}
+.work-agent-state{font-size:9px}
+.work-chat-messages{padding:clamp(16px,2vw,26px) clamp(13px,1.8vw,23px) 24px;gap:18px}
+.work-welcome{max-width:430px;padding:14px 8px}
+.work-welcome-mark{border-radius:50%;width:42px;height:42px;background:var(--work-text);color:var(--work-panel)}
+.work-welcome h2{font-size:clamp(22px,2.1vw,29px);letter-spacing:-.045em}
+.work-welcome p{font-size:12px;line-height:1.65;color:var(--work-muted)}
+.work-starter-grid{gap:8px;margin-top:22px}
+.work-starter{
+  min-height:58px;padding:12px;border-radius:12px;
+  background:var(--work-panel);font-size:11px;line-height:1.45
+}
+.work-starter svg{color:var(--work-muted)}
+.work-starter:hover{background:var(--work-panel-soft);border-color:var(--work-line)}
+.work-message{max-width:98%;gap:7px}
+.work-message.user{max-width:88%}
+.work-message-role{font-size:9px;letter-spacing:.08em}
+.work-message-body{font-size:12px;line-height:1.72}
+.work-message.user .work-message-body{
+  background:var(--work-panel);border:1px solid var(--work-line);
+  border-radius:15px 15px 4px 15px;padding:11px 14px
+}
+.work-message.assistant .work-message-body{padding:4px 1px}
+.work-message-action{border-radius:999px;padding:7px 11px;background:var(--work-panel);color:var(--work-text);border-color:var(--work-line)}
+.work-reasoning{border-radius:12px;background:var(--work-panel);border-color:var(--work-line)}
+.work-reasoning>summary{padding:10px 12px;font-size:10px}
+.work-reasoning-step{background:var(--work-panel-soft);border-radius:8px;padding:7px 9px}
+.work-chat-compose{padding:12px clamp(10px,1.5vw,20px) 15px;background:var(--work-panel);border-top:1px solid var(--work-line)}
+.work-chat-compose-box{border-radius:18px;background:var(--work-bg);border:1px solid var(--work-line);box-shadow:none;padding:11px 12px 9px}
+.work-chat-input{font-size:12px;min-height:64px;background:transparent}
+.work-model-select{border-radius:999px;background:var(--work-panel);height:30px;font-size:9px}
+.work-attach-button{border-radius:50%;width:31px;height:31px;background:var(--work-panel)}
+.work-send-button{width:34px;height:34px;border-radius:50%;background:var(--work-text);color:var(--work-panel)}
+.work-upload-chip{border:1px solid var(--work-line);border-radius:999px;background:var(--work-panel);font-size:9px}
+.work-editor-head{background:var(--work-panel);padding:0 14px}
+.work-editor-file-icon{border-radius:50%;background:var(--work-panel-soft);border:0}
+.work-editor-action{border-radius:999px}
+.work-editor-tabs{background:var(--work-panel);border-color:var(--work-line)}
+.work-editor-tab{border-radius:999px;font-size:10px}
+.work-editor-tab.active{background:var(--work-panel-soft);border-color:var(--work-line)}
+.work-editor-body{background:var(--work-panel)}
+.work-editor-footer{background:var(--work-panel);border-color:var(--work-line)}
+.work-empty-editor{color:var(--work-muted)}
+.work-dialog{border-radius:18px;background:var(--work-panel);border-color:var(--work-line);box-shadow:0 20px 70px #0003}
+@media(max-width:1120px){
+  .work-layout{grid-template-columns:minmax(175px,205px) minmax(270px,.9fr) minmax(300px,1.1fr)}
+  .work-top-actions{gap:4px}
+}
+@media(max-width:880px){
+  .work-topbar{height:52px;min-height:52px}
+  .work-layout{grid-template-columns:minmax(0,1fr)}
+  .work-chat-messages{padding:18px 14px 22px}
+  .work-mobile-tabs{height:48px;min-height:48px;padding:6px 8px;background:var(--work-panel)}
+  .work-mobile-tabs button{border-radius:999px;font-size:10px}
+}
+@media(max-width:520px){
+  .work-brand-subtitle{display:none}
+  .work-topbar{padding:0 9px}
+  .work-top-actions [data-act="manage-projects"] span,.work-top-actions [data-act="import"] span{display:none}
+  .work-top-button{width:33px;padding:0;min-width:33px}
+  .work-chat-compose{padding:8px}
+  .work-welcome h2{font-size:23px}
+  .work-starter{min-height:54px;padding:9px;font-size:10px}
+  .work-editor-actions{gap:3px}
+  .work-editor-action{height:27px;padding:0 7px;font-size:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  #work-workspace *{scroll-behavior:auto!important;transition:none!important}
+}
