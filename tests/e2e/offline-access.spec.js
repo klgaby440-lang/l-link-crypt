@@ -33,7 +33,7 @@ test("le Web n'importe jamais le moteur local et refuse le mode hors ligne", asy
   }));
   await page.route("https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js", route => route.fulfill({
     status: 200, contentType: "application/javascript",
-    body: "export const getAuth=()=>({currentUser:null}); export const signInWithPopup=async()=>null; export const signInWithCustomToken=async()=>({user:{uid:"desktop-user"}}); export class GoogleAuthProvider{}; export const onAuthStateChanged=(auth,cb)=>{Promise.resolve().then(()=>cb(null));return ()=>{};}; export const signOut=async()=>{};"
+    body: 'export const getAuth=()=>({currentUser:null}); export const signInWithPopup=async()=>null; export const signInWithCustomToken=async()=>({user:{uid:"desktop-user"}}); export class GoogleAuthProvider{}; export const onAuthStateChanged=(auth,cb)=>{Promise.resolve().then(()=>cb(null));return ()=>{};}; export const signOut=async()=>{};'
   }));
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
