@@ -50,7 +50,8 @@ Le site Web reste en ligne uniquement. Le mode Work hors ligne et le Live hors l
 
 ### 2.6 Tauri et Inno Setup Windows
 - Nouveau projet Tauri v2 sous `desktop/src-tauri`, avec la même application web et les ressources locales embarquées.
-- Tauri produit l'exécutable Windows et son paquet NSIS.
+- Tauri produit l'exécutable Windows avec l'option `--no-bundle` afin d'éviter une seconde compression/installation NSIS du modèle.
+- Le programme d'installation final est produit par Inno Setup à partir de l'exécutable Tauri.
 - Nouveau script Inno Setup `desktop/installer/Llink.iss` produisant `Llink-Setup.exe`.
 - Nouveau workflow Windows x64 qui prépare les ressources, compile Tauri, installe Inno Setup et publie les artefacts.
 

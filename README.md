@@ -61,7 +61,7 @@ node scripts/prepare-offline-assets.mjs
 ./build-tools/node_modules/.bin/tailwindcss -c tailwind.config.cjs -i scripts/tailwind.input.css -o app/vendor/tailwind.min.css --minify
 cd desktop
 npm install
-npx tauri build --config src-tauri/tauri.conf.json
+npx tauri build --no-bundle --config src-tauri/tauri.conf.json
 ```
 
 Puis compiler `desktop/installer/Llink.iss` avec Inno Setup 6. Le workflow `.github/workflows/windows-desktop-build.yml` construit les artefacts Tauri et Inno Setup.
