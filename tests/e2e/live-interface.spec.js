@@ -41,7 +41,6 @@ test("Live restaure les commandes vocales de référence et le portrait fixe dan
 
   await page.locator('#llcall [data-c="hang"]').click();
   await expect(page.locator("#llcall")).toBeHidden();
-  // La vidéo est un panneau du Live vocal : raccrocher la vidéo revient à la voix.
-  await expect(page.locator("body")).toHaveClass(/live-mode-active/);
-  await expect(page.locator("#live-visual")).toBeVisible();
+  // Le bouton Raccrocher appelle returnFromLive() et quitte entièrement le mode Live.
+  await expect(page.locator("body")).not.toHaveClass(/live-mode-active/);
 });
