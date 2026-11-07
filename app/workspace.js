@@ -2,7 +2,7 @@
 (() => {
 "use strict";
 const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,binaryEditor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},agentVersion:null,agentTools:[],agentStatusError:false,agentEffort:"extra",busy:false};
-const SERVER=typeof SERVER_URL!=="undefined"?SERVER_URL:"https://llink-usz9.onrender.com";
+const SERVER=window.LLINK_SERVER_URL||window.SERVER_URL||"https://llink-usz9.onrender.com";
 const $=id=>S.root?.querySelector("#"+id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid=()=>window.auth?.currentUser?.uid||(window.uid&&window.uid!=="anonymous"?window.uid:"anonymous");

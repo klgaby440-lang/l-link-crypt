@@ -13,15 +13,9 @@
     <title>Llink | Crypt Enterprise</title>
     <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="20" r="18" fill="none" stroke="%23FF5733" stroke-width="3"/><circle cx="76" cy="35" r="18" fill="none" stroke="%2333FF57" stroke-width="3"/><circle cx="76" cy="65" r="18" fill="none" stroke="%233357FF" stroke-width="3"/><circle cx="50" cy="80" r="18" fill="none" stroke="%23F333FF" stroke-width="3"/><circle cx="24" cy="65" r="18" fill="none" stroke="%23FFBD33" stroke-width="3"/><circle cx="24" cy="35" r="18" fill="none" stroke="%2333FFF3" stroke-width="3"/></svg>'>
     
-    <link rel="stylesheet" href="./vendor/tailwind.min.css">
-    <link rel="stylesheet" href="./workspace.css?v=offline-native-1">
-    <!-- Les bibliothèques essentielles sont intégrées au paquet natif pour permettre le démarrage sans réseau. -->
-    <script src="./vendor/lucide.min.js"></script>
-    <script src="./vendor/dexie.min.js"></script>
-    <script src="./vendor/marked.umd.js"></script>
-    <script src="./vendor/purify.min.js"></script>
-    <script src="./vendor/firebase-runtime.js"></script>
-    <script defer src="./offline-engine.js"></script>
+    <!-- Le chargeur sélectionne les dépendances Web (CDN) ou natives (vendor local). -->
+    <script src="./platform-loader.js?v=web-native-split-2"></script>
+    <link rel="stylesheet" href="./workspace.css?v=web-native-split-2">
     
 
  
@@ -1048,8 +1042,30 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
     <!-- Le moteur local Transformers.js/ONNX est fourni par les ressources embarquées des applications natives. -->
 
     <script type="module">
-        const firebaseSDK = window.LlinkFirebaseSDK;
-        if (!firebaseSDK) throw new Error("Le SDK Firebase local n'a pas été chargé.");
+        // Web : Firebase est importé depuis le SDK Web officiel.
+        // APK/Tauri : le build embarque le SDK local dans firebase-runtime.js.
+        let firebaseSDK;
+        if (window.LLINK_PLATFORM?.isNative) {
+            firebaseSDK = window.LlinkFirebaseSDK;
+            if (!firebaseSDK) {
+                throw new Error("Le SDK Firebase embarqué est absent de cette compilation native.");
+            }
+        } else {
+            const [firebaseAppSDK, firebaseAuthSDK] = await Promise.all([
+                import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"),
+                import("https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js")
+            ]);
+            firebaseSDK = {
+                initializeApp: firebaseAppSDK.initializeApp,
+                getApps: firebaseAppSDK.getApps,
+                getApp: firebaseAppSDK.getApp,
+                getAuth: firebaseAuthSDK.getAuth,
+                signInWithPopup: firebaseAuthSDK.signInWithPopup,
+                GoogleAuthProvider: firebaseAuthSDK.GoogleAuthProvider,
+                onAuthStateChanged: firebaseAuthSDK.onAuthStateChanged,
+                signOut: firebaseAuthSDK.signOut
+            };
+        }
         const { initializeApp, getApps, getApp, getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } = firebaseSDK;
         const firebaseConfig = { 
             apiKey: "AIzaSyDJPf1206nZjpw58OOnCpX4Gq9YFFQ0nUU", 
@@ -1118,6 +1134,9 @@ body.live-mode-active .live-voice-picker { right:64px !important;left:auto !impo
         });
         
         const SERVER_URL = "https://llink-usz9.onrender.com";
+        // Contrat public pour les scripts séparés, notamment workspace.js.
+        window.LLINK_SERVER_URL = SERVER_URL;
+        window.SERVER_URL = SERVER_URL;
 
         // Les ID tokens Firebase sont rafraîchis avant chaque appel cloud.
         // Les routes publiques restent appelables sans en-tête Authorization.
@@ -5596,7 +5615,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script src="./document-editor.js?v=work-sequential-documents-1"></script>
 <script src="./presentation-editor.js?v=work-sequential-documents-1"></script>
 <script src="./binary-editors.js?v=work-sequential-documents-1"></script>
-<script src="./workspace.js?v=work-sequential-documents-1"></script>
+<script src="./workspace.js?v=web-native-split-2"></script>
 <script src="./live-avatar.js?v=live-face-3d-20261107"></script>
 <style id="llink-live-avatar-ui">
 #live-avatar-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:320px;touch-action:pan-y}
