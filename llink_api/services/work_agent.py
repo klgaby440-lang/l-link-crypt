@@ -1930,7 +1930,10 @@ def _agent_system(preferences: str | None, available_tools: list[str] | None = N
         "Respond in the same language as the user unless asked otherwise. Understand the user's goal, "
         "decide whether tools are useful, make a concise user-visible plan, then execute the necessary "
         "steps using the supplied native function tools. "
-        "Use web_search for research and web_open to inspect source pages; use Python for calculations, "
+        "Use web_search for research and web_open to inspect source pages; use image_search to find real images, "
+        "image_generate to create original visuals, and image_edit with the correct source_index to modify an image "
+        "attached by the user. When an image is attached, inspect it before responding; do not claim image edits "
+        "unless the returned image artifact has passed artifact_verify. Use Python for calculations, "
         "data analysis and independent checks; use document tools only when the user requests a document; "
         "create_text_file and export_file for standalone downloadable artifacts. Use workspace_list_projects, "
         "workspace_list_files, workspace_read_file and workspace_search_files to inspect real user files; "
@@ -1957,9 +1960,6 @@ def _agent_system(preferences: str | None, available_tools: list[str] | None = N
         "controls or download arbitrary files. Never invent searches, quotations, references or dates. "
         "For requested illustrations, use image_search or image_generate "
         "when available, then insert the returned image_id into the relevant artifact and report any unavailable images. "
-        "When the user asks to edit, retouch, restyle, extend or otherwise transform an attached image, call image_edit with the zero-based source_index shown in the attached-image list. "
-        "Do not merely describe the requested image changes: return a newly generated edited PNG, then verify its artifact before claiming delivery. "
-        "When an image is attached and the user's intent is ambiguous between analysis and editing, analyze it first and ask for the intended visual change before using image_edit. "
         "For EVERY requested Word document, first call document_plan BEFORE document_begin. Create 3 to 16 "
         "logical ordered sections with a concrete purpose and realistic target_words; target_total_words must "
         "match the requested depth and roughly equal the section targets. Then call document_begin once. "
@@ -2014,6 +2014,7 @@ async def _run_agent(
         for index, item in enumerate(media_parts or [])
         if str(item.get("mime_type") or "").startswith("image/")
         and isinstance(item.get("data"), bytes)
+        and 0 < len(item.get("data")) <= 6_000_000
     ][:5]
     state = AgentState(user_request=payload.message, input_images=image_inputs)
     tool_definitions = _available_tool_definitions(user)
@@ -2044,6 +2045,21 @@ async def _run_agent(
             [{"role": item["role"], "content": item["content"]} for item in history],
             messages[-1]["content"],
         )
+        if model.provider == "gemini":
+            from google.genai import types
+            user_turn = gemini_contents[-1]
+            image_parts = [
+                types.Part.from_bytes(data=item["data"], mime_type=item["mime_type"])
+                for item in state.input_images
+                if isinstance(item.get("data"), bytes)
+                and len(item["data"]) <= 6_000_000
+                and str(item.get("mime_type") or "").startswith("image/")
+            ]
+            if image_parts:
+                gemini_contents[-1] = types.Content(
+                    role="user",
+                    parts=[*(user_turn.parts or []), *image_parts],
+                )
 
     await emit({"type": "plan", **state.plan})
     try:

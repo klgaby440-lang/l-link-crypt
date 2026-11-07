@@ -3,6 +3,8 @@
 import logging
 
 from firebase_admin import auth as firebase_auth
+
+from firebase_admin import auth as firebase_auth
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -29,7 +31,7 @@ async def exchange_desktop_firebase_token(
     user: dict = Depends(require_authenticated_user),
     db: Any | None = Depends(get_db),
 ):
-    """Échange un ID token Google vérifié dans le navigateur système contre un custom token."""
+    """Échange un jeton Google vérifié dans le navigateur système contre un custom token."""
     await enforce_endpoint_quota(
         request=request, user=user, db=db, scope="auth_desktop_exchange"
     )

@@ -52,6 +52,11 @@ def test_work_registry_is_public_but_remote_tools_require_authentication(client,
     monkeypatch.delenv("E2B_API_KEY", raising=False)
     monkeypatch.delenv("ZAI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    from types import SimpleNamespace
+    monkeypatch.setattr(
+        "llink_api.api.routes.work_tools.get_settings",
+        lambda: SimpleNamespace(gemini_api_key=""),
+    )
     registry = client.get("/api/work/tools")
     assert registry.status_code == 200
     assert registry.json()["tools"]["document_create"] is True
