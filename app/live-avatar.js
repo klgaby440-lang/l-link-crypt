@@ -20,7 +20,7 @@
   function placeCanvas() {
     const next = resolveActiveTile();
     if (!canvas) return;
-    if (!next) {
+    if (!next || !ready) {
       stop();
       if (fallback) fallback.classList.remove("llia-fallback-hidden");
       document.querySelector("#live-avatar-stage .elia-svg, #live-avatar-stage .elia-avatar-3d")?.classList.remove("llia-fallback-hidden");
