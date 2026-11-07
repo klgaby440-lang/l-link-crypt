@@ -8,21 +8,25 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{
-      "title": "Llink",
-      "width": 1440,
-      "height": 900,
-      "minWidth": 900,
-      "minHeight": 640,
-      "resizable": true
-    }],
+    "windows": [
+      {
+        "title": "Llink",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
     "security": {
       "csp": null
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser"
@@ -30,6 +34,9 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
-    }
+    },
+    "icon": [
+      "icons/icon.ico"
+    ]
   }
 }
