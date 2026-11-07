@@ -245,7 +245,7 @@ async def chat_with_attachments(
                     declared_type, data = prepare_image_for_gemini(declared_type, data)
                 except ValueError as exc:
                     raise HTTPException(status_code=415, detail=f"{filename} : {exc}") from exc
-            binary_parts.append({"mime_type": declared_type, "data": data})
+            binary_parts.append({"filename": filename, "mime_type": declared_type, "data": data})
             summary["kind"] = kind
             attachment_summaries.append(summary)
             continue
@@ -371,7 +371,10 @@ async def chat_with_attachments(
     if payload.mode == "work":
         from llink_api.services.work_agent import work_agent_response
 
-        response = await work_agent_response(payload, request, user, db)
+        response = await work_agent_response(
+            payload, request, user, db,
+            media_parts=[item for item in binary_parts if str(item.get("mime_type") or "").startswith("image/")],
+        )
     else:
         response = await chat_endpoint(payload, request, user, db)
     response.headers["X-Llink-Attachment-Count"] = str(len(attachment_summaries))

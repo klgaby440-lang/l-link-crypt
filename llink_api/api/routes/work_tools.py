@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.responses import Response
 
+from llink_api.config import get_settings
 from llink_api.database import get_db
 from llink_api.security import get_optional_user, require_authenticated_user
 from llink_api.services.document_engine import build_structured_docx
@@ -245,9 +246,10 @@ async def list_work_tools(user: dict = Depends(get_optional_user)):
     """Indique seulement les outils réellement configurés côté serveur."""
     return {
         "tools": {
-            "web_search": bool(os.getenv("TAVILY_API_KEY", "").strip()),
-            "image_search": bool(os.getenv("TAVILY_API_KEY", "").strip()),
-            "image_generate": bool(os.getenv("ZAI_API_KEY", "").strip()),
+            "web_search": bool(get_settings().gemini_api_key.strip()),
+            "image_search": bool(get_settings().gemini_api_key.strip()),
+            "image_generate": bool(get_settings().gemini_api_key.strip()),
+            "image_edit": bool(get_settings().gemini_api_key.strip()),
             "python": bool(os.getenv("E2B_API_KEY", "").strip()),
             "exports": True,
             "document_create": True,
@@ -263,43 +265,67 @@ async def search_web(
     user: dict = Depends(require_authenticated_user),
     db: Any | None = Depends(get_db),
 ):
+    """Recherche Web fondée sur Google Search via l'API Gemini et retourne les citations."""
     await _quota(request, user, db, "work_tool_read")
-    api_key = _require_service_key("TAVILY_API_KEY")
+    api_key = get_settings().gemini_api_key.strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="La recherche Web Gemini n'est pas configurée sur le serveur.")
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0, connect=8.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=10.0), trust_env=False) as client:
             response = await client.post(
-                "https://api.tavily.com/search",
-                headers={"Authorization": f"Bearer {api_key}"},
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
                 json={
-                    "query": payload.query,
-                    "search_depth": "basic",
-                    "max_results": payload.max_results,
-                    "include_answer": False,
-                    "include_raw_content": False,
+                    "contents": [{"role": "user", "parts": [{"text": payload.query}]}],
+                    "tools": [{"google_search": {}}],
+                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 3072},
                 },
             )
         response.raise_for_status()
         data = response.json()
+        candidates = data.get("candidates") or []
+        if not candidates:
+            raise HTTPException(status_code=502, detail="Google Search n'a retourné aucun résultat exploitable.")
+        candidate = candidates[0]
+        answer = "\n".join(
+            str(part.get("text") or "")
+            for part in (candidate.get("content") or {}).get("parts", [])
+            if isinstance(part, dict) and part.get("text")
+        ).strip()
+        grounding = candidate.get("groundingMetadata") or candidate.get("grounding_metadata") or {}
+        chunks = grounding.get("groundingChunks") or grounding.get("grounding_chunks") or []
         results = []
-        for item in data.get("results", [])[:payload.max_results]:
-            url = str(item.get("url") or "")
-            if not url.startswith(("https://", "http://")):
+        seen = set()
+        for chunk in chunks:
+            web = chunk.get("web") if isinstance(chunk, dict) else None
+            if not isinstance(web, dict):
                 continue
+            url = str(web.get("uri") or "").strip()
+            if not url.startswith(("https://", "http://")) or url in seen:
+                continue
+            seen.add(url)
             results.append({
-                "title": str(item.get("title") or url)[:300],
+                "title": str(web.get("title") or url)[:300],
                 "url": url[:2000],
-                "snippet": str(item.get("content") or "")[:1800],
-                "published_date": item.get("published_date"),
-                "score": item.get("score"),
+                "snippet": "Source citée par Google Search dans la réponse Gemini.",
             })
-        return {"query": payload.query, "results": results}
+            if len(results) >= payload.max_results:
+                break
+        search_entry = grounding.get("searchEntryPoint") or grounding.get("search_entry_point") or {}
+        return {
+            "query": payload.query,
+            "answer": answer[:12_000],
+            "results": results,
+            "search_queries": grounding.get("webSearchQueries") or grounding.get("web_search_queries") or [],
+            "search_suggestions_html": search_entry.get("renderedContent") or search_entry.get("rendered_content"),
+        }
     except HTTPException:
         raise
     except httpx.HTTPStatusError as exc:
-        logger.warning("Tavily a refusé la recherche Work : HTTP %s", exc.response.status_code)
-        raise HTTPException(status_code=502, detail="Le service de recherche Web a refusé la requête.") from exc
+        logger.warning("Gemini Google Search a répondu HTTP %s.", exc.response.status_code)
+        raise HTTPException(status_code=502, detail="Le service Google Search a refusé la requête.") from exc
     except httpx.HTTPError as exc:
-        logger.warning("Recherche Web Work indisponible : %s", exc)
+        logger.warning("Google Search Work indisponible : %s", exc)
         raise HTTPException(status_code=502, detail="Le service de recherche Web est indisponible.") from exc
 
 

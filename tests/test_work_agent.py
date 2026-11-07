@@ -172,7 +172,7 @@ def test_agent_runs_native_tool_calls_in_multiple_rounds_and_verifies_docx(monke
 def test_agent_tool_registry_is_general_and_uses_native_function_schemas():
     names = {item["function"]["name"] for item in work_agent.TOOLS}
     assert {
-        "update_plan", "web_search", "web_open", "image_search", "image_generate", "python",
+        "update_plan", "web_search", "web_open", "image_search", "image_generate", "image_edit", "python",
         "document_plan", "document_begin", "document_add_blocks", "document_finalize",
         "artifact_verify", "create_text_file", "export_file",
     }.issubset(names)
@@ -208,6 +208,7 @@ def test_workspace_tools_are_native_and_are_only_advertised_to_authenticated_use
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("E2B_API_KEY", raising=False)
     monkeypatch.delenv("ZAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     authenticated = {item["function"]["name"] for item in work_agent._available_tool_definitions({"uid": "work-user"})}
     anonymous = {item["function"]["name"] for item in work_agent._available_tool_definitions({"uid": "anonymous"})}
     assert expected.issubset(authenticated)
@@ -220,7 +221,7 @@ def test_image_generation_is_advertised_to_authenticated_users_without_subscript
     monkeypatch.setattr(
         work_agent,
         "get_settings",
-        lambda: SimpleNamespace(zai_api_key="zai-test"),
+        lambda: SimpleNamespace(gemini_api_key="gemini-test", zai_api_key=""),
     )
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("E2B_API_KEY", raising=False)
@@ -234,10 +235,12 @@ def test_image_generation_is_advertised_to_authenticated_users_without_subscript
         for item in work_agent._available_tool_definitions({"uid": "anonymous"})
     }
 
-    # L'outil est exposé à tout compte authentifié si Z.ai est configuré.
+    # L'outil est exposé à tout compte authentifié dès que Gemini est configuré.
     # Le registre ne reçoit aucune formule d'abonnement et ne filtre pas cet outil par plan.
     assert "image_generate" in authenticated
+    assert "image_edit" in authenticated
     assert "image_generate" not in anonymous
+    assert "image_edit" not in anonymous
 
 
 def test_workspace_dispatch_creates_reads_and_updates_real_workspace_files(monkeypatch):

@@ -94,7 +94,7 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "image_search",
-            "description": "Find relevant real images through Tavily, fetch and validate a small selection, and retain them as image references that can be embedded in a Word draft. Use this when illustrations materially improve a requested artifact. Keep source attribution.",
+            "description": "Search Google Images for real reference images. Return the source image references and page attribution; use image_id to insert selected references into a Word draft. Never invent sources.",
             "parameters": {"type": "object", "properties": {
                 "query": {"type": "string", "minLength": 3, "maxLength": 400},
                 "max_images": {"type": "integer", "minimum": 1, "maximum": 4}
@@ -105,13 +105,27 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "image_generate",
-            "description": "Generate an original illustration with GLM-Image. Use for original diagrams, educational illustrations or visuals that cannot be obtained from suitable existing images. The generated PNG is retained as an image reference for document insertion and as a downloadable artifact that must be independently verified.",
+            "description": "Generate an original image with Gemini 3.1 Flash Image. Use for original illustrations, diagrams, posters and visual assets. The PNG is stored as an image reference and downloadable artifact; verify it before claiming delivery.",
             "parameters": {"type": "object", "properties": {
                 "prompt": {"type": "string", "minLength": 10, "maxLength": 1800},
                 "filename": {"type": "string", "maxLength": 120},
-                "size": {"type": "string", "enum": ["1280x1280", "1568x1056", "1056x1568", "1472x1088", "1088x1472", "1728x960", "960x1728"]},
+                "aspect_ratio": {"type": "string", "enum": ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"]},
                 "quality": {"type": "string", "enum": ["standard", "hd"]}
             }, "required": ["prompt"]}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "image_edit",
+            "description": "Edit an image attached to this Work task using Gemini. Add, remove or change elements, extend the canvas, improve quality or restyle it according to the user's instructions. source_index is zero-based and refers to the numbered image attachments shown in the task context. Do not claim an edit unless the tool returns a new image.",
+            "parameters": {"type": "object", "properties": {
+                "prompt": {"type": "string", "minLength": 10, "maxLength": 1800},
+                "source_index": {"type": "integer", "minimum": 0, "maximum": 4},
+                "filename": {"type": "string", "maxLength": 120},
+                "aspect_ratio": {"type": "string", "enum": ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"]},
+                "quality": {"type": "string", "enum": ["standard", "hd"]}
+            }, "required": ["prompt", "source_index"]}
         }
     },
     {
@@ -404,6 +418,7 @@ class AgentState:
     document_plan: dict[str, Any] | None = None
     artifacts: dict[str, dict[str, Any]] = field(default_factory=dict)
     images: dict[str, dict[str, Any]] = field(default_factory=dict)
+    input_images: list[dict[str, Any]] = field(default_factory=list)
     image_bytes: int = 0
     call_signatures: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_calls: int = 0
@@ -708,23 +723,38 @@ async def _resolve_public_image(url: str) -> dict[str, Any]:
     headers = {"User-Agent": "LlinkWorkImages/1.0", "Accept": "image/png,image/jpeg,image/webp"}
     chunks: list[bytes] = []
     total = 0
+    current_url = url
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client:
-        async with client.stream("GET", url, headers=headers) as response:
-            if response.is_redirect:
-                raise ValueError("La source image redirige ; cette URL n'est pas acceptée.")
-            if response.status_code != 200:
-                raise ValueError(f"La source image répond HTTP {response.status_code}.")
-            mime = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-            if mime not in {"image/png", "image/jpeg", "image/webp"}:
-                raise ValueError("Le serveur n'a pas renvoyé une image PNG, JPEG ou WebP.")
-            content_length = response.headers.get("content-length")
-            if content_length and content_length.isdigit() and int(content_length) > 4_000_000:
-                raise ValueError("L'image dépasse la limite de 4 Mo.")
-            async for chunk in response.aiter_bytes():
-                total += len(chunk)
-                if total > 4_000_000:
+        for redirect_count in range(4):
+            await _assert_public_host_resolves(current_url)
+            async with client.stream("GET", current_url, headers=headers) as response:
+                if response.is_redirect:
+                    if redirect_count >= 3:
+                        raise ValueError("La source image effectue trop de redirections.")
+                    location = response.headers.get("location")
+                    if not location:
+                        raise ValueError("La source image a fourni une redirection invalide.")
+                    next_url = urljoin(current_url, location)
+                    if not next_url.startswith("https://"):
+                        raise ValueError("La source image tente une redirection non sécurisée.")
+                    current_url = next_url
+                    continue
+                if response.status_code != 200:
+                    raise ValueError(f"La source image répond HTTP {response.status_code}.")
+                mime = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                if mime not in {"image/png", "image/jpeg", "image/webp"}:
+                    raise ValueError("Le serveur n'a pas renvoyé une image PNG, JPEG ou WebP.")
+                content_length = response.headers.get("content-length")
+                if content_length and content_length.isdigit() and int(content_length) > 4_000_000:
                     raise ValueError("L'image dépasse la limite de 4 Mo.")
-                chunks.append(chunk)
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > 4_000_000:
+                        raise ValueError("L'image dépasse la limite de 4 Mo.")
+                    chunks.append(chunk)
+                break
+        else:
+            raise ValueError("Impossible de résoudre l'URL de l'image.")
 
     from PIL import Image, UnidentifiedImageError
     raw = b"".join(chunks)
@@ -748,133 +778,261 @@ async def _resolve_public_image(url: str) -> dict[str, Any]:
     return {"data_url": data_url, "size_bytes": len(normalized), "mime_type": "image/png"}
 
 
-async def _search_work_images(query: str, max_images: int, state: AgentState) -> dict[str, Any]:
-    import os
+def _normalize_work_image(raw: bytes) -> dict[str, Any]:
+    """Valide et normalise une image en PNG sans conserver de métadonnées actives."""
+    from PIL import Image, UnidentifiedImageError
 
-    api_key = os.getenv("TAVILY_API_KEY", "").strip()
+    if not raw or len(raw) > 6_000_000:
+        raise ValueError("L'image doit peser au maximum 6 Mo.")
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            if image.width * image.height > 20_000_000:
+                raise ValueError("La résolution de l'image dépasse la limite autorisée.")
+            image.load()
+            converted = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+            output = io.BytesIO()
+            converted.save(output, format="PNG", optimize=True)
+            normalized = output.getvalue()
+    except ValueError:
+        raise
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ValueError("Le fournisseur n'a pas retourné une image exploitable.") from exc
+    if len(normalized) > 4_000_000:
+        raise ValueError("L'image normalisée dépasse la limite de 4 Mo.")
+    return {
+        "data_url": "data:image/png;base64," + base64.b64encode(normalized).decode("ascii"),
+        "size_bytes": len(normalized),
+        "mime_type": "image/png",
+    }
+
+
+async def _gemini_generate_content(
+    prompt: str,
+    *,
+    model: str,
+    response_modalities: list[str],
+    tools: list[dict[str, Any]] | None = None,
+    image_inputs: list[dict[str, Any]] | None = None,
+    aspect_ratio: str | None = None,
+    quality: str = "standard",
+) -> dict[str, Any]:
+    """Appelle l'API Gemini multimodale depuis le serveur, jamais depuis le navigateur."""
+    settings = get_settings()
+    api_key = str(settings.gemini_api_key or "").strip()
     if not api_key:
-        raise PermissionError("La recherche d'images nécessite TAVILY_API_KEY sur le serveur.")
+        raise PermissionError("GEMINI_API_KEY n'est pas configurée sur le serveur.")
+    parts: list[dict[str, Any]] = [{"text": prompt}]
+    for item in (image_inputs or [])[:4]:
+        raw = item.get("data")
+        mime = str(item.get("mime_type") or "image/png")
+        if not isinstance(raw, bytes) or not raw or len(raw) > 6_000_000:
+            raise ValueError("Une image source est vide ou dépasse la limite de 6 Mo.")
+        if not mime.startswith("image/"):
+            raise ValueError("Le fichier source n'est pas une image.")
+        parts.append({
+            "inline_data": {
+                "mime_type": mime,
+                "data": base64.b64encode(raw).decode("ascii"),
+            }
+        })
+    generation_config: dict[str, Any] = {
+        "responseModalities": response_modalities,
+        "maxOutputTokens": 2048,
+        "temperature": 0.35,
+    }
+    if aspect_ratio:
+        generation_config["responseFormat"] = {
+            "image": {
+                "aspectRatio": aspect_ratio,
+                "imageSize": "2K" if quality == "hd" else "1K",
+            }
+        }
+    request_body: dict[str, Any] = {
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": generation_config,
+    }
+    if tools:
+        request_body["tools"] = tools
+    timeout = httpx.Timeout(120.0, connect=12.0, write=35.0, pool=8.0)
+    endpoint = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent"
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+        response = await client.post(
+            endpoint,
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json=request_body,
+        )
+    if response.status_code != 200:
+        logger.warning("Gemini %s a répondu HTTP %s.", model, response.status_code)
+        raise ValueError(f"Gemini a refusé la requête image/recherche (HTTP {response.status_code}).")
+    payload = response.json()
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        raise ValueError("Gemini n'a retourné aucun résultat.")
+    return candidates[0]
+
+
+async def _search_work_images(query: str, max_images: int, state: AgentState) -> dict[str, Any]:
+    """Recherche Google Images, télécharge les sources et conserve leur attribution."""
+    query = str(query or "").strip()
     if len(query) < 3 or len(query) > 400:
         raise ValueError("La recherche d'images doit contenir entre 3 et 400 caractères.")
     max_images = max(1, min(int(max_images or 3), 4))
-    timeout = httpx.Timeout(28.0, connect=8.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            "https://api.tavily.com/search",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "query": query,
-                "search_depth": "basic",
-                "max_results": 5,
-                "include_images": True,
-                "include_image_descriptions": True,
-                "include_answer": False,
-                "include_raw_content": False,
-            },
-        )
-    if response.status_code != 200:
-        raise ValueError(f"Le service image a répondu HTTP {response.status_code}.")
-    data = response.json()
-    candidates: list[dict[str, Any]] = []
-    for image in data.get("images") or []:
-        if isinstance(image, dict):
-            candidates.append(image)
-    for result in data.get("results") or []:
-        if not isinstance(result, dict):
-            continue
-        for image in result.get("images") or []:
-            if isinstance(image, dict):
-                candidates.append({**image, "source_url": result.get("url"), "source_title": result.get("title")})
+    candidate = await _gemini_generate_content(
+        "Recherche des images correspondant exactement à cette demande. "
+        "Ne génère aucune image : effectue une recherche d'images et retourne les sources réelles. "
+        "Requête : " + query,
+        model="gemini-3.1-flash-image",
+        response_modalities=["TEXT"],
+        tools=[{"google_search": {"searchTypes": {"webSearch": {}, "imageSearch": {}}}}],
+    )
+    grounding = candidate.get("groundingMetadata") or candidate.get("grounding_metadata") or {}
+    chunks = grounding.get("groundingChunks") or grounding.get("grounding_chunks") or []
     stored: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for candidate in candidates:
-        image_url = str(candidate.get("url") or candidate.get("image_url") or "")
-        if not image_url or image_url in seen:
+    for chunk in chunks:
+        image = (
+            chunk.get("image")
+            if isinstance(chunk, dict) and isinstance(chunk.get("image"), dict)
+            else chunk
+        )
+        if not isinstance(image, dict):
+            continue
+        nested_image = image.get("image") if isinstance(image.get("image"), dict) else image
+        if not any(key in nested_image for key in ("imageUri", "image_uri")):
+            continue
+        image_url = str(nested_image.get("imageUri") or nested_image.get("image_uri") or nested_image.get("uri") or "").strip()
+        source_url = str(nested_image.get("sourceUri") or nested_image.get("source_uri") or image.get("uri") or image.get("source_url") or "").strip()
+        if not image_url.startswith("https://") or not source_url.startswith("https://") or image_url in seen:
             continue
         seen.add(image_url)
         try:
             validated = await _resolve_public_image(image_url)
         except Exception as exc:
-            logger.info("Image Work ignorée après validation (%s).", str(exc)[:180])
+            logger.info("Image Google ignorée après validation (%s).", str(exc)[:180])
             continue
         if len(state.images) >= MAX_AGENT_IMAGES or state.image_bytes + validated["size_bytes"] > MAX_AGENT_IMAGE_BYTES:
             break
         image_id = uuid.uuid4().hex
-        description = str(candidate.get("description") or candidate.get("alt") or query)[:350]
-        source_url = str(candidate.get("source_url") or candidate.get("page_url") or image_url)[:1500]
-        source_title = str(candidate.get("source_title") or "")[:300]
+        title = str(image.get("title") or image.get("domain") or "Image trouvée")[:300]
+        description = title or query
         state.image_bytes += validated["size_bytes"]
         state.images[image_id] = {
             **validated,
             "description": description,
-            "source_url": source_url,
-            "source_title": source_title,
+            "source_url": source_url[:1500],
+            "source_title": title,
+            "image_url": image_url[:2000],
         }
         stored.append({
             "image_id": image_id,
             "description": description,
-            "source_url": source_url,
-            "source_title": source_title,
+            "source_url": source_url[:1500],
+            "image_url": image_url[:2000],
+            "source_title": title,
             "mime_type": validated["mime_type"],
             "size_bytes": validated["size_bytes"],
         })
         if len(stored) >= max_images:
             break
-    return {"query": query, "images": stored, "count": len(stored), "note": "Les images ont été téléchargées, contrôlées et conservées côté serveur pour insertion dans le document."}
+    text_parts = [
+        part.get("text", "")
+        for part in (candidate.get("content") or {}).get("parts", [])
+        if isinstance(part, dict) and isinstance(part.get("text"), str)
+    ]
+    grounding_entry = grounding.get("searchEntryPoint") or grounding.get("search_entry_point") or {}
+    return {
+        "query": query,
+        "images": stored,
+        "count": len(stored),
+        "summary": "\n".join(text_parts)[:1800],
+        "search_suggestions_html": grounding_entry.get("renderedContent") or grounding_entry.get("rendered_content"),
+        "note": (
+            "Les images ont été recherchées sur Google, téléchargées et contrôlées. "
+            "Chaque image conserve la page source à attribuer."
+            if stored else "Google n'a retourné aucune image téléchargeable pour cette requête."
+        ),
+    }
 
 
-async def _generate_work_image(prompt: str, filename: str, size: str, quality: str, state: AgentState) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.zai_api_key:
-        raise PermissionError("La génération d'images nécessite ZAI_API_KEY sur le serveur.")
+async def _generate_work_image(
+    prompt: str,
+    filename: str,
+    aspect_ratio: str,
+    quality: str,
+    state: AgentState,
+    source_index: int | None = None,
+) -> dict[str, Any]:
+    """Génère une image ou retouche une pièce jointe avec Gemini Image."""
     prompt = str(prompt or "").strip()
     if len(prompt) < 10 or len(prompt) > 1800:
         raise ValueError("La description de l'image doit contenir entre 10 et 1 800 caractères.")
-    allowed_sizes = {"1280x1280", "1568x1056", "1056x1568", "1472x1088", "1088x1472", "1728x960", "960x1728"}
-    if size not in allowed_sizes:
-        size = "1280x1280"
-    if quality not in {"standard", "hd"}:
-        quality = "hd"
+    allowed_ratios = {"1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"}
+    if aspect_ratio not in allowed_ratios:
+        aspect_ratio = "1:1"
+    quality = "hd" if quality == "hd" else "standard"
 
-    timeout = httpx.Timeout(75.0, connect=10.0)
-    endpoint = settings.zai_base_url.rstrip("/") + "/images/generations"
-    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-        response = await client.post(
-            endpoint,
-            headers={"Authorization": f"Bearer {settings.zai_api_key}", "Content-Type": "application/json"},
-            json={"model": "glm-image", "prompt": prompt, "size": size, "quality": quality},
+    image_inputs: list[dict[str, Any]] = []
+    if source_index is not None:
+        if source_index < 0 or source_index >= len(state.input_images):
+            raise ValueError("L'index d'image source n'existe pas. Vérifie la liste des images jointes à cette tâche.")
+        image_inputs = [state.input_images[source_index]]
+        prompt = (
+            "MODIFICATION D'IMAGE. Utilise l'image jointe comme source principale et applique précisément ces changements. "
+            "Conserve les caractéristiques qui ne sont pas concernées par la demande. "
+            "Ne décris pas seulement l'image : retourne le résultat visuel modifié.\n\n"
+            + prompt
         )
-    if response.status_code != 200:
-        logger.warning("GLM-Image a répondu HTTP %s.", response.status_code)
-        raise ValueError(f"Le service GLM-Image a répondu HTTP {response.status_code}.")
-    payload = response.json()
-    data = payload.get("data") or []
-    image_url = str((data[0] or {}).get("url") or "") if data and isinstance(data[0], dict) else ""
-    if not image_url:
-        raise ValueError("GLM-Image n'a pas retourné de lien de téléchargement.")
-    validated = await _resolve_public_image(image_url)
+
+    candidate = await _gemini_generate_content(
+        prompt,
+        model="gemini-3.1-flash-image",
+        response_modalities=["TEXT", "IMAGE"],
+        image_inputs=image_inputs,
+        aspect_ratio=aspect_ratio,
+        quality=quality,
+    )
+    output_parts = (candidate.get("content") or {}).get("parts") or []
+    raw_image: bytes | None = None
+    for part in output_parts:
+        if not isinstance(part, dict):
+            continue
+        inline = part.get("inlineData") or part.get("inline_data")
+        if isinstance(inline, dict) and inline.get("data"):
+            try:
+                raw_image = base64.b64decode(inline["data"], validate=True)
+                break
+            except (ValueError, TypeError):
+                continue
+    if raw_image is None:
+        refusal = " ".join(
+            str(part.get("text") or "") for part in output_parts if isinstance(part, dict)
+        ).strip()
+        raise ValueError(
+            "Gemini n'a retourné aucune image exploitable."
+            + ((" Détail : " + refusal[:500]) if refusal else "")
+        )
+    validated = _normalize_work_image(raw_image)
     if len(state.images) >= MAX_AGENT_IMAGES or state.image_bytes + validated["size_bytes"] > MAX_AGENT_IMAGE_BYTES:
         raise ValueError("La limite de stockage des illustrations de cette tâche est atteinte.")
 
     image_id = uuid.uuid4().hex
     artifact_id = uuid.uuid4().hex
-    filename = _safe_filename(filename or "illustration.png", "illustration.png")
+    filename = _safe_filename(filename or ("image-retouchee.png" if source_index is not None else "illustration.png"), "image.png")
     if not filename.lower().endswith(".png"):
         filename = re.sub(r"\.[^.]+$", "", filename) + ".png"
-    image_description = prompt[:350]
     state.image_bytes += validated["size_bytes"]
     state.images[image_id] = {
         **validated,
-        "description": image_description,
+        "description": prompt[:350],
         "source_url": "",
-        "source_title": "Illustration originale générée avec GLM-Image",
+        "source_title": "Image modifiée avec Gemini" if source_index is not None else "Illustration générée avec Gemini",
     }
     state.artifacts[artifact_id] = {
         "artifact_id": artifact_id,
         "filename": filename,
         "mime_type": "image/png",
         "data": base64.b64decode(validated["data_url"].split(",", 1)[1]),
-        "verification": {"passed": False, "precheck": "Image PNG reçue et normalisée par le serveur."},
+        "verification": {"passed": False, "precheck": "Image PNG générée et normalisée par le serveur."},
         "verified_by_agent": False,
         "kind": "image",
     }
@@ -886,7 +1044,8 @@ async def _generate_work_image(prompt: str, filename: str, size: str, quality: s
         "size_bytes": validated["size_bytes"],
         "status": "image_ready_pending_independent_verification",
         "verified": False,
-        "note": "Image générée et téléchargée. Utilise image_id pour l'insérer dans un document et artifact_verify pour autoriser sa livraison.",
+        "source_image_index": source_index,
+        "note": "Image prête. Utilise image_id pour l'insérer dans un document et artifact_verify avant de confirmer la livraison.",
     }
 
 
@@ -973,14 +1132,27 @@ async def _dispatch_tool(
 
     if name == "image_generate":
         if uid == "anonymous":
-            raise PermissionError("Connecte-toi pour générer et intégrer des images.")
+            raise PermissionError("Connecte-toi pour générer une image.")
         await enforce_endpoint_quota(request=request, user=user, db=db, scope="work_tool_read")
         return await _generate_work_image(
             str(args.get("prompt") or ""),
             str(args.get("filename") or "illustration.png"),
-            str(args.get("size") or "1280x1280"),
+            str(args.get("aspect_ratio") or "1:1"),
             str(args.get("quality") or "hd"),
             state,
+        )
+
+    if name == "image_edit":
+        if uid == "anonymous":
+            raise PermissionError("Connecte-toi pour retoucher une image.")
+        await enforce_endpoint_quota(request=request, user=user, db=db, scope="work_tool_read")
+        return await _generate_work_image(
+            str(args.get("prompt") or ""),
+            str(args.get("filename") or "image-retouchee.png"),
+            str(args.get("aspect_ratio") or "1:1"),
+            str(args.get("quality") or "hd"),
+            state,
+            source_index=int(args.get("source_index") or 0),
         )
 
     if name == "web_open":
@@ -1623,7 +1795,7 @@ async def _dispatch_tool(
 def _available_tool_definitions(user: dict[str, Any]) -> list[dict[str, Any]]:
     settings = get_settings()
     authenticated = str(user.get("uid") or "anonymous") != "anonymous"
-    tavily_ready = bool(__import__("os").getenv("TAVILY_API_KEY", "").strip())
+    gemini_ready = bool(settings.gemini_api_key.strip())
     e2b_ready = bool(__import__("os").getenv("E2B_API_KEY", "").strip())
     allowed = {"update_plan", "document_plan", "document_begin", "document_add_blocks", "document_finalize", "artifact_verify", "create_text_file", "export_file"}
     if authenticated:
@@ -1631,12 +1803,10 @@ def _available_tool_definitions(user: dict[str, Any]) -> list[dict[str, Any]]:
         if e2b_ready:
             allowed.update({"project_sandbox_open", "project_run", "project_list_files", "project_read_file", "project_sync_files"})
         allowed.add("web_open")
-        if tavily_ready:
-            allowed.update({"web_search", "image_search"})
+        if gemini_ready:
+            allowed.update({"web_search", "image_search", "image_generate", "image_edit"})
         if e2b_ready:
             allowed.add("python")
-        if settings.zai_api_key:
-            allowed.add("image_generate")
     return [
         item for item in TOOLS
         if item.get("type") == "function" and (item.get("function") or {}).get("name") in allowed
@@ -1836,8 +2006,19 @@ async def _run_agent(
     api_key: str,
     base_url: str,
     emit: Any,
+    media_parts: list[dict[str, Any]] | None = None,
 ) -> None:
-    state = AgentState(user_request=payload.message)
+    image_inputs = [
+        {
+            "filename": str(item.get("filename") or f"image-{index + 1}"),
+            "mime_type": str(item.get("mime_type") or "image/png"),
+            "data": item.get("data"),
+        }
+        for index, item in enumerate(media_parts or [])
+        if str(item.get("mime_type") or "").startswith("image/")
+        and isinstance(item.get("data"), bytes)
+    ][:5]
+    state = AgentState(user_request=payload.message, input_images=image_inputs)
     tool_definitions = _available_tool_definitions(user)
     available_tool_names = [(item.get("function") or {}).get("name", "") for item in tool_definitions]
     system = _agent_system(payload.preferences, available_tool_names)
@@ -1855,6 +2036,17 @@ async def _run_agent(
     seen_calls: set[str] = set()
     final_answer = ""
     started = asyncio.get_running_loop().time()
+
+    if state.input_images:
+        image_context = "\n\nImages jointes disponibles pour une retouche (indices à partir de 0) : " + "; ".join(
+            f"{index}: {item.get('filename') or 'image'}"
+            for index, item in enumerate(state.input_images)
+        )
+        messages[-1]["content"] += image_context
+        gemini_contents = build_gemini_contents(
+            [{"role": item["role"], "content": item["content"]} for item in history],
+            messages[-1]["content"],
+        )
 
     await emit({"type": "plan", **state.plan})
     try:
@@ -1943,6 +2135,7 @@ async def _run_agent(
                         "artifact_verify": "Vérification indépendante du fichier",
                         "image_search": "Recherche d'illustrations",
                         "image_generate": "Génération d'illustration",
+                        "image_edit": "Retouche d'image",
                         "create_text_file": "Création d'un artefact texte",
                         "export_file": "Export du fichier",
                         "workspace_list_projects": "Exploration des projets Work",
@@ -2137,6 +2330,7 @@ async def work_agent_response(
     request: Request,
     user: dict[str, Any],
     db: Any | None,
+    media_parts: list[dict[str, Any]] | None = None,
 ):
     """Valide les droits, puis retourne le flux d'événements de l'agent Work."""
     from fastapi.responses import StreamingResponse
@@ -2173,7 +2367,7 @@ async def work_agent_response(
             await _run_agent(
                 payload=payload, request=request, user=user, db=db,
                 model=model, api_key=api_key, base_url=base_url,
-                emit=queue.put,
+                emit=queue.put, media_parts=media_parts,
             )
         except asyncio.CancelledError:
             raise

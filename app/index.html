@@ -948,12 +948,22 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 getApp: firebaseAppSDK.getApp,
                 getAuth: firebaseAuthSDK.getAuth,
                 signInWithPopup: firebaseAuthSDK.signInWithPopup,
+                signInWithCustomToken: firebaseAuthSDK.signInWithCustomToken,
                 GoogleAuthProvider: firebaseAuthSDK.GoogleAuthProvider,
                 onAuthStateChanged: firebaseAuthSDK.onAuthStateChanged,
                 signOut: firebaseAuthSDK.signOut
             };
         }
-        const { initializeApp, getApps, getApp, getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } = firebaseSDK;
+        const { initializeApp, getApps, getApp, getAuth, signInWithPopup, signInWithCustomToken, GoogleAuthProvider, onAuthStateChanged, signOut } = firebaseSDK;
+        const desktopAuthBridge = (() => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const port = Number(params.get("llink_desktop_auth_port"));
+                const state = params.get("llink_desktop_auth_state") || "";
+                if (!Number.isInteger(port) || port < 1024 || port > 65535 || !/^[a-f0-9]{64}$/.test(state)) return null;
+                return { port, state, submitted: false };
+            } catch (_) { return null; }
+        })();
         const firebaseConfig = { 
             apiKey: "AIzaSyDJPf1206nZjpw58OOnCpX4Gq9YFFQ0nUU", 
             authDomain: "llink-ee40e.firebaseapp.com", 
@@ -964,17 +974,62 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         const provider = new GoogleAuthProvider();
         window.auth = auth;
 
-        window.handleAuth = async () => { 
-            if (window.isLoggedIn) { 
+        window.handleAuth = async () => {
+            if (window.isLoggedIn) {
                 try { await signOut(auth); } catch (e) { console.error("Erreur déconnexion:", e); }
-            } else { 
-                try { await signInWithPopup(auth, provider); } catch (e) { console.error("Erreur Auth:", e); } 
+                return;
             }
+            if (window.LLINK_PLATFORM?.isTauri && !window.LLINK_PLATFORM?.isCapacitor) {
+                try {
+                    const invoke = window.__TAURI__?.core?.invoke;
+                    if (typeof invoke !== "function") throw new Error("Le module natif de connexion Google n'est pas chargé.");
+                    const browserIdToken = await invoke("begin_desktop_google_auth");
+                    const exchangeResponse = await fetch((window.LLINK_SERVER_URL || "https://llink-usz9.onrender.com") + "/api/auth/desktop-exchange", {
+                        method: "POST",
+                        headers: { "Authorization": "Bearer " + browserIdToken }
+                    });
+                    const exchange = await exchangeResponse.json().catch(() => ({}));
+                    if (!exchangeResponse.ok || !exchange.customToken) {
+                        throw new Error(exchange.detail || "Le serveur n'a pas pu finaliser la connexion.");
+                    }
+                    await signInWithCustomToken(auth, exchange.customToken);
+                } catch (e) {
+                    console.error("Erreur Auth Google Tauri:", e);
+                    alert(e?.message || "La connexion Google n'a pas abouti.");
+                }
+                return;
+            }
+            try { await signInWithPopup(auth, provider); }
+            catch (e) { console.error("Erreur Auth:", e); }
         };
 
         onAuthStateChanged(auth, async (user) => {
             const authBtn = document.getElementById('auth-btn');
             if (user) {
+                if (desktopAuthBridge && !desktopAuthBridge.submitted) {
+                    desktopAuthBridge.submitted = true;
+                    try {
+                        const form = document.createElement("form");
+                        form.method = "POST";
+                        form.action = "http://127.0.0.1:" + desktopAuthBridge.port + "/complete";
+                        form.style.display = "none";
+                        const stateField = document.createElement("input");
+                        stateField.type = "hidden";
+                        stateField.name = "state";
+                        stateField.value = desktopAuthBridge.state;
+                        const tokenField = document.createElement("input");
+                        tokenField.type = "hidden";
+                        tokenField.name = "id_token";
+                        tokenField.value = await user.getIdToken(true);
+                        form.append(stateField, tokenField);
+                        document.body.appendChild(form);
+                        form.submit();
+                        return;
+                    } catch (error) {
+                        desktopAuthBridge.submitted = false;
+                        console.error("Retour sécurisé vers Llink impossible :", error);
+                    }
+                }
                 window.isLoggedIn = true;
                 window.dispatchEvent(new Event('llink-auth-state-changed'));
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();

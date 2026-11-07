@@ -491,3 +491,9 @@ body.work-mode-active header{flex:0 0 52px!important;min-height:52px!important;p
 @media(prefers-reduced-motion:reduce){
   #work-workspace *{scroll-behavior:auto!important;transition:none!important}
 }
+
+/* Recherche Google dans Work : garder visibles le lien de provenance et les vignettes. */
+.work-result-image img{display:block;width:min(100%,240px);max-height:180px;object-fit:cover;border-radius:8px;background:var(--work-panel-soft)}
+.work-result-image>a:first-child{display:inline-flex;align-self:flex-start;max-width:100%}
+.work-google-search-suggestions{margin:10px 0 2px;padding-top:8px;border-top:1px solid var(--work-line);overflow-wrap:anywhere}
+.work-google-search-suggestions a{color:var(--work-accent)}

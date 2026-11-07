@@ -4,7 +4,26 @@ import pytest
 from fastapi import HTTPException
 
 from llink_api import security
+from llink_api.api.routes import users
 
+
+
+
+def test_tauri_desktop_exchange_requires_a_verified_firebase_user_and_returns_custom_token(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setattr(security, "_decode_firebase_token", lambda _token: {"uid": "desktop-user", "firebase": {"sign_in_provider": "google.com"}})
+    monkeypatch.setattr(users.firebase_auth, "create_custom_token", lambda uid: b"firebase-custom-token")
+    response = client.post(
+        "/api/auth/desktop-exchange",
+        headers={"Authorization": "Bearer verified-firebase-id-token"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"customToken": "firebase-custom-token"}
+
+
+def test_tauri_desktop_exchange_rejects_anonymous_users(client):
+    response = client.post("/api/auth/desktop-exchange")
+    assert response.status_code == 401
 
 def test_history_read_requires_authentication(client):
     response = client.get("/api/history")
