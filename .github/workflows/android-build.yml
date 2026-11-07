@@ -56,7 +56,8 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v6
       - name: Install pinned build dependencies
-        run: npm --prefix build-tools install --no-audit --no-fund
+        working-directory: build-tools
+        run: npm install --no-audit --no-fund
       - name: Prepare local runtime, SmolLM ONNX, Firebase, Tesseract and CSS
         run: |
           node scripts/prepare-offline-assets.mjs

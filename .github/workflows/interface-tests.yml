@@ -49,7 +49,8 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install offline asset build dependencies
-        run: npm --prefix build-tools install --no-audit --no-fund
+        working-directory: build-tools
+        run: npm install --no-audit --no-fund
       - name: Prepare local browser libraries (model download skipped for UI tests)
         run: |
           node scripts/prepare-offline-assets.mjs --skip-model

@@ -84,6 +84,7 @@ const bundle = async (entry, output, target = "es2022") => esbuild.build({
   bundle: true,
   format: "iife",
   platform: "browser",
+  nodePaths: [path.join(root, "build-tools", "node_modules")],
   target: [target],
   outfile: path.join(vendorDirectory, output),
   minify: true,

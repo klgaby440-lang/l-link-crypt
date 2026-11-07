@@ -46,7 +46,8 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install offline asset dependencies
-        run: npm --prefix build-tools install --no-audit --no-fund
+        working-directory: build-tools
+        run: npm install --no-audit --no-fund
       - name: Prepare SmolLM, Transformers.js, Firebase, Tesseract and CSS
         run: |
           node scripts/prepare-offline-assets.mjs
