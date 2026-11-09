@@ -183,3 +183,192 @@ def test_primeink_fiche_extract_falls_back_to_gemini_38_after_primary_503(
     assert response.status_code == 200
     assert response.json()["students"][0]["p1"] == 14
     assert requested_models == ["primary", "gemini-3.8-flash"]
+
+
+
+def test_primeink_students_extract_returns_names_postnames_firstnames_and_sex(
+    client, monkeypatch
+):
+    payload_from_model = {
+        "document_type": "student_list",
+        "class_name": "1ère Scientifique",
+        "academic_year": "2026-2027",
+        "students": [
+            {
+                "name": "MUKENDI",
+                "postname": "KABUYA",
+                "prename": "Aline",
+                "sexe": "F",
+                "confidence": 0.96,
+                "warning": None,
+            },
+            {
+                "name": "ILUNGA",
+                "postname": None,
+                "prename": None,
+                "sexe": None,
+                "confidence": 0.61,
+                "warning": "Sexe non indiqué sur la photo",
+            },
+        ],
+        "warnings": [],
+        "confidence": 0.9,
+    }
+
+    class FakeModel:
+        def generate_content(self, contents):
+            assert isinstance(contents, list) and isinstance(contents[1], dict)
+            return type("FakeResponse", (), {"text": json.dumps(payload_from_model)})()
+
+    async def no_quota(**kwargs):
+        assert kwargs["scope"] == "student_list_extract"
+
+    async def fake_reserve_slot():
+        return lambda: None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(media, "reserve_ai_slot", fake_reserve_slot)
+    monkeypatch.setattr(media, "get_gemini_model", lambda **kwargs: FakeModel())
+
+    response = client.post(
+        "/api/primeink/students-extract",
+        json={"imageBase64": _jpeg_data_url(), "class_name": "1ère Scientifique"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["document_type"] == "student_list"
+    assert data["students"][0]["name"] == "MUKENDI"
+    assert data["students"][0]["postname"] == "KABUYA"
+    assert data["students"][0]["prename"] == "Aline"
+    assert data["students"][0]["sexe"] == "F"
+    assert data["students"][1]["sexe"] is None
+
+
+def test_primeink_courses_extract_maps_bulletin_domains_and_subdomains(
+    client, monkeypatch
+):
+    payload_from_model = {
+        "document_type": "bulletin_courses",
+        "school_name": "École test",
+        "class_name": "4e Scientifique",
+        "academic_year": "2026-2027",
+        "courses": [
+            {
+                "name": "Algèbre",
+                "domain": "Domaine des sciences",
+                "subdomain": "Sous-domaine des mathématiques",
+                "confidence": 0.94,
+                "warning": None,
+            },
+            {
+                "name": "Français",
+                "domain": "Domaine des langues",
+                "subdomain": None,
+                "confidence": 0.97,
+                "warning": None,
+            },
+        ],
+        "warnings": [],
+        "confidence": 0.93,
+    }
+
+    class FakeModel:
+        def generate_content(self, contents):
+            return type("FakeResponse", (), {"text": json.dumps(payload_from_model)})()
+
+    async def no_quota(**kwargs):
+        assert kwargs["scope"] == "course_list_extract"
+
+    async def fake_reserve_slot():
+        return lambda: None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(media, "reserve_ai_slot", fake_reserve_slot)
+    monkeypatch.setattr(media, "get_gemini_model", lambda **kwargs: FakeModel())
+
+    response = client.post(
+        "/api/primeink/courses-extract",
+        json={"imageBase64": _jpeg_data_url(), "class_name": "4e Scientifique"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["document_type"] == "bulletin_courses"
+    assert data["courses"][0]["name"] == "Algèbre"
+    assert data["courses"][0]["domain"] == "Domaine des sciences"
+    assert data["courses"][0]["subdomain"] == "Sous-domaine des mathématiques"
+    assert data["courses"][1]["subdomain"] is None
+
+
+def test_primeink_students_extract_falls_back_to_gemini_38_when_primary_is_unavailable(
+    client, monkeypatch
+):
+    payload_from_model = {
+        "document_type": "student_list",
+        "class_name": "1ère",
+        "academic_year": "2026-2027",
+        "students": [
+            {
+                "name": "MUKENDI",
+                "postname": "KABUYA",
+                "prename": "Aline",
+                "sexe": "F",
+                "confidence": 0.9,
+                "warning": None,
+            }
+        ],
+        "warnings": [],
+        "confidence": 0.9,
+    }
+
+    class ProviderUnavailable(Exception):
+        code = 503
+
+    class FakeModel:
+        def __init__(self, unavailable=False):
+            self.unavailable = unavailable
+
+        def generate_content(self, contents):
+            if self.unavailable:
+                raise ProviderUnavailable("503 UNAVAILABLE")
+            return type("FakeResponse", (), {"text": json.dumps(payload_from_model)})()
+
+    requested = []
+
+    def fake_get_model(**kwargs):
+        requested.append(kwargs)
+        return FakeModel(unavailable=kwargs.get("model_name") is None)
+
+    async def no_quota(**kwargs):
+        return None
+
+    async def fake_reserve_slot():
+        return lambda: None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(media, "reserve_ai_slot", fake_reserve_slot)
+    monkeypatch.setattr(media, "get_gemini_model", fake_get_model)
+
+    response = client.post(
+        "/api/primeink/students-extract",
+        json={"imageBase64": _jpeg_data_url(), "class_name": "1ère"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["students"][0]["name"] == "MUKENDI"
+    assert requested[1]["model_name"] == "gemini-3.8-flash"
+    assert requested[1]["effort"] == "extra"
+
+
+def test_primeink_photo_extract_routes_reject_empty_images(client, monkeypatch):
+    async def no_quota(**kwargs):
+        return None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    for endpoint in ("/api/primeink/students-extract", "/api/primeink/courses-extract"):
+        response = client.post(
+            endpoint,
+            json={"imageBase64": "not-a-valid-image"},
+        )
+        assert response.status_code == 415
