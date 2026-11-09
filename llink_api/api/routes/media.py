@@ -253,6 +253,8 @@ async def primeink_fiche_extract(
             }
             if model_name:
                 model_kwargs["model_name"] = model_name
+                # Gemini 3.8 Flash ne prend pas en charge le niveau de réflexion minimal.
+                model_kwargs["effort"] = "extra"
             if use_schema:
                 model_kwargs["response_json_schema"] = PRIMEINK_FICHE_RESPONSE_SCHEMA
             model = get_gemini_model(**model_kwargs)
