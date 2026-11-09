@@ -94,7 +94,7 @@ class GeminiModelAdapter:
                 max_delay=2.0,
                 exp_base=2.0,
                 jitter=0.25,
-                http_status_codes=[502, 503, 504],
+                http_status_codes=[429, 502, 503, 504],
             )
         return genai.Client(
             api_key=self.api_key,

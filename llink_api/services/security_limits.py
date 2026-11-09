@@ -33,6 +33,10 @@ DEFAULT_POLICIES: dict[tuple[str, bool], QuotaPolicy] = {
     # Deux essais par minute permettent à l'enseignant de réessayer après une panne fournisseur.
     ("fiche_extract", False): QuotaPolicy(2, 10),
     ("fiche_extract", True): QuotaPolicy(5, 50),
+    ("student_list_extract", False): QuotaPolicy(1, 10),
+    ("student_list_extract", True): QuotaPolicy(5, 50),
+    ("course_list_extract", False): QuotaPolicy(1, 10),
+    ("course_list_extract", True): QuotaPolicy(5, 50),
     ("audio", False): QuotaPolicy(1, 3),
     ("audio", True): QuotaPolicy(3, 20),
     ("attachment", False): QuotaPolicy(2, 10),
