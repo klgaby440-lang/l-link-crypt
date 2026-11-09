@@ -381,14 +381,21 @@ et students doit être vide. Retourne uniquement le JSON conforme au schéma.
 
 PRIMEINK_COURSE_LIST_SYSTEM_INSTRUCTION = """
 Tu lis un bulletin scolaire photographié pour PrimeInk et tu extrais les cours.
-Extrais le nom exact de chaque cours ainsi que son Domaine et son Sous-domaine lorsqu'ils
-sont indiqués. Lorsqu'un domaine ou sous-domaine est écrit une seule fois pour un groupe
-de lignes, répète-le pour chaque cours du groupe correspondant. Si une catégorie est absente
-ou impossible à rattacher sans ambiguïté, retourne null. Ne déduis pas de sous-domaine à partir
-du nom du cours. Ignore les moyennes, totaux, notes, pourcentages, signatures, rangs,
-décisions et lignes de total. N'invente pas de cours. Si l'image n'est pas un bulletin
-contenant une liste de cours, retourne document_type='other' et courses vide.
-Retourne uniquement le JSON conforme au schéma.
+Pour chaque cours, extrais le nom exact, le Domaine, le Sous-domaine et maxPer.
+maxPer est le maximum de points applicable à UNE période ordinaire du bulletin (P1, P2, P3 ou P4),
+pas la somme du semestre, pas le total annuel et pas le maximum d'un examen sauf si le bulletin
+indique explicitement que cette valeur est également le maximum de la période ordinaire.
+Si un maximum est imprimé dans un en-tête de groupe ou de domaine qui couvre clairement plusieurs
+cours, applique-le aux cours concernés. Ne déduis jamais le maximum depuis le nom du cours.
+Si le bulletin affiche plusieurs maxima possibles, si la colonne est illisible, ou si l'on ne peut
+pas distinguer le maximum par période d'un total/examen, retourne maxPer=null et ajoute un warning
+expliquant l'ambiguïté. Ne remplace jamais un maximum absent par 20 ou 40.
+Lorsqu'un domaine ou sous-domaine est écrit une seule fois pour un groupe de lignes, répète-le
+pour chaque cours du groupe correspondant. Si une catégorie est absente ou impossible à rattacher
+sans ambiguïté, retourne null. Ne déduis pas de sous-domaine à partir du nom du cours.
+Ignore les moyennes, totaux, notes, pourcentages, signatures, rangs, décisions et lignes de total.
+N'invente pas de cours. Si l'image n'est pas un bulletin contenant une liste de cours,
+retourne document_type='other' et courses vide. Retourne uniquement le JSON conforme au schéma.
 """.strip()
 
 PRIMEINK_STUDENT_LIST_RESPONSE_SCHEMA = {
@@ -431,12 +438,13 @@ PRIMEINK_COURSE_LIST_RESPONSE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
+                    "maxPer": {"type": ["number", "null"]},
                     "domain": {"type": ["string", "null"]},
                     "subdomain": {"type": ["string", "null"]},
                     "confidence": {"type": "number"},
                     "warning": {"type": ["string", "null"]},
                 },
-                "required": ["name", "domain", "subdomain", "confidence", "warning"],
+                "required": ["name", "maxPer", "domain", "subdomain", "confidence", "warning"],
             },
         },
         "warnings": {"type": "array", "items": {"type": "string"}},
@@ -600,9 +608,11 @@ async def primeink_courses_extract(
     prompt = (
         "Lis la liste des cours dans ce bulletin scolaire. "
         f"Classe attendue : {payload.class_name or 'non précisée'}. "
-        "Pour chaque cours, relève son nom, son domaine et son sous-domaine si visibles. "
-        "Répète le domaine/sous-domaine des en-têtes fusionnés pour les lignes concernées. "
-        "Ignore les colonnes de notes et les totaux. Ne déduis pas les catégories absentes."
+        "Pour chaque cours, relève le nom, le domaine, le sous-domaine et le maximum par période ordinaire (P1/P2/P3/P4). "
+        "Ne renvoie pas un total semestriel, annuel ou un maximum d'examen comme maximum de période. "
+        "Si le maximum par période est ambigu ou absent, utilise null et explique pourquoi dans warning. "
+        "Répète les maxima de période et les domaines des en-têtes fusionnés uniquement pour les lignes clairement concernées. "
+        "Ignore les colonnes de notes et les totaux. Ne déduis pas les catégories ou maxima absents."
     )
     release_slot = await reserve_ai_slot()
     try:

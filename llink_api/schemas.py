@@ -111,6 +111,9 @@ class PrimeInkExtractedCourseIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=180)
+    # Maximum réellement visible pour une période ordinaire (P1/P2/P3/P4).
+    # None lorsque le bulletin ne permet pas de l'identifier sans ambiguïté.
+    maxPer: float | None = Field(default=None, gt=0, le=100000)
     domain: str | None = Field(default=None, max_length=180)
     subdomain: str | None = Field(default=None, max_length=180)
     confidence: float = Field(default=0, ge=0, le=1)
