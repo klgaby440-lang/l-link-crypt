@@ -372,3 +372,74 @@ def test_primeink_photo_extract_routes_reject_empty_images(client, monkeypatch):
             json={"imageBase64": "dGVzdCBub3QgaW1hZ2U="},
         )
         assert response.status_code == 415
+
+
+
+def test_primeink_photo_extraction_falls_back_after_schema_and_provider_errors(
+    client, monkeypatch
+):
+    payload_from_model = {
+        "document_type": "bulletin_courses",
+        "school_name": "École test",
+        "class_name": "4e",
+        "academic_year": "2026-2027",
+        "courses": [
+            {
+                "name": "Physique",
+                "domain": "Sciences",
+                "subdomain": "Physique",
+                "confidence": 0.93,
+                "warning": None,
+            }
+        ],
+        "warnings": [],
+        "confidence": 0.9,
+    }
+
+    class ProviderError(Exception):
+        def __init__(self, code):
+            super().__init__(str(code))
+            self.code = code
+
+    requested = []
+
+    class FakeModel:
+        def __init__(self, mode):
+            self.mode = mode
+
+        def generate_content(self, contents):
+            if self.mode == "schema":
+                raise ProviderError(400)
+            if self.mode == "plain-primary":
+                raise ProviderError(503)
+            return type("FakeResponse", (), {"text": json.dumps(payload_from_model)})()
+
+    def fake_get_model(**kwargs):
+        requested.append(kwargs)
+        if kwargs.get("model_name") == "gemini-3.8-flash":
+            return FakeModel("fallback")
+        return FakeModel("schema" if "response_json_schema" in kwargs else "plain-primary")
+
+    async def no_quota(**kwargs):
+        return None
+
+    async def fake_reserve_slot():
+        return lambda: None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(media, "reserve_ai_slot", fake_reserve_slot)
+    monkeypatch.setattr(media, "get_gemini_model", fake_get_model)
+
+    response = client.post(
+        "/api/primeink/courses-extract",
+        json={"imageBase64": _jpeg_data_url(), "class_name": "4e"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["courses"][0]["name"] == "Physique"
+    assert len(requested) == 3
+    assert requested[0].get("response_json_schema") is not None
+    assert "response_json_schema" not in requested[1]
+    assert requested[2]["model_name"] == "gemini-3.8-flash"
+    assert "response_json_schema" not in requested[2]
+    assert requested[2]["effort"] == "extra"
