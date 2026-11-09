@@ -479,7 +479,15 @@ async def _generate_primeink_photo_json(
         code = _provider_error_status_code(primary_error)
         if code == 400:
             logger.warning("Gemini a refusé le schéma structuré PrimeInk ; essai en JSON simple.")
-            response = await generate(use_schema=False)
+            try:
+                response = await generate(use_schema=False)
+            except Exception as plain_error:
+                if _provider_error_status_code(plain_error) not in {429, 502, 503, 504}:
+                    raise
+                logger.warning(
+                    "Le modèle principal reste indisponible en JSON simple ; basculement vers gemini-3.8-flash."
+                )
+                response = await generate("gemini-3.8-flash", use_schema=False)
         elif code in {429, 502, 503, 504}:
             logger.warning(
                 "Modèle Gemini principal indisponible (%s) ; basculement vers gemini-3.8-flash.",
