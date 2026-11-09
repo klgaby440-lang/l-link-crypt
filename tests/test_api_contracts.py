@@ -31,6 +31,20 @@ def test_openapi_exposes_stable_request_and_response_schemas(client):
     assert expected.issubset(registered)
 
 
+def test_primeink_course_photo_contract_includes_optional_period_maximum(client):
+    schema = client.get("/openapi.json").json()
+    route = schema["paths"]["/api/primeink/courses-extract"]["post"]
+    course_schema = schema["components"]["schemas"]["PrimeInkExtractedCourseIdentity"]
+    properties = course_schema["properties"]
+
+    assert route["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/PrimeInkCourseListExtraction"
+    )
+    assert "maxPer" in properties
+    assert properties["maxPer"]["anyOf"][0]["type"] == "number"
+    assert properties["maxPer"]["anyOf"][1]["type"] == "null"
+
+
 def test_anonymous_user_status_contract(client):
     response = client.get("/api/user/status")
     assert response.status_code == 200
