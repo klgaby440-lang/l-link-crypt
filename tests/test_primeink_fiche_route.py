@@ -369,6 +369,6 @@ def test_primeink_photo_extract_routes_reject_empty_images(client, monkeypatch):
     for endpoint in ("/api/primeink/students-extract", "/api/primeink/courses-extract"):
         response = client.post(
             endpoint,
-            json={"imageBase64": "not-a-valid-image"},
+            json={"imageBase64": "dGVzdCBub3QgaW1hZ2U="},
         )
         assert response.status_code == 415
