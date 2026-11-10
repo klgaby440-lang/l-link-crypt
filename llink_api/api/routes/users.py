@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -29,6 +31,41 @@ from llink_api.services.think_billing import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_sso_jti_lock = threading.Lock()
+_sso_jti_memory: dict[str, float] = {}
+
+
+def _consume_think_sso_jti(db: Any | None, jti: str, uid: str, expires_at: int) -> None:
+    """Empêche la réutilisation d'un ticket SSO Think pendant sa fenêtre de validité."""
+    if db is None:
+        if get_settings().environment not in {"development", "test"}:
+            raise HTTPException(status_code=503, detail="Le stockage anti-rejeu SSO est indisponible.")
+        now = time.time()
+        with _sso_jti_lock:
+            for key, expiry in list(_sso_jti_memory.items()):
+                if expiry <= now:
+                    _sso_jti_memory.pop(key, None)
+            if jti in _sso_jti_memory:
+                raise HTTPException(status_code=401, detail="Ce ticket SSO Think a déjà été utilisé.")
+            _sso_jti_memory[jti] = float(expires_at)
+        return
+
+    try:
+        from google.api_core.exceptions import AlreadyExists
+        db.collection("think_sso_jti").document(jti).create({
+            "firebase_uid": uid,
+            "expires_at_epoch": int(expires_at),
+            "used_at_epoch": int(time.time()),
+        })
+    except AlreadyExists:
+        raise HTTPException(status_code=401, detail="Ce ticket SSO Think a déjà été utilisé.") from None
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Le ticket SSO Think n'a pas pu être consommé dans Firestore.")
+        raise HTTPException(status_code=503, detail="La protection anti-rejeu SSO est indisponible.") from exc
+
 
 
 
@@ -103,6 +140,7 @@ async def exchange_think_sso_for_firebase(
 
     # UID dédié : ne jamais fusionner deux comptes par simple égalité d’adresse e-mail.
     firebase_uid = "think_" + think_id.lower()
+    _consume_think_sso_jti(db, str(claims["jti"]), firebase_uid, int(claims["exp"]))
     try:
         custom_token = firebase_auth.create_custom_token(
             firebase_uid,
