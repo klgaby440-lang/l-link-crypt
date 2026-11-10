@@ -12,6 +12,11 @@ class AccountDeletionRequest(BaseModel):
     confirmation: Literal["SUPPRIMER MON COMPTE"]
 
 
+class LlinkSubscriptionRefreshRequest(BaseModel):
+    """Référence du paiement retournée par la redirection CinetPay."""
+    public_id: str = Field(min_length=20, max_length=20, pattern=r"^PAY-[A-F0-9]{16}$")
+
+
 class ThinkExchangeRequest(BaseModel):
     """Jeton SSO signé par Think après une authentification valide."""
     sso_token: str = Field(min_length=80, max_length=8192)
