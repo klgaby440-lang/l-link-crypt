@@ -1081,9 +1081,9 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         window.handleLlinkPaymentReturn = async () => {
             const params = new URLSearchParams(window.location.search);
             const publicId = params.get("llink_payment");
-            if (!publicId || !window.auth?.currentUser) return;
+            if (!publicId || !window.auth?.currentUser) return false;
             const tokenResult = await window.auth.currentUser.getIdTokenResult(true);
-            if (tokenResult.claims?.auth_source !== "think" || !tokenResult.claims?.think_user_id) return;
+            if (tokenResult.claims?.auth_source !== "think" || !tokenResult.claims?.think_user_id) return false;
             const response = await fetch(SERVER_URL + "/api/subscriptions/refresh", {
                 method: "POST",
                 headers: await llinkAuthHeaders(true),
@@ -1102,12 +1102,13 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 alert("Le paiement Llink a échoué ou a été refusé. Aucun abonnement n'a été activé.");
             } else {
                 if (statusBox) statusBox.textContent = "⏳ Paiement en attente de confirmation. Le statut sera revérifié à ta prochaine actualisation.";
-                return;
+                return true;
             }
             params.delete("llink_payment");
             params.delete("llink_result");
             const next = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
             window.history.replaceState({}, document.title, next);
+            return true;
         };
 
         onAuthStateChanged(auth, async (user) => {
@@ -1154,11 +1155,12 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 if (authBtn) authBtn.innerHTML = user.photoURL ? `<img src="${user.photoURL}" alt="User" class="w-full h-full object-cover rounded-full">` : `<i data-lucide="user-round" class="w-[1.25rem] h-[1.25rem]"></i>`;
                 
                 try {
+                    let paymentReturnHandled = false;
                     if (typeof window.handleLlinkPaymentReturn === "function") {
-                        try { await window.handleLlinkPaymentReturn(); }
+                        try { paymentReturnHandled = (await window.handleLlinkPaymentReturn()) === true; }
                         catch (paymentReturnError) { console.warn("Vérification du paiement Llink en attente :", paymentReturnError); }
                     }
-                    if (typeof window.checkSubscription === "function") await window.checkSubscription();
+                    if (!paymentReturnHandled && typeof window.checkSubscription === "function") await window.checkSubscription();
                     if (typeof window.restoreHistory === "function") await window.restoreHistory();
                     if (typeof window.loadHistory === "function") window.loadHistory();
                     if (typeof window.refreshLlinkUsage === "function") await window.refreshLlinkUsage({ warn: true });
