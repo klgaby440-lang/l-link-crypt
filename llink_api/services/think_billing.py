@@ -55,6 +55,7 @@ def create_think_subscription_checkout(
     plan: str,
     payment_method: str,
     checkout_id: str,
+    mobile_money_account_id: int | None = None,
 ) -> dict[str, Any]:
     """Demande à Think de créer le paiement ; Llink ne transmet jamais de montant."""
     settings = get_settings()
@@ -68,6 +69,7 @@ def create_think_subscription_checkout(
                 "plan": plan,
                 "payment_method": payment_method,
                 "checkout_id": checkout_id,
+                "mobile_money_account_id": mobile_money_account_id,
             },
             timeout=35.0,
         )
