@@ -1268,16 +1268,26 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 const res = await fetch(`${SERVER_URL}/api/user/status`, { headers: await llinkAuthHeaders() });
                 const data = await res.json();
                 
-                // GESTION DU MESSAGE DE BIENVENUE 3 JOURS
-                if(data.isNewUser) alert("Bienvenue sur Llink ! Vous bénéficiez d'une période d'essai de 3 jours à partir d'aujourd'hui. Il vous faudra vous abonner après cela.");
+                if(data.isNewUser && !data.plan) alert("Bienvenue sur Llink ! Tu bénéficies d'une période d'essai de 3 jours. Tu pourras ensuite choisir une formule.");
                 
-                // L'accès local est indépendant du forfait cloud et vérifié par le moteur natif.
+                // L'accès hors ligne reste vérifié séparément par le moteur natif.
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
                 const infoDiv = document.getElementById('subscription-info');
+                const planLabels = { bronze: "Bronze", silver: "Silver", gold: "Gold", diamant: "Diamant" };
                 
-                if(data.isValid && data.isTrial) infoDiv.innerHTML = `🟢 Période d'essai valide jusqu'au : ${new Date(data.expirationDate).toLocaleDateString()}`;
-                else if(data.isValid && !data.isTrial) infoDiv.innerHTML = `💎 Abonnement Pro valide jusqu'au : ${new Date(data.expirationDate).toLocaleDateString()}`;
-                else { infoDiv.innerHTML = `Le mode hors ligne nécessite l'application installée et un compte Google connecté.`; }
+                if (data.subscriptionStatus === "pending_payment") {
+                    infoDiv.innerHTML = "🟠 Paiement Llink en attente de confirmation par Think/CinetPay.";
+                } else if(data.isValid && data.isTrial) {
+                    infoDiv.innerHTML = "🟢 Période d'essai valide jusqu'au : " + new Date(data.expirationDate).toLocaleDateString();
+                } else if(data.isValid && data.plan) {
+                    infoDiv.innerHTML = "💎 Offre " + (planLabels[data.plan] || data.plan) + " active jusqu'au : " + new Date(data.expirationDate).toLocaleDateString();
+                } else {
+                    infoDiv.innerHTML = "Aucun abonnement actif. Choisis une offre pour débloquer les niveaux Llink.";
+                }
+                try {
+                    if (data.isValid && data.plan) localStorage.setItem("llink_plan", data.plan);
+                    else localStorage.removeItem("llink_plan");
+                } catch (_) {}
                 
                 updateOfflineUI();
             } catch(e) { console.error("checkSubscription error", e); }
@@ -1315,20 +1325,80 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
           document.querySelectorAll('.payment-provider').forEach(el => el.classList.toggle('is-selected', el === button));
         };
 
-        async function submitSubscription() {
-            if(!window.isLoggedIn) { alert("Vous devez être connecté pour vous abonner."); return; }
-            const txId = document.getElementById('transaction-id').value.trim();
-            if(!txId) return;
-            document.getElementById('subscription-info').innerText = "Vérification en cours...";
+        window.loadLlinkPlanCatalog = async () => {
+            if (!window.isLoggedIn) throw new Error("Connecte-toi avec Think pour consulter les tarifs.");
+            const res = await fetch(SERVER_URL + "/api/subscriptions/catalog", {
+                headers: await llinkAuthHeaders(), cache: "no-store"
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !Array.isArray(data.items)) throw new Error(data.detail || "Tarifs Llink indisponibles.");
+            return data.items;
+        };
+
+        window.startLlinkSubscriptionCheckout = async (plan, operator) => {
+            if (!window.isLoggedIn || !window.auth?.currentUser) {
+                alert("Connecte-toi avec ton compte Think avant de souscrire.");
+                return;
+            }
+            const user = window.auth.currentUser;
+            const tokenResult = await user.getIdTokenResult(true);
+            if (tokenResult.claims?.auth_source !== "think" || !tokenResult.claims?.think_user_id) {
+                alert("Les abonnements Llink nécessitent une connexion avec ton compte Think. Déconnecte-toi puis choisis « Se connecter avec Think ».");
+                return;
+            }
+            const methods = {
+                airtel: "AIRTEL_CD",
+                orange: "OM_CD",
+                africell: "AFRICELL_CD",
+                mpesa: "MPESA_CD"
+            };
+            const paymentMethod = methods[String(operator || "").toLowerCase()];
+            if (!paymentMethod) {
+                alert("Cet opérateur n'est pas encore pris en charge pour le paiement Llink en RDC.");
+                return;
+            }
+            const info = document.getElementById("subscription-info");
+            if (info) info.textContent = "Vérification du numéro Mobile Money…";
             try {
-                const res = await fetch(`${SERVER_URL}/api/verify-payment`, {
-                    method: 'POST', headers: await llinkAuthHeaders(true),
-                    body: JSON.stringify({ transactionId: txId, plan: window.selectedSubscriptionPlan, paymentMethod: window.selectedPaymentMethod, paymentProvider: window.selectedPaymentProvider })
+                const optionsResponse = await fetch(SERVER_URL + "/api/subscriptions/payment-options", {
+                    headers: await llinkAuthHeaders(), cache: "no-store"
                 });
-                const data = await res.json();
-                if(data.success) { alert("Paiement validé avec succès !"); await window.checkSubscription(); document.getElementById('transaction-id').value = ''; }
-                else alert("Erreur : ID de transaction invalide.");
-            } catch(e) { alert("Erreur réseau de validation."); }
+                const options = await optionsResponse.json().catch(() => ({}));
+                if (!optionsResponse.ok || !Array.isArray(options.items)) throw new Error(options.detail || "Impossible de charger les numéros enregistrés dans Think.");
+                const matching = options.items.filter(item => item.operator === paymentMethod);
+                if (!matching.length) {
+                    throw new Error("Aucun numéro " + operator + " n'est enregistré dans ton compte Think. Ajoute ce numéro dans Think, puis réessaie.");
+                }
+                const account = matching.find(item => item.is_default) || matching[0];
+                const checkoutId = (window.crypto && typeof window.crypto.randomUUID === "function")
+                    ? window.crypto.randomUUID()
+                    : "llink-" + Date.now() + "-" + Math.random().toString(36).slice(2, 12);
+                const response = await fetch(SERVER_URL + "/api/subscriptions/checkout", {
+                    method: "POST",
+                    headers: {
+                        ...(await llinkAuthHeaders(true)),
+                        "Idempotency-Key": checkoutId
+                    },
+                    body: JSON.stringify({
+                        plan: String(plan || "").toLowerCase(),
+                        payment_method: paymentMethod,
+                        mobile_money_account_id: account.id
+                    }),
+                    cache: "no-store"
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.payment_url) throw new Error(data.detail || "Think n'a pas pu créer le paiement.");
+                if (info) info.textContent = "Redirection vers CinetPay…";
+                window.location.assign(data.payment_url);
+            } catch (error) {
+                console.error("Checkout Llink via Think impossible:", error);
+                if (info) info.textContent = error?.message || "Impossible de démarrer le paiement.";
+                alert(error?.message || "Impossible de démarrer le paiement.");
+            }
+        };
+
+        async function submitSubscription() {
+            alert("Les paiements par référence saisie manuellement ne sont pas acceptés. Utilise le parcours de paiement sécurisé géré par Think.");
         }
 
         function createChatSyncId() {
