@@ -124,3 +124,34 @@ def get_think_mobile_money_accounts(think_user_id: int) -> list[dict[str, Any]]:
     return [item for item in items if isinstance(item, dict)]
 
 
+
+
+
+def get_think_plan_catalog() -> dict[str, Any]:
+    """Lit les tarifs CDF configurés dans Think ; Llink ne maintient aucun prix de référence."""
+    settings = get_settings()
+    try:
+        response = httpx.get(
+            f"{settings.think_api_base_url}/api/llink/plans",
+            headers=_think_headers(),
+            timeout=8.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Le catalogue des abonnements Think est temporairement indisponible.",
+        ) from exc
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=503 if response.status_code >= 500 else response.status_code,
+            detail=payload.get("detail") or "Impossible de charger les tarifs Llink.",
+        )
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        raise HTTPException(status_code=502, detail="Catalogue Llink retourné par Think invalide.")
+    return payload
+
+
