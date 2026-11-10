@@ -994,11 +994,20 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         const provider = new GoogleAuthProvider();
         window.auth = auth;
 
+        window.closeAuthChoice = () => {
+            const modal = document.getElementById("auth-choice-modal");
+            if (modal) { modal.classList.add("hidden"); modal.classList.remove("flex"); }
+        };
         window.handleAuth = async () => {
             if (window.isLoggedIn) {
                 try { await signOut(auth); } catch (e) { console.error("Erreur déconnexion:", e); }
                 return;
             }
+            const modal = document.getElementById("auth-choice-modal");
+            if (modal) { modal.classList.remove("hidden"); modal.classList.add("flex"); }
+            if (window.lucide) window.lucide.createIcons();
+        };
+        window.handleGoogleAuth = async () => {
             if (window.LLINK_PLATFORM?.isTauri && !window.LLINK_PLATFORM?.isCapacitor) {
                 try {
                     const invoke = window.__TAURI__?.core?.invoke;
@@ -1009,18 +1018,64 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                         headers: { "Authorization": "Bearer " + browserIdToken }
                     });
                     const exchange = await exchangeResponse.json().catch(() => ({}));
-                    if (!exchangeResponse.ok || !exchange.customToken) {
-                        throw new Error(exchange.detail || "Le serveur n'a pas pu finaliser la connexion.");
-                    }
+                    if (!exchangeResponse.ok || !exchange.customToken) throw new Error(exchange.detail || "Le serveur n'a pas pu finaliser la connexion.");
                     await signInWithCustomToken(auth, exchange.customToken);
+                    window.closeAuthChoice();
                 } catch (e) {
                     console.error("Erreur Auth Google Tauri:", e);
                     alert(e?.message || "La connexion Google n'a pas abouti.");
                 }
                 return;
             }
-            try { await signInWithPopup(auth, provider); }
-            catch (e) { console.error("Erreur Auth:", e); }
+            try { await signInWithPopup(auth, provider); window.closeAuthChoice(); }
+            catch (e) { console.error("Erreur Auth:", e); alert(e?.message || "La connexion Google n'a pas abouti."); }
+        };
+        window.loginWithThink = async () => {
+            const email = document.getElementById("think-login-email")?.value?.trim() || "";
+            const password = document.getElementById("think-login-password")?.value || "";
+            const errorBox = document.getElementById("think-login-error");
+            const button = document.getElementById("think-login-submit");
+            if (errorBox) { errorBox.textContent = ""; errorBox.classList.add("hidden"); }
+            if (!email || !password) {
+                if (errorBox) { errorBox.textContent = "Saisis ton adresse e-mail et ton mot de passe Think."; errorBox.classList.remove("hidden"); }
+                return;
+            }
+            if (button) { button.disabled = true; button.textContent = "Connexion sécurisée…"; }
+            try {
+                const thinkBase = "https://think-crypt-entreprise.onrender.com";
+                const loginResponse = await fetch(thinkBase + "/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                    body: JSON.stringify({ email: email, password: password }),
+                    cache: "no-store"
+                });
+                const login = await loginResponse.json().catch(() => ({}));
+                if (!loginResponse.ok || !login.access_token) throw new Error(login.detail || "Identifiants Think incorrects.");
+                const ssoResponse = await fetch(thinkBase + "/api/auth/llink/exchange", {
+                    method: "POST",
+                    headers: { "Authorization": "Bearer " + login.access_token, "Accept": "application/json" },
+                    cache: "no-store"
+                });
+                const sso = await ssoResponse.json().catch(() => ({}));
+                if (!ssoResponse.ok || !sso.sso_token) throw new Error(sso.detail || "Think n'a pas pu autoriser la connexion Llink.");
+                const exchangeResponse = await fetch((window.LLINK_SERVER_URL || "https://llink-usz9.onrender.com") + "/api/auth/think-exchange", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                    body: JSON.stringify({ sso_token: sso.sso_token }),
+                    cache: "no-store"
+                });
+                const exchange = await exchangeResponse.json().catch(() => ({}));
+                if (!exchangeResponse.ok || !exchange.customToken) throw new Error(exchange.detail || "Llink n'a pas pu finaliser la session Think.");
+                await signInWithCustomToken(auth, exchange.customToken);
+                window.closeAuthChoice();
+                const passwordInput = document.getElementById("think-login-password");
+                if (passwordInput) passwordInput.value = "";
+            } catch (e) {
+                console.error("Connexion Think-Llink impossible:", e);
+                if (errorBox) { errorBox.textContent = e?.message || "Connexion impossible. Réessaie."; errorBox.classList.remove("hidden"); }
+            } finally {
+                if (button) { button.disabled = false; button.textContent = "Se connecter avec Think"; }
+            }
         };
 
         onAuthStateChanged(auth, async (user) => {
@@ -1064,7 +1119,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
                 window.authToken = await user.getIdToken(); 
                 window.uid = user.uid;
-                if (authBtn) authBtn.innerHTML = `<img src="${user.photoURL}" alt="User" class="w-full h-full object-cover rounded-full">`;
+                if (authBtn) authBtn.innerHTML = user.photoURL ? `<img src="${user.photoURL}" alt="User" class="w-full h-full object-cover rounded-full">` : `<i data-lucide="user-round" class="w-[1.25rem] h-[1.25rem]"></i>`;
                 
                 try {
                     if (typeof window.checkSubscription === "function") await window.checkSubscription();
