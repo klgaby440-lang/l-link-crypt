@@ -155,3 +155,39 @@ def get_think_plan_catalog() -> dict[str, Any]:
     return payload
 
 
+
+
+
+def refresh_think_subscription_payment(
+    *,
+    think_user_id: int,
+    public_id: str,
+) -> dict[str, Any]:
+    """Demande à Think de revérifier auprès de CinetPay le paiement Llink identifié."""
+    settings = get_settings()
+    try:
+        response = httpx.post(
+            f"{settings.think_api_base_url}/api/internal/llink/users/{int(think_user_id)}/payments/{public_id}/refresh",
+            headers=_think_headers(),
+            timeout=35.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Impossible de vérifier le paiement Llink auprès de Think.",
+        ) from exc
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.status_code < 200 or response.status_code >= 300:
+        status_code = response.status_code if 400 <= response.status_code < 500 else 503
+        raise HTTPException(
+            status_code=status_code,
+            detail=payload.get("detail") or "Think n'a pas pu vérifier ce paiement Llink.",
+        )
+    if not isinstance(payload, dict) or payload.get("public_id") != public_id:
+        raise HTTPException(status_code=502, detail="Réponse de vérification Think invalide.")
+    return payload
+
+
