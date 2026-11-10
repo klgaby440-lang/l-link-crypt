@@ -90,3 +90,35 @@ def create_think_subscription_checkout(
     if not isinstance(payload, dict) or not payload.get("public_id"):
         raise HTTPException(status_code=502, detail="Think a retourné une réponse de paiement incomplète.")
     return payload
+
+
+
+def get_think_mobile_money_accounts(think_user_id: int) -> list[dict[str, Any]]:
+    """Renvoie uniquement les numéros masqués déjà enregistrés dans Think."""
+    settings = get_settings()
+    try:
+        response = httpx.get(
+            f"{settings.think_api_base_url}/api/internal/llink/users/{int(think_user_id)}/mobile-money-accounts",
+            headers=_think_headers(),
+            timeout=8.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Impossible de charger les numéros Mobile Money de Think.",
+        ) from exc
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=503 if response.status_code >= 500 else response.status_code,
+            detail=payload.get("detail") or "Impossible de charger les numéros Mobile Money.",
+        )
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        raise HTTPException(status_code=502, detail="Réponse des numéros Think invalide.")
+    return [item for item in items if isinstance(item, dict)]
+
+
