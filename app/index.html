@@ -2925,7 +2925,7 @@ function render(){if(S.step===5){try{parent.localStorage.setItem(&quot;llink_pla
  if(s===2||s===21)chk();
 }
 function chk(){const b=$(&quot;#nx&quot;);if(!b)return;const f=S.f,m=S.method;
- b.disabled=!(m===&quot;mobile&quot;?S.op!==null:false)
+ b.disabled=!(m===&quot;mobile&quot;?S.op!==null:false)}
 function fmt(e){const B=br();const v=e.value.replace(/\D/g,&quot;&quot;).slice(0,B.len);e.value=B.amex?v.replace(/^(\d{0,4})(\d{0,6})(\d{0,5}).*/,(m,a,b,c)=&gt;[a,b,c].filter(Boolean).join(&quot; &quot;)):v.replace(/(.{4})(?=.)/g,&quot;$1 &quot;);S.f.num=e.value;$(&quot;#pn&quot;).textContent=mask(v,B);chk()}
 function ex(e){let v=e.value.replace(/\D/g,&quot;&quot;).slice(0,4);if(v.length&gt;2)v=v.slice(0,2)+&quot;/&quot;+v.slice(2);e.value=v;S.f.ex=v;$(&quot;#pe&quot;).textContent=v||&quot;MM/AA&quot;;chk()}
 function pay(){
