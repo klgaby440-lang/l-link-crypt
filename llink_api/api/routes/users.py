@@ -59,6 +59,62 @@ async def exchange_desktop_firebase_token(
         ) from exc
 
 
+@router.post("/api/auth/think-exchange")
+async def exchange_think_sso_for_firebase(
+    payload: ThinkExchangeRequest,
+    request: Request,
+    db: Any | None = Depends(get_db),
+):
+    """Convertit une identité Think vérifiée en session Firebase propre à Llink."""
+    await enforce_endpoint_quota(
+        request=request, user={"uid": "anonymous"}, db=db, scope="auth_think_exchange"
+    )
+    settings = get_settings()
+    if len(settings.think_sso_secret) < 32:
+        raise HTTPException(status_code=503, detail="La connexion commune Think-Llink n’est pas configurée.")
+    try:
+        claims = jwt.decode(
+            payload.sso_token, settings.think_sso_secret, algorithms=["HS256"],
+            issuer="think-api", audience="llink-api",
+            options={"require": ["sub", "think_id", "email", "iat", "exp", "jti", "scope"]},
+        )
+        if claims.get("scope") != "llink":
+            raise jwt.InvalidTokenError("scope invalide")
+        think_user_id = int(claims["sub"])
+        think_id = str(claims["think_id"]).strip()
+        email = str(claims["email"]).strip().lower()
+        full_name = str(claims.get("name") or "").strip()
+        if think_user_id <= 0 or not think_id.startswith("THK-") or "@" not in email:
+            raise jwt.InvalidTokenError("identité Think invalide")
+    except (jwt.PyJWTError, KeyError, TypeError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="La session Think est invalide ou expirée. Reconnecte-toi à Think.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
+
+    # UID dédié : ne jamais fusionner deux comptes par simple égalité d’adresse e-mail.
+    firebase_uid = "think_" + think_id.lower()
+    try:
+        custom_token = firebase_auth.create_custom_token(
+            firebase_uid,
+            developer_claims={
+                "auth_source": "think", "think_user_id": think_user_id,
+                "think_id": think_id, "think_email": email, "think_name": full_name,
+            },
+        )
+        if isinstance(custom_token, bytes):
+            custom_token = custom_token.decode("utf-8")
+        if not isinstance(custom_token, str) or not custom_token:
+            raise ValueError("Firebase Admin a retourné un custom token vide.")
+        return {
+            "customToken": custom_token,
+            "user": {"uid": firebase_uid, "think_id": think_id, "email": email, "full_name": full_name},
+        }
+    except Exception as exc:
+        logger.exception("Échec de création de session Firebase pour un compte Think.")
+        raise HTTPException(status_code=503, detail="Impossible de finaliser la connexion Think sur Llink.") from exc
+
 @router.get("/api/user/status", response_model=UserStatusResponse, response_model_exclude_unset=True)
 async def check_status(
     request: Request,
