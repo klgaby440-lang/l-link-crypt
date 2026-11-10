@@ -15,6 +15,7 @@ from llink_api.config import get_settings
 from llink_api.database import get_db
 from llink_api.schemas import (
     LlinkSubscriptionCheckoutRequest,
+    LlinkSubscriptionRefreshRequest,
     PaymentVerifyResponse,
     ThinkExchangeRequest,
     UserStatusResponse,
@@ -26,6 +27,7 @@ from llink_api.services.think_billing import (
     create_think_subscription_checkout,
     get_think_mobile_money_accounts,
     get_think_plan_catalog,
+    refresh_think_subscription_payment,
     get_think_subscription,
 )
 
@@ -274,6 +276,24 @@ async def get_llink_payment_options(
         raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour utiliser tes numéros enregistrés.")
     items = await asyncio.to_thread(get_think_mobile_money_accounts, int(user["think_user_id"]))
     return {"items": items}
+
+@router.post("/api/subscriptions/refresh")
+async def refresh_llink_subscription_payment(
+    payload: LlinkSubscriptionRefreshRequest,
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
+):
+    await enforce_endpoint_quota(
+        request=request, user=user, db=get_db(), scope="subscription_checkout"
+    )
+    if user.get("auth_source") != "think" or not user.get("think_user_id"):
+        raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour vérifier le paiement.")
+    result = await asyncio.to_thread(
+        refresh_think_subscription_payment,
+        think_user_id=int(user["think_user_id"]),
+        public_id=payload.public_id,
+    )
+    return {"product": "llink", **result}
 
 @router.post("/api/subscriptions/checkout")
 async def create_llink_subscription_checkout(
