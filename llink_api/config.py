@@ -88,6 +88,9 @@ class Settings:
     provider_timeout_seconds: int
     ai_max_concurrent: int
     ai_queue_timeout_seconds: int
+    think_api_base_url: str
+    think_service_token: str
+    think_sso_secret: str
 
 
 def get_settings() -> Settings:
@@ -135,4 +138,7 @@ def get_settings() -> Settings:
         provider_timeout_seconds=_int_env("PROVIDER_TIMEOUT_SECONDS", 60),
         ai_max_concurrent=_int_env("AI_MAX_CONCURRENT", 4),
         ai_queue_timeout_seconds=_int_env("AI_QUEUE_TIMEOUT_SECONDS", 3),
+        think_api_base_url=os.getenv("THINK_API_BASE_URL", "https://think-crypt-entreprise.onrender.com").strip().rstrip("/"),
+        think_service_token=os.getenv("THINK_SERVICE_TOKEN", "").strip(),
+        think_sso_secret=os.getenv("THINK_SSO_SECRET", "").strip(),
     )
