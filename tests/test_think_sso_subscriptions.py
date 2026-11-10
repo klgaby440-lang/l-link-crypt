@@ -95,15 +95,6 @@ def test_think_user_status_uses_think_subscription(monkeypatch):
             "level": "auren",
         },
     )
-    monkeypatch.setattr(
-        users,
-        "get_optional_user",
-        lambda: {
-            "uid": "think_thk-0123456789ab",
-            "auth_source": "think",
-            "think_user_id": 42,
-        },
-    )
     main.app.dependency_overrides[users.get_optional_user] = lambda: {
         "uid": "think_thk-0123456789ab",
         "auth_source": "think",
