@@ -1,23 +1,31 @@
-"""Routes de compte, état d'abonnement et validation de paiement."""
+"""Routes de compte, état d’abonnement et validation de paiement."""
 
+import asyncio
 import logging
-
-from firebase_admin import auth as firebase_auth
-
-from firebase_admin import auth as firebase_auth
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import jwt
+from firebase_admin import auth as firebase_auth
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
+from llink_api.config import get_settings
 from llink_api.database import get_db
 from llink_api.schemas import (
+    LlinkSubscriptionCheckoutRequest,
     PaymentVerifyResponse,
+    ThinkExchangeRequest,
     UserStatusResponse,
     VerifyPaymentRequest,
 )
 from llink_api.security import get_optional_user, require_authenticated_user
 from llink_api.services.security_limits import enforce_endpoint_quota
+from llink_api.services.think_billing import (
+    create_think_subscription_checkout,
+    get_think_mobile_money_accounts,
+    get_think_plan_catalog,
+    get_think_subscription,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
