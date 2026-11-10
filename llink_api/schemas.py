@@ -21,6 +21,7 @@ class LlinkSubscriptionCheckoutRequest(BaseModel):
     """Formule Llink ; le prix est toujours calculé par Think."""
     plan: Literal["bronze", "silver", "gold", "diamant"]
     payment_method: Literal["AIRTEL_CD", "OM_CD", "MPESA_CD", "AFRICELL_CD"]
+    mobile_money_account_id: int | None = Field(default=None, gt=0)
 
 
 class VerifyPaymentRequest(BaseModel):
