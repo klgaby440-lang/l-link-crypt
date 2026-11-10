@@ -204,6 +204,18 @@ async def get_llink_subscription_status(
     return {"product": "llink", **result}
 
 
+@router.get("/api/subscriptions/catalog")
+async def get_llink_subscription_catalog(
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
+):
+    await enforce_endpoint_quota(
+        request=request, user=user, db=get_db(), scope="subscription_status"
+    )
+    if user.get("auth_source") != "think" or not user.get("think_user_id"):
+        raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour consulter les offres.")
+    return await asyncio.to_thread(get_think_plan_catalog)
+
 @router.get("/api/subscriptions/payment-options")
 async def get_llink_payment_options(
     request: Request,
