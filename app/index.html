@@ -864,6 +864,26 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         </div>
     </div>
 
+    <div id="auth-choice-modal" class="fixed inset-0 bg-black/65 backdrop-blur-sm hidden items-center justify-center p-4 z-[5000]" role="dialog" aria-modal="true" aria-labelledby="auth-choice-title">
+      <div class="w-full max-w-[25rem] rounded-3xl p-5 shadow-2xl bg-campagne-light dark:bg-campagne-dark border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between mb-3">
+          <div><h2 id="auth-choice-title" class="text-xl font-extrabold">Connexion à Llink</h2><p class="text-xs text-gray-500 mt-1">Un compte CRYPT pour Think et Llink.</p></div>
+          <button type="button" onclick="closeAuthChoice()" class="p-2 rounded-full bg-surface-light dark:bg-surface-dark" aria-label="Fermer"><i data-lucide="x"></i></button>
+        </div>
+        <form id="think-login-form" onsubmit="event.preventDefault();loginWithThink()" class="grid gap-3">
+          <label class="text-xs font-bold">Adresse e-mail Think</label>
+          <input id="think-login-email" type="email" autocomplete="username" required maxlength="320" placeholder="nom@exemple.com" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent outline-none">
+          <label class="text-xs font-bold">Mot de passe Think</label>
+          <input id="think-login-password" type="password" autocomplete="current-password" required maxlength="256" placeholder="Mot de passe" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent outline-none">
+          <p id="think-login-error" class="hidden text-sm text-red-600" role="alert"></p>
+          <button id="think-login-submit" type="submit" class="w-full p-3 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900 font-extrabold">Se connecter avec Think</button>
+        </form>
+        <div class="flex items-center gap-3 my-4"><span class="h-px bg-gray-300 dark:bg-gray-700 flex-1"></span><span class="text-xs text-gray-500">ou</span><span class="h-px bg-gray-300 dark:bg-gray-700 flex-1"></span></div>
+        <button type="button" onclick="handleGoogleAuth()" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 font-bold">Continuer avec Google</button>
+        <p class="text-xs text-gray-500 text-center mt-4">Pas encore de compte Think ? <a href="https://think-crypt-entre.vercel.app/app" target="_blank" rel="noopener noreferrer" class="underline font-bold">Créer un compte Think</a>.</p>
+      </div>
+    </div>
+
     <section id="library-hub" class="hub-overlay" aria-label="Bibliothèque Llink">
       <header class="hub-top"><button class="hub-back" onclick="closeHub('library-hub')" aria-label="Retour"><i data-lucide="arrow-left"></i></button><div class="hub-title">Bibliothèque<div class="hub-subtitle">Tout ce que tu conserves dans Llink</div></div><button class="hub-action" onclick="toggleLibraryMenu()" aria-label="Options"><i data-lucide="ellipsis-vertical"></i></button></header>
       <div class="hub-content"><nav class="hub-tabs" aria-label="Sections bibliothèque"><button class="hub-chip active" data-library-tab="Suggérés" onclick="setLibraryTab(this)">Suggérés</button><button class="hub-chip" data-library-tab="Favoris" onclick="setLibraryTab(this)">Favoris</button><button class="hub-chip" data-library-tab="Dossiers" onclick="setLibraryTab(this)">Dossiers</button><button class="hub-chip" data-library-tab="Images" onclick="setLibraryTab(this)">Images</button></nav>
