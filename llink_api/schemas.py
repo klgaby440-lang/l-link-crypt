@@ -12,6 +12,17 @@ class AccountDeletionRequest(BaseModel):
     confirmation: Literal["SUPPRIMER MON COMPTE"]
 
 
+class ThinkExchangeRequest(BaseModel):
+    """Jeton SSO signé par Think après une authentification valide."""
+    sso_token: str = Field(min_length=80, max_length=8192)
+
+
+class LlinkSubscriptionCheckoutRequest(BaseModel):
+    """Formule Llink ; le prix est toujours calculé par Think."""
+    plan: Literal["bronze", "silver", "gold", "diamant"]
+    payment_method: Literal["AIRTEL_CD", "OM_CD", "MPESA_CD", "AFRICELL_CD"]
+
+
 class VerifyPaymentRequest(BaseModel):
     transactionId: str = Field(min_length=1, max_length=180)
 
@@ -164,6 +175,8 @@ class UserStatusResponse(BaseModel):
     isTrial: bool | None = None
     expirationDate: float | None = None
     isNewUser: bool
+    plan: str | None = None
+    subscriptionStatus: str | None = None
 
 
 class ChatSyncPayload(BaseModel):
