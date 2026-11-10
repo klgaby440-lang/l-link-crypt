@@ -2828,11 +2828,11 @@ ol.st{padding-left:20px;margin:6px 0 10px;font-size:14px;line-height:1.55}.ref{f
 @keyframes dshine{from{background-position:150% 0}to{background-position:-50% 0}}
 &lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;div id=&quot;app&quot;&gt;&lt;/div&gt;
 &lt;script&gt;
-const T={bronze:{n:&quot;Bronze&quot;,p:30,f:[&quot;Débloque Llink SATORI&quot;,&quot;Support par e‑mail&quot;,&quot;Facturation annuelle&quot;]},
-silver:{n:&quot;Silver&quot;,p:80,f:[&quot;Débloque jusqu’à NOETRA&quot;,&quot;Support prioritaire 24h&quot;,&quot;Rapports et exports&quot;]},
-gold:{n:&quot;Gold&quot;,p:150,f:[&quot;Débloque jusqu’à AUREN&quot;,&quot;Gestionnaire dédié 24/7&quot;,&quot;SLA 99,99 % et API complète&quot;]},
-diamant:{n:&quot;Diamant&quot;,p:250,f:[&quot;Débloque tous les niveaux, jusqu’à OMNIS&quot;,&quot;Gestionnaire dédié 24/7&quot;,&quot;Accès prioritaire et API complète&quot;]}};
-const M={mobile:{n:&quot;Mobile Money&quot;,i:&quot;📱&quot;,d:&quot;Airtel, Orange, Africell, M‑Pesa, Vodacom…&quot;,fee:.015},bank:{n:&quot;Virement bancaire&quot;,i:&quot;🏦&quot;,d:&quot;Sans frais · 1 à 2 jours&quot;,fee:0},card:{n:&quot;Carte bancaire&quot;,i:&quot;💳&quot;,d:&quot;Visa, Mastercard, Amex, UnionPay… · instantané&quot;,fee:.029}};
+const T={bronze:{n:&quot;Bronze&quot;,p:0,f:[&quot;Débloque Llink SATORI&quot;,&quot;Support par e‑mail&quot;,&quot;Facturation annuelle&quot;]},
+silver:{n:&quot;Silver&quot;,p:0,f:[&quot;Débloque jusqu’à NOETRA&quot;,&quot;Support prioritaire 24h&quot;,&quot;Rapports et exports&quot;]},
+gold:{n:&quot;Gold&quot;,p:0,f:[&quot;Débloque jusqu’à AUREN&quot;,&quot;Gestionnaire dédié 24/7&quot;,&quot;SLA 99,99 % et API complète&quot;]},
+diamant:{n:&quot;Diamant&quot;,p:0,f:[&quot;Débloque tous les niveaux, jusqu’à OMNIS&quot;,&quot;Gestionnaire dédié 24/7&quot;,&quot;Accès prioritaire et API complète&quot;]}};
+const M={mobile:{n:&quot;Mobile Money&quot;,i:&quot;📱&quot;,d:&quot;Airtel Money, Orange Money, Africell Money et M-Pesa&quot;,fee:0}};
 const W=(b,c)=&gt;`&lt;svg viewBox=&quot;0 0 64 40&quot; aria-hidden=&quot;true&quot;&gt;&lt;rect width=&quot;64&quot; height=&quot;40&quot; fill=&quot;${b}&quot;/&gt;${c}&lt;/svg&gt;`;
 const tx=(t,x,y,z,f,w)=&gt;`&lt;text x=&quot;${x}&quot; y=&quot;${y}&quot; font-size=&quot;${z}&quot; font-weight=&quot;${w||800}&quot; fill=&quot;${f}&quot; text-anchor=&quot;middle&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot;&gt;${t}&lt;/text&gt;`;
 const LG={
@@ -2860,7 +2860,7 @@ disc:W(&#x27;#fff&#x27;,tx(&#x27;DISCOVER&#x27;,26,25,8,&#x27;#231f20&#x27;,900)
 jcb:W(&#x27;#fff&#x27;,&#x27;&lt;rect x=&quot;9&quot; y=&quot;6&quot; width=&quot;14&quot; height=&quot;28&quot; rx=&quot;4&quot; fill=&quot;#0e4c96&quot;/&gt;&lt;rect x=&quot;25&quot; y=&quot;6&quot; width=&quot;14&quot; height=&quot;28&quot; rx=&quot;4&quot; fill=&quot;#c4122f&quot;/&gt;&lt;rect x=&quot;41&quot; y=&quot;6&quot; width=&quot;14&quot; height=&quot;28&quot; rx=&quot;4&quot; fill=&quot;#1ba54f&quot;/&gt;&#x27;+tx(&#x27;J&#x27;,16,26,15,&#x27;#fff&#x27;,900)+tx(&#x27;C&#x27;,32,26,15,&#x27;#fff&#x27;,900)+tx(&#x27;B&#x27;,48,26,15,&#x27;#fff&#x27;,900)),
 mae:W(&#x27;#fff&#x27;,&#x27;&lt;circle cx=&quot;25&quot; cy=&quot;16&quot; r=&quot;10&quot; fill=&quot;#eb001b&quot;/&gt;&lt;circle cx=&quot;39&quot; cy=&quot;16&quot; r=&quot;10&quot; fill=&quot;#00a2e5&quot;/&gt;&lt;path d=&quot;M32 7.5a10 10 0 0 1 0 17 10 10 0 0 1 0-17z&quot; fill=&quot;#6c6bbd&quot;/&gt;&#x27;+tx(&#x27;maestro&#x27;,32,37,7.5,&#x27;#222&#x27;,700))
 };
-const OPS=[[&quot;Airtel Money&quot;,&quot;airtel&quot;],[&quot;Orange Money&quot;,&quot;orange&quot;],[&quot;Africell Money&quot;,&quot;africell&quot;],[&quot;M‑Pesa&quot;,&quot;mpesa&quot;],[&quot;Vodacom&quot;,&quot;vodacom&quot;],[&quot;MTN MoMo&quot;,&quot;mtn&quot;],[&quot;Wave&quot;,&quot;wave&quot;],[&quot;Moov Money&quot;,&quot;moov&quot;]];
+const OPS=[[&quot;Airtel Money&quot;,&quot;airtel&quot;],[&quot;Orange Money&quot;,&quot;orange&quot;],[&quot;Africell Money&quot;,&quot;africell&quot;],[&quot;M‑Pesa&quot;,&quot;mpesa&quot;]];
 const BANKS=[[&quot;Rawbank&quot;,&quot;rawbank&quot;],[&quot;Equity Bank&quot;,&quot;equity&quot;],[&quot;Ecobank&quot;,&quot;ecobank&quot;],[&quot;Afriland First Bank&quot;,&quot;afriland&quot;],[&quot;UBA&quot;,&quot;uba&quot;],[&quot;Standard Bank&quot;,&quot;standard&quot;],[&quot;BNP Paribas&quot;,&quot;bnp&quot;],[&quot;Société Générale&quot;,&quot;sg&quot;]];
 const BR=[{n:&quot;Visa&quot;,k:&quot;visa&quot;,len:16,bg:&quot;radial-gradient(circle at 90% 8%,rgba(255,255,255,.22),transparent 40%),linear-gradient(135deg,#2a3bd0,#1a1f71 55%,#0b0f45)&quot;,fg:&quot;#fff&quot;},
 {n:&quot;Mastercard&quot;,k:&quot;mc&quot;,len:16,bg:&quot;radial-gradient(circle at 88% 10%,rgba(247,158,27,.42),transparent 42%),linear-gradient(135deg,#34343a,#0c0c0e)&quot;,fg:&quot;#fff&quot;},
@@ -2875,7 +2875,7 @@ const mask=(v,B)=&gt;{B=B||br();const s=(v+&quot;•&quot;.repeat(B.len)).slice(
 const keys=[&quot;bronze&quot;,&quot;silver&quot;,&quot;gold&quot;,&quot;diamant&quot;],$=s=&gt;document.querySelector(s),A=$(&quot;#app&quot;);
 const nref=()=&gt;&quot;INV-&quot;+Math.random().toString(36).slice(2,8).toUpperCase();
 let S={step:0,tier:&quot;gold&quot;,method:null,op:null,bank:null,f:{},ref:nref()};
-const money=n=&gt;n.toLocaleString(&quot;fr-FR&quot;,{minimumFractionDigits:2,maximumFractionDigits:2})+&quot; €&quot;;
+const money=n=&gt;n.toLocaleString(&quot;fr-FR&quot;,{minimumFractionDigits:2,maximumFractionDigits:2})+&quot; CDF&quot;;
 const fee=()=&gt;+(T[S.tier].p*M[S.method].fee).toFixed(2),total=()=&gt;T[S.tier].p+fee();
 const go=n=&gt;{S.step=n;render()};
 const prev=()=&gt;({1:0,2:1,21:2,3:S.method===&quot;card&quot;?21:2})[S.step];
@@ -2890,14 +2890,14 @@ function carInit(){const c=$(&quot;#car&quot;);if(!c)return;const sl=[...c.query
 function render(){if(S.step===5){try{parent.localStorage.setItem(&quot;llink_plan&quot;,S.tier);if(parent.llThink)parent.llThink.refresh()}catch(e){}}
  const s=S.step,t=T[S.tier],m=S.method;
  if(s===0){A.innerHTML=`&lt;h1&gt;Choisissez votre offre&lt;/h1&gt;&lt;p class=&quot;s&quot;&gt;Abonnement annuel pour votre entreprise.&lt;/p&gt;
-  ${keys.map(k=&gt;`&lt;button class=&quot;tier ${k===S.tier?&quot;sel&quot;:&quot;&quot;}&quot; onclick=&quot;S.tier=&#x27;${k}&#x27;;render()&quot;&gt;&lt;span class=&quot;sw ${k}&quot;&gt;&lt;/span&gt;&lt;span class=&quot;tn&quot;&gt;&lt;b&gt;${T[k].n}&lt;/b&gt;&lt;small&gt;${T[k].f[0]}&lt;/small&gt;&lt;/span&gt;&lt;span class=&quot;tp&quot;&gt;&lt;b&gt;${T[k].p} €&lt;/b&gt;&lt;small&gt;/ an&lt;/small&gt;&lt;/span&gt;&lt;/button&gt;`).join(&quot;&quot;)}
-  &lt;ul class=&quot;f&quot;&gt;${t.f.slice(1).map(x=&gt;`&lt;li&gt;${x}&lt;/li&gt;`).join(&quot;&quot;)}&lt;/ul&gt;&lt;button class=&quot;btn&quot; onclick=&quot;go(1)&quot;&gt;Payer ${money(t.p)}&lt;/button&gt;`}
+  ${keys.map(k=&gt;`&lt;button class=&quot;tier ${k===S.tier?&quot;sel&quot;:&quot;&quot;}&quot; onclick=&quot;S.tier=&#x27;${k}&#x27;;render()&quot;&gt;&lt;span class=&quot;sw ${k}&quot;&gt;&lt;/span&gt;&lt;span class=&quot;tn&quot;&gt;&lt;b&gt;${T[k].n}&lt;/b&gt;&lt;small&gt;${T[k].f[0]}&lt;/small&gt;&lt;/span&gt;&lt;span class=&quot;tp&quot;&gt;&lt;b&gt;${T[k].p?money(T[k].p):&quot;Tarif indisponible&quot;}&lt;/b&gt;&lt;small&gt;/ an&lt;/small&gt;&lt;/span&gt;&lt;/button&gt;`).join(&quot;&quot;)}
+  &lt;ul class=&quot;f&quot;&gt;${t.f.slice(1).map(x=&gt;`&lt;li&gt;${x}&lt;/li&gt;`).join(&quot;&quot;)}&lt;/ul&gt;&lt;button class=&quot;btn&quot; ${t.p&gt;0?&quot;&quot;:&quot;disabled&quot;} onclick=&quot;go(1)&quot;&gt;Continuer vers le paiement sécurisé&lt;/button&gt;`}
  if(s===1)A.innerHTML=`${back()}&lt;h1&gt;Mode de paiement&lt;/h1&gt;&lt;p class=&quot;s&quot;&gt;Offre ${t.n} · ${money(t.p)}&lt;/p&gt;
   ${Object.keys(M).map(k=&gt;`&lt;button class=&quot;opt ${m===k?&quot;sel&quot;:&quot;&quot;}&quot; onclick=&quot;S.method=&#x27;${k}&#x27;;render()&quot;&gt;&lt;span class=&quot;ic&quot;&gt;${M[k].i}&lt;/span&gt;&lt;span&gt;&lt;b&gt;${M[k].n}&lt;/b&gt;&lt;small&gt;${M[k].d}&lt;/small&gt;&lt;/span&gt;&lt;/button&gt;`).join(&quot;&quot;)}
   &lt;button class=&quot;btn&quot; ${m?&quot;&quot;:&quot;disabled&quot;} onclick=&quot;go(2)&quot;&gt;Continuer&lt;/button&gt;`;
  if(s===2&amp;&amp;m===&quot;mobile&quot;)A.innerHTML=`${back()}&lt;h1&gt;Mobile Money&lt;/h1&gt;&lt;p class=&quot;s&quot;&gt;Choisissez votre opérateur.&lt;/p&gt;
   &lt;div class=&quot;grid&quot;&gt;${OPS.map((o,i)=&gt;`&lt;button class=&quot;opt ${S.op===i?&quot;sel&quot;:&quot;&quot;}&quot; onclick=&quot;S.op=${i};render()&quot;&gt;${lg(o)}${o[0]}&lt;/button&gt;`).join(&quot;&quot;)}&lt;/div&gt;
-  ${S.op!==null?`&lt;label&gt;Numéro ${OPS[S.op][0]}&lt;/label&gt;&lt;input inputmode=&quot;tel&quot; placeholder=&quot;+225 07 00 00 00 00&quot; value=&quot;${S.f.tel||&quot;&quot;}&quot; oninput=&quot;S.f.tel=this.value;chk()&quot;&gt;&lt;label&gt;Nom du compte&lt;/label&gt;&lt;input placeholder=&quot;Nom de l’entreprise&quot; value=&quot;${S.f.co||&quot;&quot;}&quot; oninput=&quot;S.f.co=this.value;chk()&quot;&gt;&lt;p class=&quot;note&quot;&gt;Une demande de confirmation sera envoyée sur ce numéro.&lt;/p&gt;`:&quot;&quot;}
+  ${S.op!==null?`&lt;p class=&quot;note&quot;&gt;Le paiement utilisera ton numéro ${OPS[S.op][0]} enregistré dans ton compte Think. Si tu ne l’as pas encore ajouté, ouvre Think et enregistre-le dans Mobile Money.&lt;/p&gt;`:&quot;&quot;}
   &lt;div style=&quot;height:16px&quot;&gt;&lt;/div&gt;&lt;button class=&quot;btn&quot; id=&quot;nx&quot; onclick=&quot;go(3)&quot;&gt;Continuer&lt;/button&gt;`;
  if(s===2&amp;&amp;m===&quot;bank&quot;){const b=S.bank!==null?BANKS[S.bank]:null;A.innerHTML=`${back()}&lt;h1&gt;Virement bancaire&lt;/h1&gt;&lt;p class=&quot;s&quot;&gt;Choisissez votre banque.&lt;/p&gt;
   ${BANKS.map((o,i)=&gt;`&lt;button class=&quot;opt ${S.bank===i?&quot;sel&quot;:&quot;&quot;}&quot; onclick=&quot;S.bank=${i};render()&quot;&gt;${lg(o)}&lt;b&gt;${o[0]}&lt;/b&gt;&lt;/button&gt;`).join(&quot;&quot;)}
@@ -2925,13 +2925,33 @@ function render(){if(S.step===5){try{parent.localStorage.setItem(&quot;llink_pla
  if(s===2||s===21)chk();
 }
 function chk(){const b=$(&quot;#nx&quot;);if(!b)return;const f=S.f,m=S.method;
- b.disabled=!(m===&quot;mobile&quot;?S.op!==null&amp;&amp;(f.tel||&quot;&quot;).replace(/\D/g,&quot;&quot;).length&gt;=8&amp;&amp;(f.co||&quot;&quot;).trim():m===&quot;bank&quot;?S.bank!==null&amp;&amp;(f.co||&quot;&quot;).trim().length&gt;1:(f.num||&quot;&quot;).replace(/\D/g,&quot;&quot;).length===br().len&amp;&amp;(f.nm||&quot;&quot;).trim()&amp;&amp;/^\d\d\/\d\d$/.test(f.ex||&quot;&quot;)&amp;&amp;(f.cv||&quot;&quot;).length&gt;=(br().amex?4:3))}
+ b.disabled=!(m===&quot;mobile&quot;?S.op!==null:false)
 function fmt(e){const B=br();const v=e.value.replace(/\D/g,&quot;&quot;).slice(0,B.len);e.value=B.amex?v.replace(/^(\d{0,4})(\d{0,6})(\d{0,5}).*/,(m,a,b,c)=&gt;[a,b,c].filter(Boolean).join(&quot; &quot;)):v.replace(/(.{4})(?=.)/g,&quot;$1 &quot;);S.f.num=e.value;$(&quot;#pn&quot;).textContent=mask(v,B);chk()}
 function ex(e){let v=e.value.replace(/\D/g,&quot;&quot;).slice(0,4);if(v.length&gt;2)v=v.slice(0,2)+&quot;/&quot;+v.slice(2);e.value=v;S.f.ex=v;$(&quot;#pe&quot;).textContent=v||&quot;MM/AA&quot;;chk()}
-function pay(){S.step=4;render();const tot=total(),d=2800,t0=performance.now();
- (function f(n){const k=Math.min(1,(n-t0)/d),e=1-Math.pow(1-k,2),v=tot*(1-e),c=$(&quot;#cn&quot;);if(!c)return;c.textContent=money(v);$(&quot;#br&quot;).style.transform=`scaleX(${1-k})`;if(k&lt;1)requestAnimationFrame(f);else setTimeout(()=&gt;go(5),400)})(t0)}
+function pay(){
+ if(S.method!=="mobile"||S.op===null){alert("Choisis un opérateur Mobile Money.");return;}
+ if(!parent||typeof parent.startLlinkSubscriptionCheckout!=="function"){alert("Le service d'abonnement Llink n'est pas disponible.");return;}
+ parent.startLlinkSubscriptionCheckout(S.tier,OPS[S.op][1]);
+}
 function resetSub(t){S={step:0,tier:(typeof t===&quot;string&quot;&amp;&amp;T[t])?t:&quot;gold&quot;,method:null,op:null,bank:null,brand:0,f:{},ref:nref()};render();window.scrollTo(0,0)}
+window.refreshPlanPrices=async function(){
+ try{
+  if(!parent||typeof parent.loadLlinkPlanCatalog!=="function")throw new Error("Connexion Think requise.");
+  const items=await parent.loadLlinkPlanCatalog();
+  let found=0;
+  items.forEach(item=>{if(T[item.plan]){const amount=Number(item.amount);if(Number.isFinite(amount)&&amount>0){T[item.plan].p=amount;found++;}}});
+  if(!found)throw new Error("Aucun tarif CDF Llink n'est configuré dans Think.");
+  render();
+  return true;
+ }catch(error){
+  keys.forEach(key=>{T[key].p=0;});
+  window.__llinkPlanPriceError=error?.message||"Tarifs indisponibles";
+  render();
+  return false;
+ }
+};
 render();
+window.refreshPlanPrices();
 &lt;/script&gt;&lt;/body&gt;&lt;/html&gt;
 "></iframe>
   </div>
