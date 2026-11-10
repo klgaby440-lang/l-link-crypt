@@ -2974,6 +2974,10 @@ window.refreshPlanPrices();
     resetSub(typeof tier==='string'?tier:undefined);
     w.style.display='flex';
     syncTheme();
+    try {
+      const child=document.getElementById('sub-frame')?.contentWindow;
+      if(child&&typeof child.refreshPlanPrices==='function') child.refreshPlanPrices();
+    } catch(e) { console.warn('Chargement des tarifs Llink indisponible:',e); }
     requestAnimationFrame(()=>w.classList.add('is-open'));
     if(window.lucide) lucide.createIcons();
   };
