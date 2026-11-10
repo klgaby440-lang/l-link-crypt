@@ -32,7 +32,7 @@ jobs:
         run: python -m compileall -q main.py llink_api tests
 
       - name: Test Think SSO and Llink subscription contracts
-        run: pytest -q tests/test_think_sso_subscriptions.py
+        run: PYTHONPATH=. pytest -q tests/test_think_sso_subscriptions.py
 
       - name: Validate inline JavaScript including subscription iframe
         run: |
