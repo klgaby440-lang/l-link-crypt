@@ -190,6 +190,44 @@ async def check_status(
     }
 
 
+@router.get("/api/subscriptions/status")
+async def get_llink_subscription_status(
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
+):
+    await enforce_endpoint_quota(
+        request=request, user=user, db=get_db(), scope="subscription_status"
+    )
+    if user.get("auth_source") != "think" or not user.get("think_user_id"):
+        raise HTTPException(status_code=403, detail="Les abonnements Llink sont gérés par le compte commun Think.")
+    result = await asyncio.to_thread(get_think_subscription, int(user["think_user_id"]))
+    return {"product": "llink", **result}
+
+
+@router.post("/api/subscriptions/checkout")
+async def create_llink_subscription_checkout(
+    payload: LlinkSubscriptionCheckoutRequest,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(require_authenticated_user),
+):
+    await enforce_endpoint_quota(
+        request=request, user=user, db=get_db(), scope="subscription_checkout"
+    )
+    if user.get("auth_source") != "think" or not user.get("think_user_id"):
+        raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour souscrire à Llink.")
+    checkout_id = (idempotency_key or "").strip()
+    if not 8 <= len(checkout_id) <= 64 or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in checkout_id):
+        raise HTTPException(status_code=422, detail="Clé d’idempotence de souscription invalide.")
+    result = await asyncio.to_thread(
+        create_think_subscription_checkout,
+        think_user_id=int(user["think_user_id"]),
+        plan=payload.plan,
+        payment_method=payload.payment_method,
+        checkout_id=checkout_id,
+    )
+    return result
+
 @router.post("/api/verify-payment", response_model=PaymentVerifyResponse)
 async def verify_payment(
     req: VerifyPaymentRequest,
