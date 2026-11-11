@@ -114,6 +114,25 @@ function finalEvent(answer, artifact = null, reasoningOverride = null) {
   return { type: "final", answer, reasoning, artifacts: artifact ? [artifact] : [] };
 }
 
+test("Work ouvre un accueil sans créer automatiquement une conversation et propose ses quatre espaces", async ({ page }) => {
+  await openWork(page);
+  await expect(page.locator(".work-home")).toBeVisible();
+  for (const label of ["Tâches", "Notes", "Concentration", "Explorer"]) {
+    await expect(page.locator(".work-home-card").filter({ hasText: label })).toBeVisible();
+  }
+  await expect(page.locator(".work-message")).toHaveCount(0);
+});
+
+test("L’aide Llink est embarquée localement et sa recherche filtre les rubriques", async ({ page }) => {
+  await openWork(page);
+  await page.locator('[data-act="home-help"]').click();
+  await expect(page).toHaveURL(/help\.html$/);
+  await expect(page.locator("h1")).toContainText("Comment pouvons-nous t’aider");
+  await page.locator("#help-search").fill("CinetPay");
+  await expect(page.locator("#credits")).toBeVisible();
+  await expect(page.locator("#offline")).toBeHidden();
+});
+
 test("Work crée et télécharge un fichier Markdown éditable par l'agent serveur", async ({ page }) => {
   await openWork(page);
   const text = "# Rapport CI\n\nContenu créé par le nouvel agent.";
@@ -437,8 +456,13 @@ test("Work affiche les vraies sources retournées par la recherche native", asyn
 
 test("Work permet de renommer et rouvrir une conversation", async ({ page }) => {
   await openWork(page);
+  // L'accueil Work ne crée volontairement aucune conversation automatiquement.
+  // Démarrer explicitement une session avant d'ouvrir le gestionnaire.
+  await page.locator('[data-act="home-chat"]').click();
+  await expect(page.locator("#work-prompt")).toBeVisible();
   await page.locator('[data-act="conversations"]').click();
-  await expect(page.locator(".work-manager-dialog")).toContainText("Espace Work");
+  await expect(page.locator(".work-manager-dialog")).toContainText("Conversations Work");
+  await expect(page.locator('.work-manager-row [data-act="rename-conversation"]')).toHaveCount(1);
   await page.locator('.work-manager-row [data-act="rename-conversation"]').first().click();
   await page.locator("#work-dialog-value").fill("Projet de test Work");
   await page.locator("#work-input-dialog button[type=submit]").click();

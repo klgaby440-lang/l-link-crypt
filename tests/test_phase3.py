@@ -43,78 +43,10 @@ def test_anonymous_entitlement_is_always_velora():
     assert resolve_entitled_level({"uid": "anonymous"}, None) == "velora"
 
 
-def test_legacy_pro_document_without_plan_fails_closed():
-    class Snapshot:
-        exists = True
-
-        def to_dict(self):
-            return {"isPro": True, "expirationDate": 4_000_000_000}
-
-    class Document:
-        def get(self):
-            return Snapshot()
-
-    class Collection:
-        def document(self, _uid):
-            return Document()
-
-    class Database:
-        def collection(self, _name):
-            return Collection()
-
-    assert resolve_entitled_level({"uid": "user-1"}, Database()) == "velora"
-
-
-def test_verified_subscription_plan_maps_to_entitled_level():
-    class Snapshot:
-        exists = True
-
-        def to_dict(self):
-            return {
-                "isPro": True,
-                "subscriptionPlan": "gold",
-                "expirationDate": 4_000_000_000,
-            }
-
-    class Document:
-        def get(self):
-            return Snapshot()
-
-    class Collection:
-        def document(self, _uid):
-            return Document()
-
-    class Database:
-        def collection(self, _name):
-            return Collection()
-
-    assert resolve_entitled_level({"uid": "user-1"}, Database()) == "auren"
-
-
-def test_expired_subscription_falls_back_to_velora():
-    class Snapshot:
-        exists = True
-
-        def to_dict(self):
-            return {
-                "isPro": True,
-                "subscriptionPlan": "diamant",
-                "expirationDate": 1,
-            }
-
-    class Document:
-        def get(self):
-            return Snapshot()
-
-    class Collection:
-        def document(self, _uid):
-            return Document()
-
-    class Database:
-        def collection(self, _name):
-            return Collection()
-
-    assert resolve_entitled_level({"uid": "user-1"}, Database()) == "velora"
+def test_authenticated_model_access_uses_credit_wallet_not_legacy_subscription():
+    assert resolve_entitled_level({"uid": "user-1"}, db=None) == "omnis"
+    assert resolve_entitled_level({"uid": "think-user", "auth_source": "think"}, db=None) == "omnis"
+    assert resolve_entitled_level({"uid": "anonymous"}, db=None) == "velora"
 
 
 def test_openai_compatible_parser_excludes_private_reasoning_content():

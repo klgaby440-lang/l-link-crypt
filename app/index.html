@@ -765,12 +765,25 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
 .msg-content input[type=checkbox]{margin-right:.4em}
 </style>
 
+
+<style id="llink-mobile-dark-text-contrast">
+@media (max-width: 768px) {
+  .dark .text-blue-400, .dark .text-blue-500, .dark .text-blue-600,
+  .dark .text-blue-700, .dark [class~="text-sky-500"], .dark [class~="text-sky-600"] {
+    color: #a8d0ff !important;
+  }
+  .dark input::placeholder, .dark textarea::placeholder {
+    color: #aab8ca !important;
+    opacity: 1;
+  }
+}
+</style>
 </head>
 <body class="bg-campagne-light dark:bg-campagne-dark text-gray-900 dark:text-gray-100 h-full flex transition-colors duration-300 font-sans">
 
     <div id="sidebar" class="llink-sidebar fixed lg:static inset-y-0 left-0 z-50 flex flex-col shadow-2xl lg:shadow-none -translate-x-full lg:translate-x-0" aria-label="Navigation Llink">
         <nav class="rail-nav" aria-label="Raccourcis">
-          <button class="rail-item" onclick="openSettings('panel-sub')" title="Abonnement" aria-label="Abonnement"><span class="rail-icon"><i data-lucide="crown"></i></span><span class="rail-label">Abonnement</span></button>
+          <button class="rail-item" onclick="openCreditWallet()" title="Portefeuille de crédits" aria-label="Portefeuille de crédits"><span class="rail-icon"><i data-lucide="wallet"></i></span><span class="rail-label">Crédits</span></button>
           <button class="rail-item" onclick="newConversation()" title="Nouvelle discussion" aria-label="Nouvelle discussion"><span class="rail-icon"><i data-lucide="square-pen"></i></span><span class="rail-label">Nouvelle discussion</span></button>
           <button class="rail-item" onclick="sidebarPlanifier()" title="Planifier" aria-label="Planifier"><span class="rail-icon"><i data-lucide="calendar-check"></i></span><span class="rail-label">Planifier</span></button>
           <button class="rail-item" onclick="sidebarBibliotheque()" title="Bibliothèque" aria-label="Bibliothèque"><span class="rail-icon"><i data-lucide="library-big"></i></span><span class="rail-label">Bibliothèque</span></button>
@@ -809,7 +822,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             <div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-[0.75rem] shadow-lg flex flex-col gap-[0.5rem] relative">
                 
                 <div id="pro-alert" class="hidden text-[0.75rem] font-bold text-center py-[0.25rem] px-[0.5rem] rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mb-[0.25rem]">
-                    Accès Hors-Ligne expiré ou non abonné.
+                    Mode Offline indisponible sur cet appareil ou ce compte.
                 </div>
 
                 <textarea id="user-msg" placeholder="Commencez à discuter..." class="w-full bg-transparent border-none outline-none resize-none p-[0.5rem] text-[1rem] max-h-[10rem] overflow-y-auto no-scrollbar" oninput="this.style.height='3rem';this.style.height=this.scrollHeight+'px'"></textarea>
@@ -824,7 +837,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                         <button onclick="toggleMediaMenu()" class="p-[0.5rem] rounded-full hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition"><i data-lucide="paperclip" class="w-[1.25rem] h-[1.25rem]"></i></button>
                         <button id="mic-btn" onclick="handleVoice()" class="p-[0.5rem] rounded-full hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition"><i data-lucide="mic" class="w-[1.25rem] h-[1.25rem]"></i></button>
                     </div>
-                    <button onclick="sendFromInput()" class="w-[2.5rem] h-[2.5rem] rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 flex items-center justify-center hover:scale-105 transition"><i data-lucide="send" class="w-[1.25rem] h-[1.25rem]"></i></button>
+                    <button type="button" onclick="sendFromInput()" aria-label="Envoyer" title="Envoyer" class="w-[2.5rem] h-[2.5rem] rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 flex items-center justify-center hover:scale-105 transition"><i data-lucide="send" class="w-[1.25rem] h-[1.25rem]"></i></button>
                 </div>
 
                 <div id="media-menu" class="hidden absolute bottom-[4rem] left-[1rem] bg-campagne-light dark:bg-campagne-dark rounded-xl shadow-xl flex-col border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
@@ -910,8 +923,8 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                     <i data-lucide="moon" class="w-[1.25rem] h-[1.25rem] text-indigo-500"></i> Apparence et thème
                 </button>
                 
-                <button onclick="openSubscriptionWindow()" class="w-full flex items-center gap-[0.65rem] p-[0.65rem] bg-surface-light dark:bg-surface-dark rounded-2xl font-bold hover:brightness-95 transition">
-                    <i data-lucide="credit-card" class="w-[1.25rem] h-[1.25rem] text-emerald-500"></i> Forfait et mode hors-ligne
+                <button onclick="openCreditWallet()" class="w-full flex items-center gap-[0.65rem] p-[0.65rem] bg-surface-light dark:bg-surface-dark rounded-2xl font-bold hover:brightness-95 transition">
+                    <i data-lucide="wallet" class="w-[1.25rem] h-[1.25rem] text-emerald-500"></i> Portefeuille et crédits
                 </button>
                 <div id="subscription-info" class="hidden"></div>
 
@@ -924,7 +937,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                     <button onclick="savePreferences()" class="w-full p-[0.75rem] bg-gray-900 text-white dark:bg-white dark:text-gray-900 font-bold rounded-xl shadow-md hover:scale-105 transition">Enregistrer</button>
                 </div>
 
-                <button onclick="window.open('https://klgaby440-lang.github.io/ll-aide/', '_blank')" class="w-full flex items-center gap-[0.65rem] p-[0.65rem] bg-surface-light dark:bg-surface-dark rounded-2xl font-bold hover:brightness-95 transition">
+                <button onclick="openHelpPage()" class="w-full flex items-center gap-[0.65rem] p-[0.65rem] bg-surface-light dark:bg-surface-dark rounded-2xl font-bold hover:brightness-95 transition">
                     <i data-lucide="help-circle" class="w-[1.25rem] h-[1.25rem] text-purple-500"></i> Aide
                 </button>
 
@@ -1084,24 +1097,21 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             if (!publicId || !window.auth?.currentUser) return false;
             const tokenResult = await window.auth.currentUser.getIdTokenResult(true);
             if (tokenResult.claims?.auth_source !== "think" || !tokenResult.claims?.think_user_id) return false;
-            const response = await fetch(SERVER_URL + "/api/subscriptions/refresh", {
+            const response = await fetch(SERVER_URL + "/api/credits/refresh", {
                 method: "POST",
                 headers: await llinkAuthHeaders(true),
                 body: JSON.stringify({ public_id: publicId }),
                 cache: "no-store"
             });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || "Think n'a pas pu vérifier le paiement.");
-            if (typeof window.checkSubscription === "function") await window.checkSubscription();
-            const statusBox = document.getElementById("subscription-info");
-            if (data.payment_status === "accepted" && data.subscription?.is_active) {
-                if (statusBox) statusBox.textContent = "✅ Paiement confirmé. Ton abonnement Llink est actif.";
-                alert("Paiement confirmé ! Ton abonnement Llink est maintenant actif.");
+            if (!response.ok) throw new Error(data.detail || "Think n'a pas pu vérifier l'achat de crédits.");
+            if (data.payment_status === "accepted" && data.credits?.status === "paid") {
+                alert("Paiement confirmé. Tes crédits Llink ont été ajoutés au portefeuille.");
+                if (typeof window.refreshCreditWallet === "function") await window.refreshCreditWallet();
             } else if (data.payment_status === "failed") {
-                if (statusBox) statusBox.textContent = "❌ Le paiement n'a pas été confirmé. Aucun abonnement n'a été activé.";
-                alert("Le paiement Llink a échoué ou a été refusé. Aucun abonnement n'a été activé.");
+                alert("Le paiement a échoué. Aucun crédit n'a été ajouté.");
             } else {
-                if (statusBox) statusBox.textContent = "⏳ Paiement en attente de confirmation. Le statut sera revérifié à ta prochaine actualisation.";
+                alert("Paiement en attente de confirmation. Aucun crédit n'a encore été ajouté.");
                 return true;
             }
             params.delete("llink_payment");
@@ -1109,6 +1119,99 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const next = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
             window.history.replaceState({}, document.title, next);
             return true;
+        };
+
+        window.refreshCreditWallet = async () => {
+            const [walletResponse, catalogResponse] = await Promise.all([
+                fetch(SERVER_URL + "/api/credits/wallet", { headers: await llinkAuthHeaders(true), cache: "no-store" }),
+                fetch(SERVER_URL + "/api/credits/catalog", { headers: await llinkAuthHeaders(true), cache: "no-store" })
+            ]);
+            const wallet = await walletResponse.json().catch(() => ({}));
+            const catalog = await catalogResponse.json().catch(() => ({}));
+            if (!walletResponse.ok) throw new Error(wallet.detail || "Portefeuille indisponible.");
+            if (!catalogResponse.ok) throw new Error(catalog.detail || "Tarif des crédits indisponible.");
+            const root = document.getElementById("llink-credit-wallet-body");
+            if (root) {
+                root.querySelector("[data-balance=online]").textContent = wallet.online_balance ?? 0;
+                root.querySelector("[data-balance=free]").textContent = wallet.daily_free_balance ?? 0;
+                root.querySelector("[data-balance=offline]").textContent = wallet.offline_balance ?? 0;
+                root.querySelector("[data-credit-rate]").textContent = "1 crédit = 0,01 USD";
+                root.querySelector("[data-offline-note]").textContent = wallet.offline_note || "Le portefeuille Offline n'est pas encore activé.";
+                const minimumCredits = Math.max(1, Number(catalog.minimum_credits) || 1);
+                const maximumCredits = Math.max(minimumCredits, Number(catalog.maximum_credits) || 500000);
+                root.querySelector("[data-credit-min]").textContent = minimumCredits;
+                root.querySelector("[data-credit-max]").textContent = maximumCredits;
+                const amountInput = root.querySelector("#llink-credit-amount");
+                if (amountInput) {
+                    amountInput.min = String(minimumCredits);
+                    amountInput.max = String(maximumCredits);
+                    const currentAmount = Number(amountInput.value);
+                    if (!Number.isInteger(currentAmount) || currentAmount < minimumCredits) {
+                        amountInput.value = String(minimumCredits);
+                    } else if (currentAmount > maximumCredits) {
+                        amountInput.value = String(maximumCredits);
+                    }
+                }
+            }
+            return {wallet, catalog};
+        };
+
+        window.openCreditWallet = async () => {
+            if (!window.auth?.currentUser) { alert("Connecte-toi pour accéder à ton portefeuille."); return; }
+            let overlay = document.getElementById("llink-credit-wallet");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "llink-credit-wallet";
+                overlay.style.cssText = "position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:16px";
+                overlay.innerHTML = '<section style="width:min(100%,480px);max-height:92dvh;overflow:auto;background:var(--panel-bg,#fff);color:var(--text-primary,#171717);border:1px solid var(--panel-border,#ddd);border-radius:24px;padding:22px;box-shadow:0 24px 80px #0005"><header style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div><h2 style="font-size:22px;font-weight:800">Mon portefeuille Llink</h2><p style="opacity:.7;font-size:13px">Achète des crédits à ton rythme, sans abonnement.</p></div><button id="llink-credit-close" style="font-size:24px;padding:4px 10px">×</button></header><div id="llink-credit-wallet-body" style="margin-top:16px"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"><div style="padding:12px;border-radius:14px;background:var(--surface-light,#f3f3f3)"><small>Online</small><strong data-balance="online" style="display:block;font-size:22px">—</strong></div><div style="padding:12px;border-radius:14px;background:var(--surface-light,#f3f3f3)"><small>Gratuits / jour</small><strong data-balance="free" style="display:block;font-size:22px">—</strong></div><div style="padding:12px;border-radius:14px;background:var(--surface-light,#f3f3f3)"><small>Offline</small><strong data-balance="offline" style="display:block;font-size:22px">—</strong></div></div><p data-credit-rate style="font-size:13px;margin:12px 0;font-weight:700">1 crédit = 0,01 USD</p><div style="display:grid;gap:10px"><label>Nombre de crédits<input id="llink-credit-amount" type="number" min="1" max="500000" step="1" value="100" style="width:100%;padding:12px;border:1px solid #aaa;border-radius:12px;background:transparent;color:inherit"></label><small>Limites : <span data-credit-min>1</span> à <span data-credit-max>500000</span> crédits. Le montant CDF est calculé par Think.</small><label>Moyen de paiement<select id="llink-credit-method" style="width:100%;padding:12px;border:1px solid #aaa;border-radius:12px;background:transparent;color:inherit"><option value="AIRTEL_CD">Airtel Money</option><option value="OM_CD">Orange Money</option><option value="MPESA_CD">M-Pesa</option><option value="AFRICELL_CD">Africell Money</option></select></label><label>Numéro Mobile Money enregistré<select id="llink-credit-account" style="width:100%;padding:12px;border:1px solid #aaa;border-radius:12px;background:transparent;color:inherit"><option value="">Choisir au paiement</option></select></label><button id="llink-credit-buy" style="padding:14px;border-radius:999px;background:var(--accent,#171717);color:white;font-weight:800">Acheter des crédits</button><p data-offline-note style="font-size:12px;opacity:.7">Les crédits Offline ne sont pas encore activés.</p><p id="llink-credit-message" role="status" style="font-size:13px"></p></div></div></section>';
+                document.body.appendChild(overlay);
+                document.getElementById("llink-credit-close").onclick = () => overlay.remove();
+                overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+                document.getElementById("llink-credit-buy").onclick = async () => {
+                    const button = document.getElementById("llink-credit-buy");
+                    const message = document.getElementById("llink-credit-message");
+                    const credits = Number(document.getElementById("llink-credit-amount").value);
+                    const method = document.getElementById("llink-credit-method").value;
+                    const account = document.getElementById("llink-credit-account").value;
+                    if (!Number.isInteger(credits) || credits < 1) { message.textContent = "Indique un nombre entier de crédits valide."; return; }
+                    button.disabled = true; message.textContent = "Préparation du paiement…";
+                    try {
+                        const checkoutId = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : "credit" + Date.now() + Math.random().toString(36).slice(2)).slice(0, 48);
+                        const response = await fetch(SERVER_URL + "/api/credits/checkout", {
+                            method: "POST", headers: {...await llinkAuthHeaders(true), "Idempotency-Key": checkoutId},
+                            body: JSON.stringify({credits, wallet_type:"online", payment_method:method, mobile_money_account_id:account ? Number(account) : null}),
+                            cache:"no-store",
+                        });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(data.detail || "Impossible de créer le paiement.");
+                        if (!data.payment_url) throw new Error("Think n'a pas retourné de lien de paiement.");
+                        message.textContent = "Redirection vers CinetPay…";
+                        window.location.href = data.payment_url;
+                    } catch (error) { message.textContent = error.message || "Erreur de paiement."; button.disabled = false; }
+                };
+            }
+            overlay.style.display = "flex";
+            const message = document.getElementById("llink-credit-message");
+            try {
+                const result = await window.refreshCreditWallet();
+                const optionsResponse = await fetch(SERVER_URL + "/api/credits/payment-options", {headers:await llinkAuthHeaders(true),cache:"no-store"});
+                const options = await optionsResponse.json().catch(()=>({}));
+                if (!optionsResponse.ok) throw new Error(options.detail || "Numéros Mobile Money indisponibles.");
+                const account = document.getElementById("llink-credit-account");
+                account.innerHTML = '<option value="">Choisir au paiement</option>';
+                (options.items || []).forEach(item => {
+                    const option = document.createElement("option");
+                    option.value = item.id;
+                    option.dataset.operator = item.operator || "";
+                    option.textContent = (item.label || item.operator || "Mobile Money") + " · " + (item.masked_phone || item.phone_masked || "numéro enregistré");
+                    account.appendChild(option);
+                });
+                account.onchange = () => {
+                    const operator = account.selectedOptions[0]?.dataset.operator;
+                    if (operator) document.getElementById("llink-credit-method").value = operator;
+                };
+                message.textContent = "";
+            } catch (error) { message.textContent = error.message || "Impossible de charger le portefeuille."; }
         };
 
         onAuthStateChanged(auth, async (user) => {
@@ -1301,34 +1404,21 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         window.exportDatasetJSON = window.exportLlinkDataJSON;
 
         window.checkSubscription = async () => {
-            if(!window.isLoggedIn) return;
+            if (!window.isLoggedIn) return;
             try {
-                const res = await fetch(`${SERVER_URL}/api/user/status`, { headers: await llinkAuthHeaders() });
-                const data = await res.json();
-                
-                if(data.isNewUser && !data.plan) alert("Bienvenue sur Llink ! Tu bénéficies d'une période d'essai de 3 jours. Tu pourras ensuite choisir une formule.");
-                
-                // L'accès hors ligne reste vérifié séparément par le moteur natif.
+                const response = await fetch(SERVER_URL + "/api/user/status", {
+                    headers: await llinkAuthHeaders(), cache: "no-store"
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.isValid) throw new Error(data.detail || "Compte Llink indisponible.");
+                // Les niveaux IA sont désormais accessibles selon le solde de crédits,
+                // pas selon une formule ou une date d'expiration.
+                try { localStorage.removeItem("llink_plan"); } catch (_) {}
+                const infoDiv = document.getElementById("subscription-info");
+                if (infoDiv) infoDiv.textContent = "Compte actif · utilisation facturée selon ton portefeuille de crédits.";
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
-                const infoDiv = document.getElementById('subscription-info');
-                const planLabels = { bronze: "Bronze", silver: "Silver", gold: "Gold", diamant: "Diamant" };
-                
-                if (data.subscriptionStatus === "pending_payment") {
-                    infoDiv.innerHTML = "🟠 Paiement Llink en attente de confirmation par Think/CinetPay.";
-                } else if(data.isValid && data.isTrial) {
-                    infoDiv.innerHTML = "🟢 Période d'essai valide jusqu'au : " + new Date(data.expirationDate).toLocaleDateString();
-                } else if(data.isValid && data.plan) {
-                    infoDiv.innerHTML = "💎 Offre " + (planLabels[data.plan] || data.plan) + " active jusqu'au : " + new Date(data.expirationDate).toLocaleDateString();
-                } else {
-                    infoDiv.innerHTML = "Aucun abonnement actif. Choisis une offre pour débloquer les niveaux Llink.";
-                }
-                try {
-                    if (data.isValid && data.plan) localStorage.setItem("llink_plan", data.plan);
-                    else localStorage.removeItem("llink_plan");
-                } catch (_) {}
-                
                 updateOfflineUI();
-            } catch(e) { console.error("checkSubscription error", e); }
+            } catch (error) { console.error("Vérification du compte Llink :", error); }
         };
 
         window.selectedSubscriptionPlan = 'silver';
@@ -1381,7 +1471,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const user = window.auth.currentUser;
             const tokenResult = await user.getIdTokenResult(true);
             if (tokenResult.claims?.auth_source !== "think" || !tokenResult.claims?.think_user_id) {
-                alert("Les abonnements Llink nécessitent une connexion avec ton compte Think. Déconnecte-toi puis choisis « Se connecter avec Think ».");
+                alert("Les achats de crédits nécessitent une connexion avec ton compte Think. Déconnecte-toi puis choisis « Se connecter avec Think ».");
                 return;
             }
             const methods = {
@@ -1606,7 +1696,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
 
         function toggleTheme() { var d=document.documentElement.classList.toggle('dark'); try{localStorage.setItem('llink_theme',d?'dark':'light');}catch(e){} }
         function openSettings(sectionId) {
-            if (sectionId === 'panel-sub') { openSubscriptionWindow(); return; }
+            if (sectionId === 'panel-sub') { openCreditWallet(); return; }
             const modal = document.getElementById('settings-modal');
             const panel = modal.querySelector('.settings-panel');
             const container = Array.from(panel.children).find(el => el.classList.contains('space-y-[0.45rem]'));
@@ -1617,7 +1707,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 const target = document.getElementById(sectionId);
                 if (target) { target.classList.remove('hidden'); target.style.display = 'block'; }
                 const title = panel.querySelector('h3');
-                if (title) title.textContent = ({'panel-sub':'Abonnement','panel-pref':'Préférences','panel-connections':'Connexions','panel-privacy':'Confidentialité'})[sectionId] || 'Paramètres';
+                if (title) title.textContent = ({'panel-sub':'Portefeuille et crédits','panel-pref':'Préférences','panel-connections':'Connexions','panel-privacy':'Confidentialité'})[sectionId] || 'Paramètres';
             } else {
                 const title = panel.querySelector('h3');
                 if (title) title.textContent = 'Paramètres';
@@ -1712,7 +1802,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         function escapeHubText(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
         function togglePlannerTask(id,done){const tasks=JSON.parse(localStorage.getItem('llink_planner_tasks')||'[]');const t=tasks.find(x=>x.id===id);if(t)t.done=done;localStorage.setItem('llink_planner_tasks',JSON.stringify(tasks));renderPlannerTasks();}
         function deletePlannerTask(id){const tasks=JSON.parse(localStorage.getItem('llink_planner_tasks')||'[]').filter(x=>x.id!==id);localStorage.setItem('llink_planner_tasks',JSON.stringify(tasks));renderPlannerTasks();}
-        function showPlannerHelp(){alert('Ajoute une tâche, puis coche-la lorsqu’elle est terminée. Tes tâches sont conservées localement sur cet appareil.');}
+        function showPlannerHelp(){openHelpPage();}
         function filterSettings(q){const query=(q||'').toLowerCase();const panel=document.querySelector('#settings-modal .settings-panel');if(!panel)return;panel.querySelectorAll('.space-y-\[0\.45rem\] > button, .space-y-\[0\.45rem\] > .hub-section-label').forEach(el=>{el.style.display=!query||el.innerText.toLowerCase().includes(query)?'':'none';});}
 
         function toggleSidebar() { const sidebar=document.getElementById('sidebar'); const opening=sidebar.classList.contains('-translate-x-full'); sidebar.classList.toggle('-translate-x-full'); sidebar.classList.toggle('rail-expanded', opening); document.body.classList.toggle('sidebar-open', opening); }
@@ -2760,7 +2850,7 @@ body.translate-mode-active #llink-language-launcher{display:flex}
   if(typeof prevSelect==='function')window.selectAppMode=async function(mode){const result=await prevSelect.apply(this,arguments);document.body.classList.toggle('translate-mode-active',mode==='translate');if(mode==='translate'){const h=document.querySelector('#chat-window h1');if(h)h.textContent='Traduction';}return result;};
   const prevNew=window.newConversation;
   if(typeof prevNew==='function')window.newConversation=function(){const result=prevNew.apply(this,arguments);if(document.body.classList.contains('translate-mode-active')){const h=document.querySelector('#chat-window h1');if(h)h.textContent='Traduction';}else if(!document.body.classList.contains('work-mode-active')&&!document.body.classList.contains('live-mode-active')){
-      const state=document.getElementById('empty-state');if(state){const logo=state.querySelector('.logo-anim');state.innerHTML=`${logo?logo.outerHTML:''}<div id="llink-home-sequence"><div class="home-sequence-line" id="llink-home-line">Bonjour</div><div class="home-sequence-sub" id="llink-home-sub">Agapé, bienvenue.</div></div>`;const line=document.getElementById('llink-home-line'),sub=document.getElementById('llink-home-sub');const scenes=[['Bonjour','Agapé, bienvenue.'],['Bienvenue chez Llink','Que voulez-vous faire aujourd’hui ?'],['Une idée en tête ?','Commençons à lui donner vie.'],['Prêt à commencer ?','Choisissez votre prochaine étape.']];let i=0;const advance=()=>{if(!line.isConnected)return;i=(i+1)%scenes.length;line.textContent=scenes[i][0];sub.textContent=scenes[i][1];line.style.animation='none';sub.style.animation='none';void line.offsetWidth;line.style.animation='';sub.style.animation='';};if(state._llinkTimer)clearInterval(state._llinkTimer);state._llinkTimer=setInterval(advance,3600);}}
+      const state=document.getElementById('empty-state');if(state){const logo=state.querySelector('.logo-anim');const rawName=window.auth?.currentUser?.displayName||window.currentUser?.displayName||window.userName||'';const firstName=String(rawName).trim().split(/\s+/)[0];const welcomeText=firstName?firstName+', bienvenue.':'Bienvenue dans Llink.';state.innerHTML=`${logo?logo.outerHTML:''}<div id="llink-home-sequence"><div class="home-sequence-line" id="llink-home-line">Bonjour</div><div class="home-sequence-sub" id="llink-home-sub">${welcomeText}</div></div>`;const line=document.getElementById('llink-home-line'),sub=document.getElementById('llink-home-sub');const scenes=[['Bonjour', (function(){var raw=window.auth?.currentUser?.displayName||window.currentUser?.displayName||window.userName||'';var first=String(raw).trim().split(/\s+/)[0];return first?first+', bienvenue.':'Bienvenue dans Llink.';})()],['Bienvenue chez Llink','Que voulez-vous faire aujourd’hui ?'],['Une idée en tête ?','Commençons à lui donner vie.'],['Prêt à commencer ?','Choisissez votre prochaine étape.']];let i=0;const advance=()=>{if(!line.isConnected)return;i=(i+1)%scenes.length;line.textContent=scenes[i][0];sub.textContent=scenes[i][1];line.style.animation='none';sub.style.animation='none';void line.offsetWidth;line.style.animation='';sub.style.animation='';};if(state._llinkTimer)clearInterval(state._llinkTimer);state._llinkTimer=setInterval(advance,3600);}}
       return result;};
   document.addEventListener('DOMContentLoaded',install,{once:true});if(document.readyState!=='loading')install();
 })();
@@ -3028,6 +3118,10 @@ window.refreshPlanPrices();
   new MutationObserver(syncTheme).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&win()&&win().classList.contains('is-open')) closeSubscriptionWindow(); });
 })();
+// Compatibilité : toute ancienne ouverture d'abonnement redirige vers le portefeuille.
+window.openSubscriptionWindow = window.openCreditWallet;
+window.closeSubscriptionWindow = function(){ const wallet=document.getElementById('llink-credit-wallet'); if(wallet) wallet.remove(); };
+window.startLlinkSubscriptionCheckout = async function(){ window.openCreditWallet(); return false; };
 </script>
 
 <style id="llink-v19-connecteurs-horizontal-et-logo-fixe">
@@ -3631,7 +3725,7 @@ body.work-mode-active.composer-open #composer-close-keyboard svg {width:11px!imp
       const sub=document.getElementById('llink-home-sub');
       if(!line||!sub)return;
       const scenes=[
-        ['Bonjour','Agapé, bienvenue.'],
+        ['Bonjour',(function(){var raw=window.auth?.currentUser?.displayName||window.currentUser?.displayName||window.userName||'';var first=String(raw).trim().split(/\s+/)[0];return first?first+', bienvenue.':'Bienvenue dans Llink.';})()],
         ['Bienvenue chez Llink','Que voulez-vous faire aujourd’hui ?'],
         ['Une idée en tête ?','Commençons à lui donner vie.'],
         ['Prêt à commencer ?','Choisissez votre prochaine étape.']
@@ -4372,7 +4466,8 @@ var LS={
   set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}},
   del:function(k){try{localStorage.removeItem(k);}catch(e){}}
 };
-var HELP_URL='https://klgaby440-lang.github.io/ll-aide/';
+var HELP_URL='./help.html';
+function openHelpPage(){ window.location.href = HELP_URL; }
 var ACC={blue:['Bleu','#3b82f6'],violet:['Violet','#8b5cf6'],green:['Vert','#22c55e'],orange:['Orange','#f97316'],pink:['Rose','#ec4899'],red:['Rouge','#ef4444'],gray:['Gris','#6b7280']};
 var FS={s:['Petit','14px'],m:['Normal','16px'],l:['Grand','18px']};
 
@@ -4720,7 +4815,7 @@ function authAction(){Promise.resolve(window.handleAuth&&window.handleAuth()).th
 var A={
   open:function(el){
     var id=el.dataset.id;
-    if(id==='aide'){window.open(HELP_URL,'_blank','noopener');return;}
+    if(id==='aide'){openHelpPage();return;}
     view=id;render();
   },
   theme:function(el){LS.set('llink_theme',el.dataset.val);applyTheme();render(true);},
@@ -4832,16 +4927,16 @@ var A={
     var report='[Llink · '+$('ls-bug-type').value+']\n'+txt+'\n\n'+navigator.userAgent+' · '+screen.width+'x'+screen.height+' · '+(window.isOnline?'en ligne':'hors ligne');
     try{
       if(navigator.share){await navigator.share({title:'Rapport de bug Llink',text:report});}
-      else{await navigator.clipboard.writeText(report);alert("Rapport copié. Colle-le dans la page d'aide qui s'ouvre.");window.open(HELP_URL,'_blank','noopener');}
+      else{await navigator.clipboard.writeText(report);alert("Rapport copié. Colle-le dans la page d'aide qui s'ouvre.");openHelpPage();}
       $('ls-bug-text').value='';
     }catch(e){}
   },
   refreshusage:function(){window.refreshLlinkUsage({warn:false,render:true});},
-  help:function(){window.open(HELP_URL,'_blank','noopener');}
+  help:function(){openHelpPage();}
 };
 
 function openSettings(section){
-  if(section==='panel-sub'){window.openSubscriptionWindow();return Promise.resolve();}
+  if(section==='panel-sub'){window.openCreditWallet();return Promise.resolve();}
   if(section==='panel-connections'){window.openConnections();return Promise.resolve();}
   return (async function(){
     if(LS.get('llink_lock_on','0')==='1'&&LS.get('llink_lock_pin','')){
@@ -5535,8 +5630,8 @@ function initMode(){
   var TN={bronze:'Bronze',silver:'Silver',gold:'Gold',diamant:'Diamant'},RK={bronze:1,silver:2,gold:3,diamant:4};
   var EF=[['normal','Normal','Réflexion équilibrée'],['extra','Extra','Réflexion poussée'],['ultime','Ultime','Réflexion au maximum']];
   var lv='velora',eff='normal',effortExplicit=false;
-  function rank(){try{return RK[localStorage.getItem('llink_plan')]||0;}catch(e){return 0;}}
-  function ok(l){return l[3]||rank()>=RK[l[6]];}
+  function rank(){return 4;}
+  function ok(l){return true;}
   try{var a=localStorage.getItem('llink_level'),e0=localStorage.getItem('llink_effort');if(a&&LV.some(function(l){return l[0]===a;}))lv=a;if(e0&&EF.some(function(x){return x[0]===e0;})){eff=e0;effortExplicit=true;}}catch(_){}
   function cur(){var l=LV.filter(function(x){return x[0]===lv;})[0]||LV[0];return ok(l)?l:LV[0];}
   function sync(){var l=cur();lv=l[0];s.value=l[5];}
@@ -5549,7 +5644,7 @@ function initMode(){
     sync();var c=cur(),ef=EF.filter(function(x){return x[0]===eff;})[0];
     b.innerHTML='<i data-lucide="'+c[4]+'"></i><span>'+c[1]+'</span>'+(eff!=='normal'?'<em class="ll-ef">'+ef[1]+'</em>':'')+'<i data-lucide="chevron-down" class="ll-chev"></i>';
     $('lt-body').innerHTML=LV.map(function(l){var lock=!ok(l);
-      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink'+(l[2]?' · v'+l[2]:'')+(l[6]?' · '+TN[l[6]]:'')+'</small></span>'+(l[3]?'<span class="lt-bd free">Gratuit</span>':(lock?'<span class="lt-bd lock"><i data-lucide="lock"></i>'+l[7]+' €</span>':'<span class="lt-bd">Débloqué</span>'))+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
+      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink · crédits</small></span>'+'<span class="lt-bd">Facturé à l’usage</span>'+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
      +'<div class="lt-eff"><div class="lt-eh">Intensité de réflexion</div><div class="lt-seg" role="radiogroup">'+EF.map(function(x){return '<div role="radio" tabindex="0" data-e="'+x[0]+'" aria-checked="'+(x[0]===eff)+'">'+x[1]+'</div>';}).join('')+'</div><div class="lt-hint">'+ef[2]+'</div></div>';
     b.disabled=s.disabled;icons();
   }
@@ -5562,7 +5657,7 @@ function initMode(){
     if(ev){eff=ev.dataset.e;effortExplicit=true;try{localStorage.setItem('llink_effort',eff);}catch(_){}render();return;}
     var it=e.target.closest('[data-v]');if(!it)return;
     var l=LV.filter(function(x){return x[0]===it.dataset.v;})[0];
-    if(!ok(l)){close();if(window.openSubscriptionWindow)openSubscriptionWindow(l[6]);return;}
+    if(!ok(l)){close();if(window.openCreditWallet)openCreditWallet();return;}
     lv=l[0];try{localStorage.setItem('llink_level',lv);}catch(_){}
     sync();s.dispatchEvent(new Event('change',{bubbles:true}));render();close();});
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&o.classList.contains('open'))close();});

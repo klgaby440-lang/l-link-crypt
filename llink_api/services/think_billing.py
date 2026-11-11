@@ -191,3 +191,81 @@ def refresh_think_subscription_payment(
     return payload
 
 
+
+def get_think_credit_catalog() -> dict[str, Any]:
+    """Lit auprès de Think le taux CDF/USD et les limites commerciales des crédits."""
+    settings = get_settings()
+    try:
+        response = httpx.get(
+            f"{settings.think_api_base_url}/api/llink/credits/catalog",
+            headers=_think_headers(), timeout=8.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Le catalogue des crédits Think est indisponible.") from exc
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=503 if response.status_code >= 500 else response.status_code,
+            detail=payload.get("detail") or "Impossible de charger le tarif des crédits Llink.",
+        )
+    if not isinstance(payload, dict) or payload.get("credit_usd") != "0.01":
+        raise HTTPException(status_code=502, detail="Catalogue de crédits Think invalide.")
+    return payload
+
+
+def create_think_credit_checkout(
+    *, think_user_id: int, credits: int, wallet_type: str, payment_method: str,
+    checkout_id: str, mobile_money_account_id: int | None = None,
+) -> dict[str, Any]:
+    """Demande à Think de calculer le montant CDF et d'initialiser CinetPay."""
+    settings = get_settings()
+    idempotency_key = f"llink-credit-{int(think_user_id)}-{checkout_id}"
+    try:
+        response = httpx.post(
+            f"{settings.think_api_base_url}/api/internal/llink/credits/checkout",
+            headers={**_think_headers(), "Idempotency-Key": idempotency_key},
+            json={
+                "think_user_id": int(think_user_id), "credits": int(credits),
+                "wallet_type": wallet_type, "payment_method": payment_method,
+                "checkout_id": checkout_id, "mobile_money_account_id": mobile_money_account_id,
+            },
+            timeout=35.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Impossible de contacter Think pour préparer l'achat de crédits.") from exc
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.status_code < 200 or response.status_code >= 300:
+        status_code = response.status_code if 400 <= response.status_code < 500 else 503
+        raise HTTPException(status_code=status_code, detail=payload.get("detail") or "Think n'a pas pu préparer l'achat de crédits.")
+    if not isinstance(payload, dict) or not payload.get("public_id") or int(payload.get("credits") or 0) != int(credits):
+        raise HTTPException(status_code=502, detail="Think a retourné une réponse d'achat incomplète.")
+    return payload
+
+
+def refresh_think_credit_purchase(*, think_user_id: int, public_id: str) -> dict[str, Any]:
+    """Demande à Think de revérifier le paiement et l'achat de crédits associé."""
+    settings = get_settings()
+    try:
+        response = httpx.post(
+            f"{settings.think_api_base_url}/api/internal/llink/users/{int(think_user_id)}/payments/{public_id}/refresh",
+            headers=_think_headers(), timeout=35.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Impossible de vérifier le paiement Llink auprès de Think.") from exc
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.status_code < 200 or response.status_code >= 300:
+        status_code = response.status_code if 400 <= response.status_code < 500 else 503
+        raise HTTPException(status_code=status_code, detail=payload.get("detail") or "Think n'a pas pu vérifier cet achat de crédits.")
+    credits = payload.get("credits") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict) or payload.get("public_id") != public_id or not isinstance(credits, dict):
+        raise HTTPException(status_code=502, detail="Réponse de vérification des crédits Think invalide.")
+    return payload

@@ -17,6 +17,11 @@ from google.cloud import firestore as google_firestore
 from llink_api.config import get_settings
 from llink_api.providers.openai_compatible import TokenUsage
 from llink_api.services.model_registry import ModelDefinition
+from llink_api.services.credit_wallet import (
+    CreditReservation,
+    reserve_credit_usage,
+    settle_credit_usage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +31,7 @@ class UsageReservation:
     request_id: str
     hour_bucket: int
     reserved_cost_microusd: int
+    credit_reservation: CreditReservation | None = None
 
 
 def _ceil_microusd(value: Decimal) -> int:
@@ -88,8 +94,11 @@ async def reserve_usage_budget(
     model: ModelDefinition,
     prompt: str,
     max_output_tokens: int | None = None,
+    allow_daily_free: bool = False,
 ) -> UsageReservation | None:
-    """Réserve une estimation dans une transaction avant de lancer le modèle."""
+    """Réserve une estimation du coût et les crédits avant de lancer le modèle."""
+    if uid == "anonymous":
+        raise HTTPException(status_code=401, detail="Connecte-toi pour utiliser Llink et ton portefeuille de crédits.")
     if db is None:
         if uid != "anonymous":
             raise HTTPException(
@@ -139,10 +148,31 @@ async def reserve_usage_budget(
             detail="Votre budget horaire de crédits est épuisé. Il sera renouvelé à l'heure suivante.",
             headers={"Retry-After": str(max(1, 3600 - (now % 3600)))},
         )
+    credit_reservation = None
+    if uid != "anonymous":
+        try:
+            credit_reservation = await reserve_credit_usage(
+                db=db, uid=uid, estimated_cost_microusd=estimate,
+                allow_daily_free=allow_daily_free,
+            )
+        except Exception:
+            try:
+                @google_firestore.transactional
+                def release_hour(transaction):
+                    snapshot = hour_ref.get(transaction=transaction)
+                    current = snapshot.to_dict() or {}
+                    transaction.set(hour_ref, {
+                        "reserved_cost_microusd": max(0, int(current.get("reserved_cost_microusd", 0)) - estimate),
+                        "updated_at_epoch": int(time.time()),
+                    }, merge=True)
+                await asyncio.to_thread(lambda: release_hour(db.transaction()))
+            except Exception:
+                logger.exception("Impossible de libérer la réservation horaire après refus du portefeuille.")
+            raise
+
     return UsageReservation(
-        request_id=request_id,
-        hour_bucket=hour_bucket,
-        reserved_cost_microusd=estimate,
+        request_id=request_id, hour_bucket=hour_bucket,
+        reserved_cost_microusd=estimate, credit_reservation=credit_reservation,
     )
 
 
@@ -228,6 +258,14 @@ async def finalize_usage(
     except Exception:
         # Le résultat IA ne doit pas être remplacé par une erreur de comptabilisation.
         logger.exception("Échec de la finalisation de consommation %s.", reservation.request_id)
+
+    if reservation.credit_reservation is not None:
+        await settle_credit_usage(
+            db=db, uid=uid, reservation=reservation.credit_reservation,
+            actual_cost_microusd=actual_cost, status=status, level=level,
+            model=model.model_id, input_tokens=prompt_tokens,
+            output_tokens=completion_tokens,
+        )
 
 
 async def read_current_usage(*, db: Any, uid: str, level: str) -> dict[str, Any]:

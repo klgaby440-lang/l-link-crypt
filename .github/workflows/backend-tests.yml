@@ -10,6 +10,7 @@ on:
       - 'phase-4/**'
       - 'phase-5/**'
       - 'phase-6/**'
+      - 'feature/credits-*'
     paths:
       - 'main.py'
       - 'app/**'
@@ -21,6 +22,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/think-llink-sso-subscriptions
     paths:
       - 'main.py'
       - 'llink_api/**'

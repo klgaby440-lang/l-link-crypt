@@ -836,6 +836,50 @@ def test_available_tool_registry_respects_session_and_server_keys(monkeypatch):
     assert not ({"web_search", "image_search", "image_generate", "image_edit", "python"} & limited_names)
 
 
+def test_gemini_image_request_uses_supported_v1beta_image_config(monkeypatch):
+    from types import SimpleNamespace
+
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+
+    class FakeAsyncClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, endpoint, **kwargs):
+            captured["endpoint"] = endpoint
+            captured["body"] = kwargs["json"]
+            return FakeResponse()
+
+    async def run():
+        monkeypatch.setattr(work_agent, "get_settings", lambda: SimpleNamespace(gemini_api_key="gemini-test"))
+        monkeypatch.setattr(work_agent.httpx, "AsyncClient", FakeAsyncClient)
+        await work_agent._gemini_generate_content(
+            "Draw a botanical illustration",
+            model="gemini-3.1-flash-image",
+            response_modalities=["IMAGE"],
+            aspect_ratio="16:9",
+            quality="hd",
+        )
+
+    asyncio.run(run())
+    assert captured["endpoint"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent"
+    config = captured["body"]["generationConfig"]
+    assert config["responseModalities"] == ["IMAGE"]
+    assert config["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "2K"}
+
+
 def test_gemini_image_tools_generate_and_edit_verified_artifacts(monkeypatch):
     import base64
     from types import SimpleNamespace
@@ -866,7 +910,19 @@ def test_gemini_image_tools_generate_and_edit_verified_artifacts(monkeypatch):
             }
         }
 
+    async def no_reserve(**_kwargs):
+        return SimpleNamespace(request_id="test-reservation", reserved_free=0, reserved_online=1, reservation_date="2026-11-11")
+
+    async def no_settle(**_kwargs):
+        return None
+
+    async def no_cancel(**_kwargs):
+        return None
+
     async def run():
+        monkeypatch.setattr(work_agent, "reserve_credit_usage", no_reserve)
+        monkeypatch.setattr(work_agent, "settle_credit_usage", no_settle)
+        monkeypatch.setattr(work_agent, "cancel_credit_reservation", no_cancel)
         monkeypatch.setattr(work_agent, "enforce_endpoint_quota", no_quota)
         monkeypatch.setattr(
             work_agent,
