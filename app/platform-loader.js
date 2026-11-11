@@ -50,14 +50,28 @@
   window.hasLlinkGoogleAccount = function () { return false; };
   window.isOfflineValid = false;
 
-  // Web : mêmes dépendances épinglées que les applications natives.
-  // La feuille Tailwind est locale ; les scripts sont réécrits par Vercel
-  // vers les CDN côté serveur, mais restent de même origine dans le navigateur.
-  writeLink("./vendor/tailwind.min.css");
-  writeScript("./vendor/lucide.min.js");
-  writeScript("./vendor/dexie.min.js");
-  writeScript("./vendor/marked.umd.js");
-  writeScript("./vendor/purify.min.js");
+  window.tailwind = window.tailwind || {};
+  window.tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          campagne: { light: "#FDFBF7", dark: "#131314" },
+          surface: { light: "#EFECE6", dark: "#1E1F20" },
+          userBg: { light: "#E3DFD5", dark: "#2B2C2F" }
+        },
+        animation: {
+          "pulse-fast": "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite"
+        }
+      }
+    }
+  };
+
+  writeScript("https://cdn.tailwindcss.com");
+  writeScript("https://unpkg.com/lucide@1.70.0/dist/umd/lucide.js");
+  writeScript("https://unpkg.com/dexie@4.4.7/dist/dexie.js");
+  writeScript("https://cdn.jsdelivr.net/npm/marked@18.1.2/lib/marked.umd.js");
+  writeScript("https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js");
 
   window.addEventListener("online", function () {
     window.isOnline = true;
