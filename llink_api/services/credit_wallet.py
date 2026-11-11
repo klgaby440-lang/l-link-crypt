@@ -239,7 +239,7 @@ async def settle_credit_usage(
     wallet_ref = _wallet_ref(db, uid)
     reservation_ref = db.collection("llink_credit_reservations").document(reservation.request_id)
     event_ref = db.collection("llink_credit_transactions").document(reservation.request_id)
-    actual = credits_for_microusd(actual_cost_microusd)
+    actual = credits_for_microusd(actual_cost_microusd, minimum_one=False)
     now = int(time.time())
 
     @google_firestore.transactional
