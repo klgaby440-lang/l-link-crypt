@@ -1789,7 +1789,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         function escapeHubText(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
         function togglePlannerTask(id,done){const tasks=JSON.parse(localStorage.getItem('llink_planner_tasks')||'[]');const t=tasks.find(x=>x.id===id);if(t)t.done=done;localStorage.setItem('llink_planner_tasks',JSON.stringify(tasks));renderPlannerTasks();}
         function deletePlannerTask(id){const tasks=JSON.parse(localStorage.getItem('llink_planner_tasks')||'[]').filter(x=>x.id!==id);localStorage.setItem('llink_planner_tasks',JSON.stringify(tasks));renderPlannerTasks();}
-        function showPlannerHelp(){alert('Ajoute une tâche, puis coche-la lorsqu’elle est terminée. Tes tâches sont conservées localement sur cet appareil.');}
+        function showPlannerHelp(){openHelpPage();}
         function filterSettings(q){const query=(q||'').toLowerCase();const panel=document.querySelector('#settings-modal .settings-panel');if(!panel)return;panel.querySelectorAll('.space-y-\[0\.45rem\] > button, .space-y-\[0\.45rem\] > .hub-section-label').forEach(el=>{el.style.display=!query||el.innerText.toLowerCase().includes(query)?'':'none';});}
 
         function toggleSidebar() { const sidebar=document.getElementById('sidebar'); const opening=sidebar.classList.contains('-translate-x-full'); sidebar.classList.toggle('-translate-x-full'); sidebar.classList.toggle('rail-expanded', opening); document.body.classList.toggle('sidebar-open', opening); }
