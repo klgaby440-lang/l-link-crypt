@@ -25,6 +25,7 @@ def _sso_token(*, jti: str | None = None, scope: str = "llink", expires: int = 1
         {
             "sub": "42",
             "think_id": "THK-0123456789AB",
+            "crypt_id": "INK_ABCDEFGHJKLMNPQ",
             "email": "tester@example.test",
             "name": "Think Tester",
             "scope": scope,
@@ -54,7 +55,9 @@ def test_think_sso_exchange_creates_firebase_custom_token(monkeypatch):
     payload = response.json()
     assert payload["customToken"] == "firebase-custom-token"
     assert payload["user"]["think_id"] == "THK-0123456789AB"
+    assert payload["user"]["crypt_id"] == "INK_ABCDEFGHJKLMNPQ"
     assert observed["uid"] == "think_thk-0123456789ab"
+    assert observed["claims"]["crypt_id"] == "INK_ABCDEFGHJKLMNPQ"
     assert observed["claims"]["auth_source"] == "think"
     assert observed["claims"]["think_user_id"] == 42
 
