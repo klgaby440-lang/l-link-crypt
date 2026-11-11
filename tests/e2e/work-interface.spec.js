@@ -126,7 +126,7 @@ test("Work ouvre un accueil sans créer automatiquement une conversation et prop
 test("L’aide Llink est embarquée localement et sa recherche filtre les rubriques", async ({ page }) => {
   await openWork(page);
   await page.locator('[data-act="home-help"]').click();
-  await expect(page).toHaveURL(/help\\.html$/);
+  await expect(page).toHaveURL(/help\.html$/);
   await expect(page.locator("h1")).toContainText("Comment pouvons-nous t’aider");
   await page.locator("#help-search").fill("crédits");
   await expect(page.locator("#credits")).toBeVisible();
