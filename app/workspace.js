@@ -876,7 +876,7 @@ async function deleteProject(rawId){
 }
 
 function bind(){S.root.addEventListener("click",async e=>{if(e.target.matches("[data-dialog-backdrop]")){if(S.focusInterval)pauseFocusTimer();$("work-dialog-root").innerHTML="";return;}const b=e.target.closest("[data-act]");if(!b)return;try{switch(b.dataset.act){case"home-tasks":{if(typeof window.openHub==="function")window.openHub("planner-hub");else toast("Le planificateur n’est pas disponible.");break;}
-case"home-notes":{const name="Notes-"+new Date().toISOString().slice(0,10)+".md";await createBlankFile("markdown",name);break;}
+case"home-notes":{const name="Notes-"+Date.now()+".md";await createBlankFile("markdown",name);break;}
 case"home-focus":showFocusTimer();break;
 case"home-explorer":{S.root.querySelectorAll("[data-act='mobile']").forEach(x=>x.classList.toggle("active",x.dataset.panel==="files"));for(const panel of ["files","chat","editor"])$("work-"+panel+"-pane").classList.toggle("work-mobile-active",panel==="files");const search=$("work-search");if(search)search.focus();break;}
 case"home-chat":await newSession();$("work-prompt").focus();break;
