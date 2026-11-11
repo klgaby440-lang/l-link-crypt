@@ -1053,39 +1053,58 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 if (errorBox) { errorBox.textContent = "Saisis ton adresse e-mail et ton mot de passe Think."; errorBox.classList.remove("hidden"); }
                 return;
             }
-            if (button) { button.disabled = true; button.textContent = "Connexion sécurisée…"; }
+            if (button) { button.disabled = true; button.textContent = "Connexion à Think…"; }
+            const showThinkError = message => {
+                if (errorBox) { errorBox.textContent = message; errorBox.classList.remove("hidden"); }
+            };
+            const postJson = async (url, options, stage) => {
+                let response;
+                try {
+                    response = await fetch(url, { ...options, cache: "no-store" });
+                } catch (networkError) {
+                    throw new Error(stage + " : impossible de joindre le serveur. Vérifie la connexion réseau et les autorisations CORS, puis réessaie.");
+                }
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const detail = typeof body.detail === "string" ? body.detail : "";
+                    throw new Error(stage + " (HTTP " + response.status + ")" + (detail ? " : " + detail : "."));
+                }
+                return body;
+            };
             try {
                 const thinkBase = "https://think-crypt-entreprise.onrender.com";
-                const loginResponse = await fetch(thinkBase + "/api/auth/login", {
+                const login = await postJson(thinkBase + "/api/auth/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                    body: JSON.stringify({ email: email, password: password }),
-                    cache: "no-store"
-                });
-                const login = await loginResponse.json().catch(() => ({}));
-                if (!loginResponse.ok || !login.access_token) throw new Error(login.detail || "Identifiants Think incorrects.");
-                const ssoResponse = await fetch(thinkBase + "/api/auth/llink/exchange", {
+                    body: JSON.stringify({ email: email, password: password })
+                }, "Connexion au compte Think impossible");
+                if (!login.access_token) throw new Error("Think n'a pas retourné de jeton de connexion.");
+
+                if (button) button.textContent = "Autorisation Think-Llink…";
+                const sso = await postJson(thinkBase + "/api/auth/llink/exchange", {
                     method: "POST",
-                    headers: { "Authorization": "Bearer " + login.access_token, "Accept": "application/json" },
-                    cache: "no-store"
-                });
-                const sso = await ssoResponse.json().catch(() => ({}));
-                if (!ssoResponse.ok || !sso.sso_token) throw new Error(sso.detail || "Think n'a pas pu autoriser la connexion Llink.");
-                const exchangeResponse = await fetch((window.LLINK_SERVER_URL || "https://llink-usz9.onrender.com") + "/api/auth/think-exchange", {
+                    headers: { "Authorization": "Bearer " + login.access_token, "Accept": "application/json" }
+                }, "Autorisation SSO Think impossible");
+                if (!sso.sso_token) throw new Error("Think n'a pas retourné de ticket SSO.");
+
+                if (button) button.textContent = "Ouverture de ta session Llink…";
+                const exchange = await postJson((window.LLINK_SERVER_URL || "https://llink-usz9.onrender.com") + "/api/auth/think-exchange", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                    body: JSON.stringify({ sso_token: sso.sso_token }),
-                    cache: "no-store"
-                });
-                const exchange = await exchangeResponse.json().catch(() => ({}));
-                if (!exchangeResponse.ok || !exchange.customToken) throw new Error(exchange.detail || "Llink n'a pas pu finaliser la session Think.");
-                await signInWithCustomToken(auth, exchange.customToken);
+                    body: JSON.stringify({ sso_token: sso.sso_token })
+                }, "Création de la session Llink impossible");
+                if (!exchange.customToken) throw new Error("Llink n'a pas retourné de session Firebase.");
+                try {
+                    await signInWithCustomToken(auth, exchange.customToken);
+                } catch (firebaseError) {
+                    throw new Error("Le ticket Think a été accepté, mais Firebase n'a pas ouvert la session Llink. Vérifie la configuration Firebase du serveur.");
+                }
                 window.closeAuthChoice();
                 const passwordInput = document.getElementById("think-login-password");
                 if (passwordInput) passwordInput.value = "";
             } catch (e) {
-                console.error("Connexion Think-Llink impossible:", e);
-                if (errorBox) { errorBox.textContent = e?.message || "Connexion impossible. Réessaie."; errorBox.classList.remove("hidden"); }
+                console.warn("Connexion Think-Llink impossible :", e?.message || e);
+                showThinkError(e?.message || "Connexion impossible. Réessaie.");
             } finally {
                 if (button) { button.disabled = false; button.textContent = "Se connecter avec Think"; }
             }
@@ -4307,6 +4326,24 @@ body.work-mode-active.composer-open #composer-close-keyboard svg {width:11px!imp
   body.work-mode-active #llink-hamburger {
     display:none !important; visibility:hidden !important; pointer-events:none !important;
   }
+</style>
+<style id="llink-message-theme-contrast-v1">
+/* Contraste explicite des bulles et du texte des discussions, indépendamment de Tailwind. */
+html:not(.dark) body { color:#202124; }
+html:not(.dark) #chat-window .msg-wrapper .msg-content { color:#202124 !important; }
+html:not(.dark) #chat-window .msg-wrapper > .bg-userBg-light {
+  background-color:#eef2f7 !important; color:#202124 !important;
+  border:1px solid #dce3ed;
+}
+html:not(.dark) #chat-window .msg-wrapper .msg-actions { color:#606b79 !important; }
+html.dark #chat-window .msg-wrapper .msg-content { color:#f1f3f6 !important; }
+html.dark #chat-window .msg-wrapper > .bg-userBg-dark {
+  background-color:#252a33 !important; color:#f1f3f6 !important;
+  border:1px solid #363e4b;
+}
+html.dark #chat-window .msg-wrapper .msg-actions { color:#aeb7c5 !important; }
+html:not(.dark) #chat-window .msg-content a { color:#245fc2 !important; }
+html.dark #chat-window .msg-content a { color:#91baff !important; }
 </style>
 
 <style id="llink-dock-pill-v20">

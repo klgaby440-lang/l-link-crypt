@@ -13,6 +13,7 @@ from llink_api.database import get_db
 from llink_api.providers.gemini import build_gemini_contents, get_gemini_model
 from llink_api.providers.openai_compatible import (
     ProviderEvent,
+    ProviderRequestError,
     TokenUsage,
     stream_openai_compatible,
 )
@@ -165,6 +166,26 @@ def _gemini_usage(chunk: Any) -> TokenUsage | None:
         )
     except (TypeError, ValueError):
         return None
+
+
+def _provider_error_message(error: ProviderRequestError) -> str:
+    """Retourne un diagnostic compréhensible sans exposer les détails internes."""
+    labels = {"minimax": "MiniMax", "deepseek": "DeepSeek", "zai": "Z.ai", "gemini": "Gemini"}
+    provider = labels.get(error.provider, error.provider)
+    code = error.status_code
+    if code == 402:
+        return (f"Le compte fournisseur {provider} refuse la requête (HTTP 402 : crédits fournisseur "
+                "ou facturation à vérifier). Aucun crédit Llink n'a été débité pour cette tentative.")
+    if code == 429:
+        retry = error.retry_after.strip() if error.retry_after and error.retry_after.strip() else None
+        suffix = f" Réessaie dans {retry} seconde(s)." if retry and retry.isdigit() else " Réessaie dans quelques instants."
+        return f"La limite de requêtes de {provider} est atteinte (HTTP 429).{suffix} Aucun crédit Llink n'a été débité."
+    if code in {401, 403}:
+        return (f"{provider} refuse l'accès (HTTP {code}). La clé API ou les autorisations du compte "
+                "fournisseur doivent être vérifiées. Aucun crédit Llink n'a été débité.")
+    if code == 404:
+        return f"Le modèle demandé n'est pas disponible chez {provider} (HTTP 404). Aucun crédit Llink n'a été débité."
+    return f"Le fournisseur {provider} a refusé la requête (HTTP {code}). Réessaie plus tard."
 
 
 def _provider_credentials(model: ModelDefinition) -> tuple[str, str]:
@@ -352,15 +373,22 @@ async def chat_endpoint(
         except asyncio.CancelledError:
             status = "cancelled"
             raise
+        except ProviderRequestError as exc:
+            status = "provider_rejected" if exc.no_charge else "provider_error"
+            logger.warning(
+                "Le fournisseur IA a refusé la requête (provider=%s, level=%s, model=%s, http=%s).",
+                model.provider, model.level, model.model_id, exc.status_code,
+            )
+            yield "❌ " + _provider_error_message(exc)
         except Exception:
             status = "provider_error"
             logger.exception(
-                "Échec du flux IA (provider=%s, level=%s, model=%s).",
+                "Échec inattendu du flux IA (provider=%s, level=%s, model=%s).",
                 model.provider,
                 model.level,
                 model.model_id,
             )
-            yield "❌ Le service IA est temporairement indisponible. Réessayez."
+            yield "❌ Le service IA est temporairement indisponible. Réessaie dans quelques instants."
         finally:
             await settle_and_release(usage, status)
 

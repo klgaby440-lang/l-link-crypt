@@ -11,6 +11,19 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class ProviderRequestError(RuntimeError):
+    """Erreur HTTP sûre et structurée renvoyée par un fournisseur IA."""
+
+    NO_CHARGE_STATUSES = {400, 401, 402, 403, 404, 409, 413, 422, 429}
+
+    def __init__(self, provider: str, status_code: int, retry_after: str | None = None):
+        self.provider = provider
+        self.status_code = int(status_code)
+        self.retry_after = retry_after
+        self.no_charge = self.status_code in self.NO_CHARGE_STATUSES
+        super().__init__(f"{provider} provider HTTP {self.status_code}")
+
+
 @dataclass(frozen=True)
 class TokenUsage:
     prompt_tokens: int
@@ -162,8 +175,13 @@ async def stream_openai_compatible(
             headers=headers,
         ) as response:
             if response.status_code != 200:
-                # Ne pas logger ni renvoyer les corps de réponse fournisseurs.
-                raise RuntimeError(f"{provider} provider HTTP {response.status_code}")
+                # Ne jamais journaliser les corps de réponse : ils peuvent contenir
+                # des détails de compte. Le Retry-After reste une métadonnée sûre.
+                raise ProviderRequestError(
+                    provider=provider,
+                    status_code=response.status_code,
+                    retry_after=response.headers.get("Retry-After"),
+                )
 
             async for line in response.aiter_lines():
                 if not line.startswith("data:"):

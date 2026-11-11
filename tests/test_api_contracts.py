@@ -265,3 +265,24 @@ def test_work_native_agent_status_exposes_protocol_and_session_tools(client):
         "document_finalize",
         "artifact_verify",
     }.intersection(payload["tools"])
+
+def test_provider_http_rejections_do_not_charge_reserved_credits():
+    from llink_api.providers.openai_compatible import ProviderRequestError, TokenUsage
+    from llink_api.services.model_registry import resolve_model
+    from llink_api.services.usage_meter import settled_cost_microusd
+
+    error = ProviderRequestError("minimax", 402)
+    assert error.no_charge is True
+    assert error.status_code == 402
+
+    model = resolve_model("noetra")
+    assert settled_cost_microusd(
+        model=model, usage=None, reserved_cost_microusd=25_000,
+        status="provider_rejected",
+    ) == 0
+    usage = TokenUsage(prompt_tokens=100, completion_tokens=50)
+    assert settled_cost_microusd(
+        model=model, usage=usage, reserved_cost_microusd=25_000,
+        status="provider_rejected",
+    ) > 0
+

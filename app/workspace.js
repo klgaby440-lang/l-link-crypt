@@ -9,7 +9,7 @@ const uid=()=>window.auth?.currentUser?.uid||(window.uid&&window.uid!=="anonymou
 const connected=()=>uid()!=="anonymous"&&!!(window.isLoggedIn||window.auth?.currentUser);
 const ext=n=>(String(n).split(".").pop()||"").toLowerCase();
 const language=n=>({md:"markdown",markdown:"markdown",py:"python",js:"javascript",ts:"typescript",html:"html",htm:"html",css:"css",json:"json",xml:"xml",sql:"sql",yaml:"yaml",yml:"yaml",sh:"shell",bash:"shell",java:"java",c:"cpp",h:"cpp",cpp:"cpp",cc:"cpp",rs:"rust",go:"go",php:"php"}[ext(n)]||"plaintext");
-const icon=n=>({md:"file-text",txt:"file-text",py:"file-code",js:"file-code",ts:"file-code",html:"code",css:"code",json:"code",pdf:"file-pdf",docx:"file-ms-word",png:"image",jpg:"image",jpeg:"image",webp:"image",csv:"file-spreadsheet",xlsx:"file-spreadsheet"}[ext(n)]||"file");
+const icon=n=>({md:"file-text",txt:"file-text",py:"file-code",js:"file-code",ts:"file-code",html:"code",css:"code",json:"code",pdf:"file-text",docx:"file-text",png:"image",jpg:"image",jpeg:"image",webp:"image",csv:"file-spreadsheet",xlsx:"file-spreadsheet"}[ext(n)]||"file");
 const textFile=f=>!["csv","tsv"].includes(ext(f.name))&&(["md","markdown","txt","json","xml","html","htm","css","js","ts","py","sql","yaml","yml","toml","ini","log","sh","java","c","cpp","rs","go","php","rb","svg"].includes(ext(f.name))||String(f.type||"").startsWith("text/"));
 const bytes=s=>new Blob([s]).size;
 function size(value){

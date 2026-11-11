@@ -38,6 +38,20 @@ def _ceil_microusd(value: Decimal) -> int:
     return int(value.to_integral_value(rounding=ROUND_CEILING))
 
 
+def settled_cost_microusd(
+    *, model: ModelDefinition, usage: TokenUsage | None,
+    reserved_cost_microusd: int, status: str,
+) -> int:
+    """Ne facture pas une réservation quand le fournisseur a rejeté la requête avant le flux."""
+    if usage is not None:
+        return calculate_cost_microusd(model, usage)
+    if status == "provider_rejected":
+        return 0
+    # Sans métriques pour un échec réseau/serveur après envoi, conserver la réserve
+    # prudente : on ne peut pas prouver que le fournisseur n'a rien traité.
+    return max(0, int(reserved_cost_microusd))
+
+
 def calculate_cost_microusd(model: ModelDefinition, usage: TokenUsage) -> int:
     """Coût fournisseur estimé en micro-dollars US, arrondi vers le haut."""
     if usage.cost_microusd is not None:
@@ -198,12 +212,12 @@ async def finalize_usage(
     prompt_tokens = usage.prompt_tokens if usage else 0
     completion_tokens = usage.completion_tokens if usage else 0
     cached_tokens = usage.cached_input_tokens if usage else 0
-    # Si le fournisseur n'a pas livré ses métriques, on comptabilise la réserve
-    # entière pour ne pas sous-estimer la dépense.
-    actual_cost = (
-        calculate_cost_microusd(model, usage)
-        if usage is not None
-        else reservation.reserved_cost_microusd
+    # Une réponse HTTP de refus arrive avant le flux : aucune génération n'a
+    # commencé et la réservation de crédits doit donc être restituée.
+    actual_cost = settled_cost_microusd(
+        model=model, usage=usage,
+        reserved_cost_microusd=reservation.reserved_cost_microusd,
+        status=status,
     )
 
     @google_firestore.transactional
