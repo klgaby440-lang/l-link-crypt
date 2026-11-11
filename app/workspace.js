@@ -834,8 +834,8 @@ async function deleteProject(rawId){
 }
 
 function bind(){S.root.addEventListener("click",async e=>{if(e.target.matches("[data-dialog-backdrop]")){$("work-dialog-root").innerHTML="";return;}const b=e.target.closest("[data-act]");if(!b)return;try{switch(b.dataset.act){case"generate-image":{
-if(!S.agentTools.includes("image_generate"))return toast("La génération d'images n'est pas disponible : vérifie ZAI_API_KEY et actualise les outils.");
-const imagePrompt=await askInput("Générer une image","Décris précisément l’illustration à créer. GLM-Image produira un PNG que Work pourra vérifier et intégrer aux documents.","Description de l’image","","Ex. Schéma pédagogique de la photosynthèse…","Générer");
+if(!S.agentTools.includes("image_generate"))return toast("La génération d’images n’est pas disponible. Vérifie que GEMINI_API_KEY est configurée sur le serveur et actualise les outils.");
+const imagePrompt=await askInput("Générer une image","Décris précisément l’illustration à créer. Gemini créera un PNG que Work pourra vérifier et intégrer aux documents.","Description de l’image","","Ex. Schéma pédagogique de la photosynthèse…","Générer");
 if(!imagePrompt)return;
 $("work-prompt").value="Crée une illustration originale à partir de cette description : "+imagePrompt+". Utilise image_generate, vérifie le PNG avec artifact_verify, puis intègre l'image au livrable demandé.";
 await sendWork();
