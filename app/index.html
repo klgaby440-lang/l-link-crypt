@@ -5631,7 +5631,7 @@ function initMode(){
     sync();var c=cur(),ef=EF.filter(function(x){return x[0]===eff;})[0];
     b.innerHTML='<i data-lucide="'+c[4]+'"></i><span>'+c[1]+'</span>'+(eff!=='normal'?'<em class="ll-ef">'+ef[1]+'</em>':'')+'<i data-lucide="chevron-down" class="ll-chev"></i>';
     $('lt-body').innerHTML=LV.map(function(l){var lock=!ok(l);
-      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink · crédits+'</small></span>'+'<span class="lt-bd">Facturé à l’usage</span>'+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
+      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink · crédits</small></span>'+'<span class="lt-bd">Facturé à l’usage</span>'+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
      +'<div class="lt-eff"><div class="lt-eh">Intensité de réflexion</div><div class="lt-seg" role="radiogroup">'+EF.map(function(x){return '<div role="radio" tabindex="0" data-e="'+x[0]+'" aria-checked="'+(x[0]===eff)+'">'+x[1]+'</div>';}).join('')+'</div><div class="lt-hint">'+ef[2]+'</div></div>';
     b.disabled=s.disabled;icons();
   }
