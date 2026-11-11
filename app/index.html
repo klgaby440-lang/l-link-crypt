@@ -1181,7 +1181,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const message = document.getElementById("llink-credit-message");
             try {
                 const result = await window.refreshCreditWallet();
-                const optionsResponse = await fetch(SERVER_URL + "/api/subscriptions/payment-options", {headers:await llinkAuthHeaders(true),cache:"no-store"});
+                const optionsResponse = await fetch(SERVER_URL + "/api/credits/payment-options", {headers:await llinkAuthHeaders(true),cache:"no-store"});
                 const options = await optionsResponse.json().catch(()=>({}));
                 if (!optionsResponse.ok) throw new Error(options.detail || "Numéros Mobile Money indisponibles.");
                 const account = document.getElementById("llink-credit-account");
