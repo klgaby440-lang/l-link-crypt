@@ -357,6 +357,7 @@ async def live_websocket(websocket: WebSocket) -> None:
                 level=entitled_level,
                 model=LIVE_USAGE_MODEL,
                 prompt=" " * 380_000,
+                allow_daily_free=True,
             )
         except Exception:
             release_slot()
