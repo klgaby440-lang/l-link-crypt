@@ -16,6 +16,7 @@ from llink_api.database import get_db
 from llink_api.schemas import (
     LlinkSubscriptionCheckoutRequest,
     LlinkSubscriptionRefreshRequest,
+    LlinkCreditCheckoutRequest,
     PaymentVerifyResponse,
     ThinkExchangeRequest,
     UserStatusResponse,
@@ -29,7 +30,12 @@ from llink_api.services.think_billing import (
     get_think_plan_catalog,
     refresh_think_subscription_payment,
     get_think_subscription,
+    get_think_credit_catalog,
+    create_think_credit_checkout,
+    refresh_think_credit_purchase,
 )
+
+from llink_api.services.credit_wallet import read_credit_wallet, grant_verified_purchase
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -236,6 +242,72 @@ async def check_status(
         "expirationDate": exp_timestamp,
         "isNewUser": False,
     }
+
+
+@router.get("/api/credits/catalog")
+async def get_llink_credit_catalog(
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
+):
+    await enforce_endpoint_quota(request=request, user=user, db=get_db(), scope="subscription_status")
+    return await asyncio.to_thread(get_think_credit_catalog)
+
+
+@router.get("/api/credits/wallet")
+async def get_llink_credit_wallet(
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
+):
+    db = get_db()
+    await enforce_endpoint_quota(request=request, user=user, db=db, scope="subscription_status")
+    return await read_credit_wallet(db=db, uid=str(user.get("uid") or ""))
+
+
+@router.post("/api/credits/checkout")
+async def create_llink_credit_checkout_route(
+    payload: LlinkCreditCheckoutRequest,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(require_authenticated_user),
+):
+    await enforce_endpoint_quota(request=request, user=user, db=get_db(), scope="subscription_checkout")
+    if user.get("auth_source") != "think" or not user.get("think_user_id"):
+        raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour acheter des crédits.")
+    checkout_id = (idempotency_key or "").strip()
+    if not 8 <= len(checkout_id) <= 64 or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in checkout_id):
+        raise HTTPException(status_code=422, detail="Clé d'idempotence de l'achat invalide.")
+    return await asyncio.to_thread(
+        create_think_credit_checkout,
+        think_user_id=int(user["think_user_id"]), credits=payload.credits,
+        wallet_type=payload.wallet_type, payment_method=payload.payment_method,
+        checkout_id=checkout_id, mobile_money_account_id=payload.mobile_money_account_id,
+    )
+
+
+@router.post("/api/credits/refresh")
+async def refresh_llink_credit_payment(
+    payload: LlinkSubscriptionRefreshRequest,
+    request: Request,
+    user: dict = Depends(require_authenticated_user),
+):
+    db = get_db()
+    await enforce_endpoint_quota(request=request, user=user, db=db, scope="subscription_checkout")
+    if user.get("auth_source") != "think" or not user.get("think_user_id"):
+        raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour vérifier le paiement.")
+    result = await asyncio.to_thread(
+        refresh_think_credit_purchase,
+        think_user_id=int(user["think_user_id"]), public_id=payload.public_id,
+    )
+    credit_info = result.get("credits") or {}
+    granted = None
+    if result.get("payment_status") == "accepted" and credit_info.get("status") == "paid":
+        granted = await grant_verified_purchase(
+            db=db, uid=str(user.get("uid") or ""), public_id=payload.public_id,
+            credits=int(credit_info.get("purchased") or 0),
+            wallet_type=str(credit_info.get("wallet_type") or "online"),
+        )
+    wallet = await read_credit_wallet(db=db, uid=str(user.get("uid") or ""))
+    return {"product": "llink", **result, "grant": granted, "wallet": wallet}
 
 
 @router.get("/api/subscriptions/status")
