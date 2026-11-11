@@ -275,7 +275,7 @@ def test_credit_checkout_uses_think_server_and_idempotency(monkeypatch):
         captured.update(kwargs)
         return {
             "ok": True, "product": "llink", "credits": 100, "wallet_type": "online",
-            "public_id": "PAY-CREDIT-TEST", "payment_url": "https://checkout.cinetpay.net/pay/test",
+            "public_id": "PAY-CREDIT-TEST-0000000001", "payment_url": "https://checkout.cinetpay.net/pay/test",
             "amount": 2800, "currency": "CDF",
         }
 
@@ -322,7 +322,7 @@ def test_credit_refresh_grants_only_provider_confirmed_purchase(monkeypatch):
 
     monkeypatch.setattr(users, "enforce_endpoint_quota", no_quota)
     monkeypatch.setattr(users, "refresh_think_credit_purchase", lambda **_kwargs: {
-        "ok": True, "public_id": "PAY-CREDIT-TEST", "payment_status": "accepted",
+        "ok": True, "public_id": "PAY-CREDIT-TEST-0000000001", "payment_status": "accepted",
         "credits": {"purchased": 100, "wallet_type": "online", "status": "paid"},
     })
     monkeypatch.setattr(users, "grant_verified_purchase", fake_grant)
@@ -332,7 +332,7 @@ def test_credit_refresh_grants_only_provider_confirmed_purchase(monkeypatch):
         "uid": "think_thk-0123456789ab", "auth_source": "think", "think_user_id": 42,
     }
     try:
-        response = client.post("/api/credits/refresh", json={"public_id": "PAY-CREDIT-TEST"})
+        response = client.post("/api/credits/refresh", json={"public_id": "PAY-CREDIT-TEST-0000000001"})
     finally:
         main.app.dependency_overrides.clear()
 
@@ -341,5 +341,5 @@ def test_credit_refresh_grants_only_provider_confirmed_purchase(monkeypatch):
     assert captured["db"] is not None
     assert {key: value for key, value in captured.items() if key != "db"} == {
         "uid": "think_thk-0123456789ab",
-        "public_id": "PAY-CREDIT-TEST", "credits": 100, "wallet_type": "online",
+        "public_id": "PAY-CREDIT-TEST-0000000001", "credits": 100, "wallet_type": "online",
     }
