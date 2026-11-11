@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -135,10 +136,16 @@ async def exchange_think_sso_for_firebase(
             raise jwt.InvalidTokenError("scope invalide")
         think_user_id = int(claims["sub"])
         think_id = str(claims["think_id"]).strip()
+        crypt_id = str(claims["crypt_id"]).strip().upper()
         email = str(claims["email"]).strip().lower()
         full_name = str(claims.get("name") or "").strip()
-        if think_user_id <= 0 or not think_id.startswith("THK-") or "@" not in email:
-            raise jwt.InvalidTokenError("identité Think invalide")
+        if (
+            think_user_id <= 0
+            or not re.fullmatch(r"THK-[A-F0-9]{12}", think_id)
+            or not re.fullmatch(r"INK_[A-HJ-NP-Z2-9]{15}", crypt_id)
+            or "@" not in email
+        ):
+            raise jwt.InvalidTokenError("identité CRYPT invalide")
     except (jwt.PyJWTError, KeyError, TypeError, ValueError):
         raise HTTPException(
             status_code=401,
@@ -154,7 +161,8 @@ async def exchange_think_sso_for_firebase(
             firebase_uid,
             developer_claims={
                 "auth_source": "think", "think_user_id": think_user_id,
-                "think_id": think_id, "think_email": email, "think_name": full_name,
+                "think_id": think_id, "crypt_id": crypt_id,
+                "think_email": email, "think_name": full_name,
             },
         )
         if isinstance(custom_token, bytes):
@@ -163,7 +171,7 @@ async def exchange_think_sso_for_firebase(
             raise ValueError("Firebase Admin a retourné un custom token vide.")
         return {
             "customToken": custom_token,
-            "user": {"uid": firebase_uid, "think_id": think_id, "email": email, "full_name": full_name},
+            "user": {"uid": firebase_uid, "crypt_id": crypt_id, "think_id": think_id, "email": email, "full_name": full_name},
         }
     except Exception as exc:
         logger.exception("Échec de création de session Firebase pour un compte Think.")
