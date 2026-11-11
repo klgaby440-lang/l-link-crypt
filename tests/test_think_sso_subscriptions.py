@@ -81,20 +81,7 @@ def test_think_sso_exchange_rejects_expired_ticket():
     assert response.status_code == 401, response.text
 
 
-def test_think_user_status_uses_think_subscription(monkeypatch):
-    now = datetime.now(timezone.utc)
-    expires_at = (now + timedelta(days=30)).isoformat()
-    monkeypatch.setattr(
-        users,
-        "get_think_subscription",
-        lambda user_id: {
-            "is_active": True,
-            "plan": "gold",
-            "status": "active",
-            "expires_at": expires_at,
-            "level": "auren",
-        },
-    )
+def test_authenticated_user_status_is_credit_based():
     main.app.dependency_overrides[users.get_optional_user] = lambda: {
         "uid": "think_thk-0123456789ab",
         "auth_source": "think",
@@ -109,8 +96,9 @@ def test_think_user_status_uses_think_subscription(monkeypatch):
     payload = response.json()
     assert payload["isValid"] is True
     assert payload["isTrial"] is False
-    assert payload["plan"] == "gold"
-    assert payload["subscriptionStatus"] == "active"
+    assert payload["plan"] == "credits"
+    assert payload["subscriptionStatus"] == "credits"
+    assert payload["expirationDate"] is None
 
 
 def test_checkout_requires_think_linked_identity(monkeypatch):
@@ -178,26 +166,14 @@ def test_checkout_uses_server_billing_service_and_idempotency(monkeypatch):
     assert "amount" not in captured
 
 
-def test_think_subscription_status_is_the_only_entitlement_source(monkeypatch):
-    monkeypatch.setattr(
-        entitlements,
-        "get_think_subscription",
-        lambda user_id: {"is_active": True, "level": "noetra"},
-    )
-    assert entitlements.resolve_entitled_level(
-        {"uid": "think_thk-0123456789ab", "auth_source": "think", "think_user_id": 42},
-        db=None,
-    ) == "noetra"
+def test_model_access_is_limited_by_credit_wallet_not_subscription():
+    think_user = {"uid": "think_thk-0123456789ab", "auth_source": "think", "think_user_id": 42}
+    google_user = {"uid": "legacy-google-user", "auth_source": "google"}
+    anonymous_user = {"uid": "anonymous"}
 
-    monkeypatch.setattr(
-        entitlements,
-        "get_think_subscription",
-        lambda user_id: {"is_active": False, "level": "omnis"},
-    )
-    assert entitlements.resolve_entitled_level(
-        {"uid": "think_thk-0123456789ab", "auth_source": "think", "think_user_id": 42},
-        db=None,
-    ) == "velora"
+    assert entitlements.resolve_entitled_level(think_user, db=None) == "omnis"
+    assert entitlements.resolve_entitled_level(google_user, db=None) == "omnis"
+    assert entitlements.resolve_entitled_level(anonymous_user, db=None) == "velora"
 
 
 def test_refresh_subscription_payment_uses_authenticated_think_identity(monkeypatch):
