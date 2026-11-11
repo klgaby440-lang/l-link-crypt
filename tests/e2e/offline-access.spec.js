@@ -1,32 +1,21 @@
 const { test, expect } = require("@playwright/test");
 
-test("le Web n'importe jamais le moteur local et refuse le mode hors ligne", async ({ page }) => {
+test("le Web charge ses bibliothèques UI sans importer le moteur local et refuse le mode hors ligne", async ({ page }) => {
   const nativeRequests = [];
+  const uiRequests = [];
   const pageErrors = [];
   page.on("request", request => {
-    if (/offline-engine\.js|\/vendor\//i.test(request.url())) nativeRequests.push(request.url());
+    const url = request.url();
+    // Les bibliothèques d'interface locales sont partagées par le Web et le natif.
+    // Seuls le runtime offline, l'ONNX et les ressources OCR sont interdits sur le Web.
+    if (/offline-engine\.js|\/vendor\/(?:transformers|tesseract|firebase-runtime|onnxruntime)(?:[./?]|$)|\/models\/|\/tessdata\//i.test(url)) {
+      nativeRequests.push(url);
+    }
+    if (/\/vendor\/(?:tailwind\.min\.css|lucide\.min\.js|dexie\.min\.js|marked\.umd\.js|purify\.min\.js)(?:\?|$)/i.test(url)) {
+      uiRequests.push(url);
+    }
   });
   page.on("pageerror", error => pageErrors.push(error.message));
-
-  // Les CDNs sont simulés à partir des fichiers construits en CI : le test
-  // vérifie la sélection de plateforme, pas la disponibilité d'Internet.
-  await page.route("https://cdn.tailwindcss.com", route => route.fulfill({
-    status: 200, contentType: "application/javascript",
-    body: "window.tailwind=window.tailwind||{};"
-  }));
-  await page.route("https://unpkg.com/lucide@1.70.0/dist/umd/lucide.js", route => route.fulfill({
-    status: 200, contentType: "application/javascript",
-    body: "window.lucide={createIcons:function(){}};"
-  }));
-  await page.route("https://unpkg.com/dexie@4.4.7/dist/dexie.js", route => route.fulfill({
-    path: require("path").join(__dirname, "../../app/vendor/dexie.min.js")
-  }));
-  await page.route("https://cdn.jsdelivr.net/npm/marked@18.1.2/lib/marked.umd.js", route => route.fulfill({
-    path: require("path").join(__dirname, "../../app/vendor/marked.umd.js")
-  }));
-  await page.route("https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js", route => route.fulfill({
-    path: require("path").join(__dirname, "../../app/vendor/purify.min.js")
-  }));
   await page.route("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js", route => route.fulfill({
     status: 200, contentType: "application/javascript",
     body: "export const initializeApp=(config)=>({config}); export const getApps=()=>[]; export const getApp=()=>({});"
@@ -42,6 +31,9 @@ test("le Web n'importe jamais le moteur local et refuse le mode hors ligne", asy
   expect(await page.evaluate(() => window.canUseLlinkOffline())).toBe(false);
   expect(await page.evaluate(() => typeof window.Dexie)).toBe("function");
   expect(await page.evaluate(() => !!window.LLINK_SERVER_URL)).toBe(true);
+  expect(uiRequests.some(url => url.includes("tailwind.min.css"))).toBe(true);
+  expect(uiRequests.some(url => url.includes("lucide.min.js"))).toBe(true);
+  expect(uiRequests.some(url => url.includes("dexie.min.js"))).toBe(true);
   expect(nativeRequests).toEqual([]);
   expect(pageErrors.filter(message => /Dexie|SERVER_URL|Firebase local/i.test(message))).toEqual([]);
 });
