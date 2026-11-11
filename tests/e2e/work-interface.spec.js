@@ -114,6 +114,25 @@ function finalEvent(answer, artifact = null, reasoningOverride = null) {
   return { type: "final", answer, reasoning, artifacts: artifact ? [artifact] : [] };
 }
 
+test("Work ouvre un accueil sans créer automatiquement une conversation et propose ses quatre espaces", async ({ page }) => {
+  await openWork(page);
+  await expect(page.locator(".work-home")).toBeVisible();
+  for (const label of ["Tâches", "Notes", "Concentration", "Explorer"]) {
+    await expect(page.locator(".work-home-card").filter({ hasText: label })).toBeVisible();
+  }
+  await expect(page.locator(".work-message")).toHaveCount(0);
+});
+
+test("L’aide Llink est embarquée localement et sa recherche filtre les rubriques", async ({ page }) => {
+  await openWork(page);
+  await page.locator('[data-act="home-help"]').click();
+  await expect(page).toHaveURL(/help\\.html$/);
+  await expect(page.locator("h1")).toContainText("Comment pouvons-nous t’aider");
+  await page.locator("#help-search").fill("crédits");
+  await expect(page.locator("#credits")).toBeVisible();
+  await expect(page.locator("#offline")).toBeHidden();
+});
+
 test("Work crée et télécharge un fichier Markdown éditable par l'agent serveur", async ({ page }) => {
   await openWork(page);
   const text = "# Rapport CI\n\nContenu créé par le nouvel agent.";
