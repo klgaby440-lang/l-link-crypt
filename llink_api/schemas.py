@@ -185,6 +185,14 @@ class UserStatusResponse(BaseModel):
     subscriptionStatus: str | None = None
 
 
+class LlinkCreditCheckoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    credits: int = Field(ge=1, le=500000)
+    wallet_type: Literal["online", "offline"] = "online"
+    payment_method: Literal["airtel_money", "orange_money", "mpesa", "africell_money"] 
+    mobile_money_account_id: int | None = Field(default=None, gt=0)
+
+
 class ChatSyncPayload(BaseModel):
     """Structure connue de Dexie ; les champs additionnels restent acceptés."""
     model_config = ConfigDict(extra="allow")
