@@ -53,7 +53,7 @@
   // Web : mêmes dépendances épinglées que les applications natives.
   // La feuille Tailwind est locale ; les scripts sont réécrits par Vercel
   // vers les CDN côté serveur, mais restent de même origine dans le navigateur.
-  writeLink("./vendor/tailwind.min.css.gz");
+  writeLink("./vendor/tailwind.min.css");
   writeScript("./vendor/lucide.min.js");
   writeScript("./vendor/dexie.min.js");
   writeScript("./vendor/marked.umd.js");

@@ -1,7 +1,7 @@
 {
   "headers": [
     {
-      "source": "/app/vendor/tailwind.min.css.gz",
+      "source": "/app/vendor/tailwind.min.css",
       "headers": [
         {
           "key": "Content-Type",
