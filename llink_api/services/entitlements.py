@@ -23,43 +23,10 @@ def _expiration_epoch(value: Any) -> float | None:
 
 
 def resolve_entitled_level(user: dict, db: Any | None) -> str:
-    """Le niveau demandé par le navigateur ne constitue jamais une preuve d'abonnement."""
-    uid = user.get("uid", "anonymous")
+    """Les modèles sont accessibles selon le portefeuille, plus selon un abonnement."""
+    uid = str(user.get("uid") or "anonymous")
     if uid == "anonymous":
         return "velora"
-    if user.get("auth_source") == "think" and user.get("think_user_id"):
-        subscription = get_think_subscription(int(user["think_user_id"]))
-        if not subscription.get("is_active"):
-            return "velora"
-        level = str(subscription.get("level") or "velora").strip().lower()
-        if level not in {"velora", "satori", "noetra", "auren", "omnis"}:
-            raise HTTPException(
-                status_code=502,
-                detail="Le niveau d'abonnement retourné par Think est invalide.",
-            )
-        return level
-    if db is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Impossible de vérifier votre abonnement pour le moment.",
-        )
-
-    try:
-        snapshot = db.collection("users").document(uid).get()
-        data = (snapshot.to_dict() or {}) if snapshot.exists else {}
-    except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Impossible de vérifier votre abonnement pour le moment.",
-        ) from exc
-
-    if not data.get("isPro"):
-        return "velora"
-    expiration = _expiration_epoch(data.get("expirationDate"))
-    if expiration is None or expiration <= time.time():
-        return "velora"
-
-    # Champ canonique prévu pour l'activation après confirmation Think (phase 7).
-    # Les anciens documents sans plan explicite restent limités à VELORA.
-    plan = str(data.get("subscriptionPlan", "")).strip().lower()
-    return PLAN_TO_LEVEL.get(plan, "velora")
+    # Le contrôle financier est effectué avant chaque requête IA par usage_meter.
+    # OMNIS ici représente le plafond d'accès aux modèles, pas un forfait payant.
+    return "omnis"
