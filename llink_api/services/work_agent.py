@@ -843,10 +843,8 @@ async def _gemini_generate_content(
     }
     if aspect_ratio:
         generation_config["imageConfig"] = {
-            "image": {
-                "aspectRatio": aspect_ratio,
-                "imageSize": "2K" if quality == "hd" else "1K",
-            }
+            "aspectRatio": aspect_ratio,
+            "imageSize": "2K" if quality == "hd" else "1K",
         }
     request_body: dict[str, Any] = {
         "contents": [{"role": "user", "parts": parts}],
