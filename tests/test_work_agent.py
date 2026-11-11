@@ -866,7 +866,19 @@ def test_gemini_image_tools_generate_and_edit_verified_artifacts(monkeypatch):
             }
         }
 
+    async def no_reserve(**_kwargs):
+        return SimpleNamespace(request_id="test-reservation", reserved_free=0, reserved_online=1, reservation_date="2026-11-11")
+
+    async def no_settle(**_kwargs):
+        return None
+
+    async def no_cancel(**_kwargs):
+        return None
+
     async def run():
+        monkeypatch.setattr(work_agent, "reserve_credit_usage", no_reserve)
+        monkeypatch.setattr(work_agent, "settle_credit_usage", no_settle)
+        monkeypatch.setattr(work_agent, "cancel_credit_reservation", no_cancel)
         monkeypatch.setattr(work_agent, "enforce_endpoint_quota", no_quota)
         monkeypatch.setattr(
             work_agent,
