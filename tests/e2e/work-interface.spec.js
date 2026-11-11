@@ -128,7 +128,7 @@ test("L’aide Llink est embarquée localement et sa recherche filtre les rubriq
   await page.locator('[data-act="home-help"]').click();
   await expect(page).toHaveURL(/help\.html$/);
   await expect(page.locator("h1")).toContainText("Comment pouvons-nous t’aider");
-  await page.locator("#help-search").fill("crédits");
+  await page.locator("#help-search").fill("CinetPay");
   await expect(page.locator("#credits")).toBeVisible();
   await expect(page.locator("#offline")).toBeHidden();
 });
