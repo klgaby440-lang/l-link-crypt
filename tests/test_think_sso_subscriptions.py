@@ -19,13 +19,13 @@ from llink_api.services import entitlements
 client = TestClient(main.app)
 
 
-def _sso_token(*, jti: str | None = None, scope: str = "llink", expires: int = 120) -> str:
+def _sso_token(*, jti: str | None = None, scope: str = "llink", expires: int = 120, crypt_id: str = "INK_ABCDEFGHJKLMNPQ") -> str:
     now = datetime.now(timezone.utc)
     return jwt.encode(
         {
             "sub": "42",
             "think_id": "THK-0123456789AB",
-            "crypt_id": "INK_ABCDEFGHJKLMNPQ",
+            "crypt_id": crypt_id,
             "email": "tester@example.test",
             "name": "Think Tester",
             "scope": scope,
@@ -213,3 +213,12 @@ def test_credit_refresh_grants_only_provider_confirmed_purchase(monkeypatch):
         "uid": "think_thk-0123456789ab",
         "public_id": "PAY-1234567890ABCDEF", "credits": 100, "wallet_type": "online",
     }
+
+
+def test_think_sso_exchange_rejects_invalid_crypt_id(monkeypatch):
+    monkeypatch.setattr(users.firebase_auth, "create_custom_token", lambda *args, **kwargs: "custom-token")
+    response = client.post(
+        "/api/auth/think-exchange",
+        json={"sso_token": _sso_token(crypt_id="INK_TOO_SHORT")},
+    )
+    assert response.status_code == 401, response.text
