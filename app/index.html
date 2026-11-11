@@ -3092,6 +3092,9 @@ window.refreshPlanPrices();
   new MutationObserver(syncTheme).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&win()&&win().classList.contains('is-open')) closeSubscriptionWindow(); });
 })();
+// Compatibilité : toute ancienne ouverture d'abonnement redirige vers le portefeuille.
+window.openSubscriptionWindow = window.openCreditWallet;
+window.closeSubscriptionWindow = function(){ const wallet=document.getElementById('llink-credit-wallet'); if(wallet) wallet.remove(); };
 </script>
 
 <style id="llink-v19-connecteurs-horizontal-et-logo-fixe">
