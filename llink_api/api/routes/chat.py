@@ -256,6 +256,7 @@ async def chat_endpoint(
             level=model.level,
             model=model,
             prompt=prompt_for_estimate,
+            allow_daily_free=True,
         )
     except Exception:
         release_slot()
