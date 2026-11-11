@@ -5599,8 +5599,8 @@ function initMode(){
   var TN={bronze:'Bronze',silver:'Silver',gold:'Gold',diamant:'Diamant'},RK={bronze:1,silver:2,gold:3,diamant:4};
   var EF=[['normal','Normal','Réflexion équilibrée'],['extra','Extra','Réflexion poussée'],['ultime','Ultime','Réflexion au maximum']];
   var lv='velora',eff='normal',effortExplicit=false;
-  function rank(){try{return RK[localStorage.getItem('llink_plan')]||0;}catch(e){return 0;}}
-  function ok(l){return l[3]||rank()>=RK[l[6]];}
+  function rank(){return 4;}
+  function ok(l){return true;}
   try{var a=localStorage.getItem('llink_level'),e0=localStorage.getItem('llink_effort');if(a&&LV.some(function(l){return l[0]===a;}))lv=a;if(e0&&EF.some(function(x){return x[0]===e0;})){eff=e0;effortExplicit=true;}}catch(_){}
   function cur(){var l=LV.filter(function(x){return x[0]===lv;})[0]||LV[0];return ok(l)?l:LV[0];}
   function sync(){var l=cur();lv=l[0];s.value=l[5];}
@@ -5613,7 +5613,7 @@ function initMode(){
     sync();var c=cur(),ef=EF.filter(function(x){return x[0]===eff;})[0];
     b.innerHTML='<i data-lucide="'+c[4]+'"></i><span>'+c[1]+'</span>'+(eff!=='normal'?'<em class="ll-ef">'+ef[1]+'</em>':'')+'<i data-lucide="chevron-down" class="ll-chev"></i>';
     $('lt-body').innerHTML=LV.map(function(l){var lock=!ok(l);
-      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink'+(l[2]?' · v'+l[2]:'')+(l[6]?' · '+TN[l[6]]:'')+'</small></span>'+'<span class="lt-bd">Facturé à l’usage</span>'+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
+      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink · crédits+'</small></span>'+'<span class="lt-bd">Facturé à l’usage</span>'+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
      +'<div class="lt-eff"><div class="lt-eh">Intensité de réflexion</div><div class="lt-seg" role="radiogroup">'+EF.map(function(x){return '<div role="radio" tabindex="0" data-e="'+x[0]+'" aria-checked="'+(x[0]===eff)+'">'+x[1]+'</div>';}).join('')+'</div><div class="lt-hint">'+ef[2]+'</div></div>';
     b.disabled=s.disabled;icons();
   }
