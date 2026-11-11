@@ -783,7 +783,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
 
     <div id="sidebar" class="llink-sidebar fixed lg:static inset-y-0 left-0 z-50 flex flex-col shadow-2xl lg:shadow-none -translate-x-full lg:translate-x-0" aria-label="Navigation Llink">
         <nav class="rail-nav" aria-label="Raccourcis">
-          <button class="rail-item" onclick="openSettings('panel-sub')" title="Abonnement" aria-label="Abonnement"><span class="rail-icon"><i data-lucide="crown"></i></span><span class="rail-label">Abonnement</span></button>
+          <button class="rail-item" onclick="openSettings('panel-sub')" title="Portefeuille" aria-label="Portefeuille"><span class="rail-icon"><i data-lucide="wallet"></i></span><span class="rail-label">Abonnement</span></button>
           <button class="rail-item" onclick="newConversation()" title="Nouvelle discussion" aria-label="Nouvelle discussion"><span class="rail-icon"><i data-lucide="square-pen"></i></span><span class="rail-label">Nouvelle discussion</span></button>
           <button class="rail-item" onclick="sidebarPlanifier()" title="Planifier" aria-label="Planifier"><span class="rail-icon"><i data-lucide="calendar-check"></i></span><span class="rail-label">Planifier</span></button>
           <button class="rail-item" onclick="sidebarBibliotheque()" title="Bibliothèque" aria-label="Bibliothèque"><span class="rail-icon"><i data-lucide="library-big"></i></span><span class="rail-label">Bibliothèque</span></button>
@@ -822,7 +822,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             <div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-[0.75rem] shadow-lg flex flex-col gap-[0.5rem] relative">
                 
                 <div id="pro-alert" class="hidden text-[0.75rem] font-bold text-center py-[0.25rem] px-[0.5rem] rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mb-[0.25rem]">
-                    Accès Hors-Ligne expiré ou non abonné.
+                    Mode Offline indisponible sur cet appareil ou ce compte.
                 </div>
 
                 <textarea id="user-msg" placeholder="Commencez à discuter..." class="w-full bg-transparent border-none outline-none resize-none p-[0.5rem] text-[1rem] max-h-[10rem] overflow-y-auto no-scrollbar" oninput="this.style.height='3rem';this.style.height=this.scrollHeight+'px'"></textarea>
@@ -1458,7 +1458,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const user = window.auth.currentUser;
             const tokenResult = await user.getIdTokenResult(true);
             if (tokenResult.claims?.auth_source !== "think" || !tokenResult.claims?.think_user_id) {
-                alert("Les abonnements Llink nécessitent une connexion avec ton compte Think. Déconnecte-toi puis choisis « Se connecter avec Think ».");
+                alert("Les achats de crédits nécessitent une connexion avec ton compte Think. Déconnecte-toi puis choisis « Se connecter avec Think ».");
                 return;
             }
             const methods = {
@@ -1694,7 +1694,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 const target = document.getElementById(sectionId);
                 if (target) { target.classList.remove('hidden'); target.style.display = 'block'; }
                 const title = panel.querySelector('h3');
-                if (title) title.textContent = ({'panel-sub':'Abonnement','panel-pref':'Préférences','panel-connections':'Connexions','panel-privacy':'Confidentialité'})[sectionId] || 'Paramètres';
+                if (title) title.textContent = ({'panel-sub':'Portefeuille et crédits','panel-pref':'Préférences','panel-connections':'Connexions','panel-privacy':'Confidentialité'})[sectionId] || 'Paramètres';
             } else {
                 const title = panel.querySelector('h3');
                 if (title) title.textContent = 'Paramètres';
