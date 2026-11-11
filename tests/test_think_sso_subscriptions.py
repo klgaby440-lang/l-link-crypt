@@ -249,7 +249,11 @@ def test_refresh_subscription_payment_rejects_malformed_public_id():
 
 
 
-def test_credit_checkout_requires_think_identity():
+def test_credit_checkout_requires_think_identity(monkeypatch):
+    async def no_quota(**_kwargs):
+        return None
+    monkeypatch.setattr(users, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(users, "get_db", lambda: object())
     main.app.dependency_overrides[users.require_authenticated_user] = lambda: {
         "uid": "legacy-google-user", "email": "legacy@example.test",
     }
@@ -280,6 +284,7 @@ def test_credit_checkout_uses_think_server_and_idempotency(monkeypatch):
 
     monkeypatch.setattr(users, "create_think_credit_checkout", fake_checkout)
     monkeypatch.setattr(users, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(users, "get_db", lambda: object())
     main.app.dependency_overrides[users.require_authenticated_user] = lambda: {
         "uid": "think_thk-0123456789ab", "auth_source": "think", "think_user_id": 42,
     }
