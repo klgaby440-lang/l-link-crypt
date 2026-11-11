@@ -101,5 +101,5 @@ jobs:
           name: Llink ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            - artifacts/Llink-Setup.exe
-            - desktop/src-tauri/target/release/llink.exe
+            artifacts/Llink-Setup.exe
+            desktop/src-tauri/target/release/llink.exe
