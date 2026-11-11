@@ -188,7 +188,7 @@ class UserStatusResponse(BaseModel):
 class LlinkCreditCheckoutRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     credits: int = Field(ge=1, le=500000)
-    wallet_type: Literal["online", "offline"] = "online"
+    wallet_type: Literal["online"] = "online"
     payment_method: Literal["AIRTEL_CD", "OM_CD", "MPESA_CD", "AFRICELL_CD"] 
     mobile_money_account_id: int | None = Field(default=None, gt=0)
 
