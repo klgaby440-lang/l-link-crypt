@@ -910,8 +910,8 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                     <i data-lucide="moon" class="w-[1.25rem] h-[1.25rem] text-indigo-500"></i> Apparence et thème
                 </button>
                 
-                <button onclick="openSubscriptionWindow()" class="w-full flex items-center gap-[0.65rem] p-[0.65rem] bg-surface-light dark:bg-surface-dark rounded-2xl font-bold hover:brightness-95 transition">
-                    <i data-lucide="credit-card" class="w-[1.25rem] h-[1.25rem] text-emerald-500"></i> Forfait et mode hors-ligne
+                <button onclick="openCreditWallet()" class="w-full flex items-center gap-[0.65rem] p-[0.65rem] bg-surface-light dark:bg-surface-dark rounded-2xl font-bold hover:brightness-95 transition">
+                    <i data-lucide="wallet" class="w-[1.25rem] h-[1.25rem] text-emerald-500"></i> Portefeuille et crédits
                 </button>
                 <div id="subscription-info" class="hidden"></div>
 
@@ -1084,24 +1084,21 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             if (!publicId || !window.auth?.currentUser) return false;
             const tokenResult = await window.auth.currentUser.getIdTokenResult(true);
             if (tokenResult.claims?.auth_source !== "think" || !tokenResult.claims?.think_user_id) return false;
-            const response = await fetch(SERVER_URL + "/api/subscriptions/refresh", {
+            const response = await fetch(SERVER_URL + "/api/credits/refresh", {
                 method: "POST",
                 headers: await llinkAuthHeaders(true),
                 body: JSON.stringify({ public_id: publicId }),
                 cache: "no-store"
             });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || "Think n'a pas pu vérifier le paiement.");
-            if (typeof window.checkSubscription === "function") await window.checkSubscription();
-            const statusBox = document.getElementById("subscription-info");
-            if (data.payment_status === "accepted" && data.subscription?.is_active) {
-                if (statusBox) statusBox.textContent = "✅ Paiement confirmé. Ton abonnement Llink est actif.";
-                alert("Paiement confirmé ! Ton abonnement Llink est maintenant actif.");
+            if (!response.ok) throw new Error(data.detail || "Think n'a pas pu vérifier l'achat de crédits.");
+            if (data.payment_status === "accepted" && data.credits?.status === "paid") {
+                alert("Paiement confirmé. Tes crédits Llink ont été ajoutés au portefeuille.");
+                if (typeof window.refreshCreditWallet === "function") await window.refreshCreditWallet();
             } else if (data.payment_status === "failed") {
-                if (statusBox) statusBox.textContent = "❌ Le paiement n'a pas été confirmé. Aucun abonnement n'a été activé.";
-                alert("Le paiement Llink a échoué ou a été refusé. Aucun abonnement n'a été activé.");
+                alert("Le paiement a échoué. Aucun crédit n'a été ajouté.");
             } else {
-                if (statusBox) statusBox.textContent = "⏳ Paiement en attente de confirmation. Le statut sera revérifié à ta prochaine actualisation.";
+                alert("Paiement en attente de confirmation. Aucun crédit n'a encore été ajouté.");
                 return true;
             }
             params.delete("llink_payment");
@@ -1109,6 +1106,81 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const next = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
             window.history.replaceState({}, document.title, next);
             return true;
+        };
+
+        window.refreshCreditWallet = async () => {
+            const [walletResponse, catalogResponse] = await Promise.all([
+                fetch(SERVER_URL + "/api/credits/wallet", { headers: await llinkAuthHeaders(true), cache: "no-store" }),
+                fetch(SERVER_URL + "/api/credits/catalog", { headers: await llinkAuthHeaders(true), cache: "no-store" })
+            ]);
+            const wallet = await walletResponse.json().catch(() => ({}));
+            const catalog = await catalogResponse.json().catch(() => ({}));
+            if (!walletResponse.ok) throw new Error(wallet.detail || "Portefeuille indisponible.");
+            if (!catalogResponse.ok) throw new Error(catalog.detail || "Tarif des crédits indisponible.");
+            const root = document.getElementById("llink-credit-wallet-body");
+            if (root) {
+                root.querySelector("[data-balance=online]").textContent = wallet.online_balance ?? 0;
+                root.querySelector("[data-balance=free]").textContent = wallet.daily_free_balance ?? 0;
+                root.querySelector("[data-balance=offline]").textContent = wallet.offline_balance ?? 0;
+                root.querySelector("[data-credit-rate]").textContent = "1 crédit = 0,01 USD";
+                root.querySelector("[data-offline-note]").textContent = wallet.offline_note || "Le portefeuille Offline n'est pas encore activé.";
+                root.querySelector("[data-credit-min]").textContent = catalog.minimum_credits ?? 1;
+                root.querySelector("[data-credit-max]").textContent = catalog.maximum_credits ?? 500000;
+            }
+            return {wallet, catalog};
+        };
+
+        window.openCreditWallet = async () => {
+            if (!window.auth?.currentUser) { alert("Connecte-toi pour accéder à ton portefeuille."); return; }
+            let overlay = document.getElementById("llink-credit-wallet");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "llink-credit-wallet";
+                overlay.style.cssText = "position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:16px";
+                overlay.innerHTML = '<section style="width:min(100%,480px);max-height:92dvh;overflow:auto;background:var(--panel-bg,#fff);color:var(--text-primary,#171717);border:1px solid var(--panel-border,#ddd);border-radius:24px;padding:22px;box-shadow:0 24px 80px #0005"><header style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div><h2 style="font-size:22px;font-weight:800">Mon portefeuille Llink</h2><p style="opacity:.7;font-size:13px">Achète des crédits à ton rythme, sans abonnement.</p></div><button id="llink-credit-close" style="font-size:24px;padding:4px 10px">×</button></header><div id="llink-credit-wallet-body" style="margin-top:16px"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"><div style="padding:12px;border-radius:14px;background:var(--surface-light,#f3f3f3)"><small>Online</small><strong data-balance="online" style="display:block;font-size:22px">—</strong></div><div style="padding:12px;border-radius:14px;background:var(--surface-light,#f3f3f3)"><small>Gratuits / jour</small><strong data-balance="free" style="display:block;font-size:22px">—</strong></div><div style="padding:12px;border-radius:14px;background:var(--surface-light,#f3f3f3)"><small>Offline</small><strong data-balance="offline" style="display:block;font-size:22px">—</strong></div></div><p data-credit-rate style="font-size:13px;margin:12px 0;font-weight:700">1 crédit = 0,01 USD</p><div style="display:grid;gap:10px"><label>Nombre de crédits<input id="llink-credit-amount" type="number" min="1" max="500000" step="1" value="100" style="width:100%;padding:12px;border:1px solid #aaa;border-radius:12px;background:transparent;color:inherit"></label><small>Limites : <span data-credit-min>1</span> à <span data-credit-max>500000</span> crédits. Le montant CDF est calculé par Think.</small><label>Moyen de paiement<select id="llink-credit-method" style="width:100%;padding:12px;border:1px solid #aaa;border-radius:12px;background:transparent;color:inherit"><option value="AIRTEL_CD">Airtel Money</option><option value="OM_CD">Orange Money</option><option value="MPESA_CD">M-Pesa</option><option value="AFRICELL_CD">Africell Money</option></select></label><label>Numéro Mobile Money enregistré<select id="llink-credit-account" style="width:100%;padding:12px;border:1px solid #aaa;border-radius:12px;background:transparent;color:inherit"><option value="">Choisir au paiement</option></select></label><button id="llink-credit-buy" style="padding:14px;border-radius:999px;background:var(--accent,#171717);color:white;font-weight:800">Acheter des crédits</button><p data-offline-note style="font-size:12px;opacity:.7">Les crédits Offline ne sont pas encore activés.</p><p id="llink-credit-message" role="status" style="font-size:13px"></p></div></div></section>';
+                document.body.appendChild(overlay);
+                document.getElementById("llink-credit-close").onclick = () => overlay.remove();
+                overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+                document.getElementById("llink-credit-buy").onclick = async () => {
+                    const button = document.getElementById("llink-credit-buy");
+                    const message = document.getElementById("llink-credit-message");
+                    const credits = Number(document.getElementById("llink-credit-amount").value);
+                    const method = document.getElementById("llink-credit-method").value;
+                    const account = document.getElementById("llink-credit-account").value;
+                    if (!Number.isInteger(credits) || credits < 1) { message.textContent = "Indique un nombre entier de crédits valide."; return; }
+                    button.disabled = true; message.textContent = "Préparation du paiement…";
+                    try {
+                        const checkoutId = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : "credit" + Date.now() + Math.random().toString(36).slice(2)).slice(0, 48);
+                        const response = await fetch(SERVER_URL + "/api/credits/checkout", {
+                            method: "POST", headers: await llinkAuthHeaders(true),
+                            body: JSON.stringify({credits, wallet_type:"online", payment_method:method, mobile_money_account_id:account ? Number(account) : null}),
+                            cache:"no-store",
+                        });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(data.detail || "Impossible de créer le paiement.");
+                        if (!data.payment_url) throw new Error("Think n'a pas retourné de lien de paiement.");
+                        message.textContent = "Redirection vers CinetPay…";
+                        window.location.href = data.payment_url;
+                    } catch (error) { message.textContent = error.message || "Erreur de paiement."; button.disabled = false; }
+                };
+            }
+            overlay.style.display = "flex";
+            const message = document.getElementById("llink-credit-message");
+            try {
+                const result = await window.refreshCreditWallet();
+                const optionsResponse = await fetch(SERVER_URL + "/api/subscriptions/payment-options", {headers:await llinkAuthHeaders(true),cache:"no-store"});
+                const options = await optionsResponse.json().catch(()=>({}));
+                if (!optionsResponse.ok) throw new Error(options.detail || "Numéros Mobile Money indisponibles.");
+                const account = document.getElementById("llink-credit-account");
+                account.innerHTML = '<option value="">Choisir au paiement</option>';
+                (options.items || []).forEach(item => {
+                    const option = document.createElement("option");
+                    option.value = item.id;
+                    option.textContent = (item.label || item.operator || "Mobile Money") + " · " + (item.masked_phone || item.phone_masked || "numéro enregistré");
+                    account.appendChild(option);
+                });
+                message.textContent = "";
+            } catch (error) { message.textContent = error.message || "Impossible de charger le portefeuille."; }
         };
 
         onAuthStateChanged(auth, async (user) => {
