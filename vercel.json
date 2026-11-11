@@ -1,6 +1,23 @@
 {
   "headers": [
     {
+      "source": "/app/vendor/tailwind.min.css.gz",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/css; charset=utf-8"
+        },
+        {
+          "key": "Content-Encoding",
+          "value": "gzip"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -44,6 +61,24 @@
           "value": "no-store, no-cache, must-revalidate"
         }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/app/vendor/lucide.min.js",
+      "destination": "https://unpkg.com/lucide@1.70.0/dist/umd/lucide.js"
+    },
+    {
+      "source": "/app/vendor/dexie.min.js",
+      "destination": "https://unpkg.com/dexie@4.4.7/dist/dexie.js"
+    },
+    {
+      "source": "/app/vendor/marked.umd.js",
+      "destination": "https://cdn.jsdelivr.net/npm/marked@18.1.2/lib/marked.umd.js"
+    },
+    {
+      "source": "/app/vendor/purify.min.js",
+      "destination": "https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js"
     }
   ]
 }
