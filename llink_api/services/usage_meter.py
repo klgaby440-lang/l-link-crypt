@@ -97,6 +97,8 @@ async def reserve_usage_budget(
     allow_daily_free: bool = False,
 ) -> UsageReservation | None:
     """Réserve une estimation du coût et les crédits avant de lancer le modèle."""
+    if uid == "anonymous":
+        raise HTTPException(status_code=401, detail="Connecte-toi pour utiliser Llink et ton portefeuille de crédits.")
     if db is None:
         if uid != "anonymous":
             raise HTTPException(
