@@ -1176,9 +1176,14 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 (options.items || []).forEach(item => {
                     const option = document.createElement("option");
                     option.value = item.id;
+                    option.dataset.operator = item.operator || "";
                     option.textContent = (item.label || item.operator || "Mobile Money") + " · " + (item.masked_phone || item.phone_masked || "numéro enregistré");
                     account.appendChild(option);
                 });
+                account.onchange = () => {
+                    const operator = account.selectedOptions[0]?.dataset.operator;
+                    if (operator) document.getElementById("llink-credit-method").value = operator;
+                };
                 message.textContent = "";
             } catch (error) { message.textContent = error.message || "Impossible de charger le portefeuille."; }
         };
@@ -1373,34 +1378,21 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         window.exportDatasetJSON = window.exportLlinkDataJSON;
 
         window.checkSubscription = async () => {
-            if(!window.isLoggedIn) return;
+            if (!window.isLoggedIn) return;
             try {
-                const res = await fetch(`${SERVER_URL}/api/user/status`, { headers: await llinkAuthHeaders() });
-                const data = await res.json();
-                
-                if(data.isNewUser && !data.plan) alert("Bienvenue sur Llink ! Tu bénéficies d'une période d'essai de 3 jours. Tu pourras ensuite choisir une formule.");
-                
-                // L'accès hors ligne reste vérifié séparément par le moteur natif.
+                const response = await fetch(SERVER_URL + "/api/user/status", {
+                    headers: await llinkAuthHeaders(), cache: "no-store"
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.isValid) throw new Error(data.detail || "Compte Llink indisponible.");
+                // Les niveaux IA sont désormais accessibles selon le solde de crédits,
+                // pas selon une formule ou une date d'expiration.
+                try { localStorage.removeItem("llink_plan"); } catch (_) {}
+                const infoDiv = document.getElementById("subscription-info");
+                if (infoDiv) infoDiv.textContent = "Compte actif · utilisation facturée selon ton portefeuille de crédits.";
                 if (window.refreshOfflineEligibility) window.refreshOfflineEligibility();
-                const infoDiv = document.getElementById('subscription-info');
-                const planLabels = { bronze: "Bronze", silver: "Silver", gold: "Gold", diamant: "Diamant" };
-                
-                if (data.subscriptionStatus === "pending_payment") {
-                    infoDiv.innerHTML = "🟠 Paiement Llink en attente de confirmation par Think/CinetPay.";
-                } else if(data.isValid && data.isTrial) {
-                    infoDiv.innerHTML = "🟢 Période d'essai valide jusqu'au : " + new Date(data.expirationDate).toLocaleDateString();
-                } else if(data.isValid && data.plan) {
-                    infoDiv.innerHTML = "💎 Offre " + (planLabels[data.plan] || data.plan) + " active jusqu'au : " + new Date(data.expirationDate).toLocaleDateString();
-                } else {
-                    infoDiv.innerHTML = "Aucun abonnement actif. Choisis une offre pour débloquer les niveaux Llink.";
-                }
-                try {
-                    if (data.isValid && data.plan) localStorage.setItem("llink_plan", data.plan);
-                    else localStorage.removeItem("llink_plan");
-                } catch (_) {}
-                
                 updateOfflineUI();
-            } catch(e) { console.error("checkSubscription error", e); }
+            } catch (error) { console.error("Vérification du compte Llink :", error); }
         };
 
         window.selectedSubscriptionPlan = 'silver';
