@@ -1670,7 +1670,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
 
         function toggleTheme() { var d=document.documentElement.classList.toggle('dark'); try{localStorage.setItem('llink_theme',d?'dark':'light');}catch(e){} }
         function openSettings(sectionId) {
-            if (sectionId === 'panel-sub') { openSubscriptionWindow(); return; }
+            if (sectionId === 'panel-sub') { openCreditWallet(); return; }
             const modal = document.getElementById('settings-modal');
             const panel = modal.querySelector('.settings-panel');
             const container = Array.from(panel.children).find(el => el.classList.contains('space-y-[0.45rem]'));
@@ -4905,7 +4905,7 @@ var A={
 };
 
 function openSettings(section){
-  if(section==='panel-sub'){window.openSubscriptionWindow();return Promise.resolve();}
+  if(section==='panel-sub'){window.openCreditWallet();return Promise.resolve();}
   if(section==='panel-connections'){window.openConnections();return Promise.resolve();}
   return (async function(){
     if(LS.get('llink_lock_on','0')==='1'&&LS.get('llink_lock_pin','')){
@@ -5613,7 +5613,7 @@ function initMode(){
     sync();var c=cur(),ef=EF.filter(function(x){return x[0]===eff;})[0];
     b.innerHTML='<i data-lucide="'+c[4]+'"></i><span>'+c[1]+'</span>'+(eff!=='normal'?'<em class="ll-ef">'+ef[1]+'</em>':'')+'<i data-lucide="chevron-down" class="ll-chev"></i>';
     $('lt-body').innerHTML=LV.map(function(l){var lock=!ok(l);
-      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink'+(l[2]?' · v'+l[2]:'')+(l[6]?' · '+TN[l[6]]:'')+'</small></span>'+(l[3]?'<span class="lt-bd free">Gratuit</span>':(lock?'<span class="lt-bd lock"><i data-lucide="lock"></i>'+l[7]+' €</span>':'<span class="lt-bd">Débloqué</span>'))+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
+      return '<div class="lt-it" role="radio" tabindex="0" data-v="'+l[0]+'" aria-checked="'+(l[0]===c[0])+'"><i data-lucide="'+l[4]+'"></i><span class="lt-t"><b>'+l[1]+'</b><small>Llink'+(l[2]?' · v'+l[2]:'')+(l[6]?' · '+TN[l[6]]:'')+'</small></span>'+'<span class="lt-bd">Facturé à l’usage</span>'+'<i data-lucide="check" class="lt-ck"></i></div>';}).join('')
      +'<div class="lt-eff"><div class="lt-eh">Intensité de réflexion</div><div class="lt-seg" role="radiogroup">'+EF.map(function(x){return '<div role="radio" tabindex="0" data-e="'+x[0]+'" aria-checked="'+(x[0]===eff)+'">'+x[1]+'</div>';}).join('')+'</div><div class="lt-hint">'+ef[2]+'</div></div>';
     b.disabled=s.disabled;icons();
   }
@@ -5626,7 +5626,7 @@ function initMode(){
     if(ev){eff=ev.dataset.e;effortExplicit=true;try{localStorage.setItem('llink_effort',eff);}catch(_){}render();return;}
     var it=e.target.closest('[data-v]');if(!it)return;
     var l=LV.filter(function(x){return x[0]===it.dataset.v;})[0];
-    if(!ok(l)){close();if(window.openSubscriptionWindow)openSubscriptionWindow(l[6]);return;}
+    if(!ok(l)){close();if(window.openCreditWallet)openCreditWallet();return;}
     lv=l[0];try{localStorage.setItem('llink_level',lv);}catch(_){}
     sync();s.dispatchEvent(new Event('change',{bubbles:true}));render();close();});
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&o.classList.contains('open'))close();});
