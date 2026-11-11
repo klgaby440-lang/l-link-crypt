@@ -1137,8 +1137,21 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                 root.querySelector("[data-balance=offline]").textContent = wallet.offline_balance ?? 0;
                 root.querySelector("[data-credit-rate]").textContent = "1 crédit = 0,01 USD";
                 root.querySelector("[data-offline-note]").textContent = wallet.offline_note || "Le portefeuille Offline n'est pas encore activé.";
-                root.querySelector("[data-credit-min]").textContent = catalog.minimum_credits ?? 1;
-                root.querySelector("[data-credit-max]").textContent = catalog.maximum_credits ?? 500000;
+                const minimumCredits = Math.max(1, Number(catalog.minimum_credits) || 1);
+                const maximumCredits = Math.max(minimumCredits, Number(catalog.maximum_credits) || 500000);
+                root.querySelector("[data-credit-min]").textContent = minimumCredits;
+                root.querySelector("[data-credit-max]").textContent = maximumCredits;
+                const amountInput = root.querySelector("#llink-credit-amount");
+                if (amountInput) {
+                    amountInput.min = String(minimumCredits);
+                    amountInput.max = String(maximumCredits);
+                    const currentAmount = Number(amountInput.value);
+                    if (!Number.isInteger(currentAmount) || currentAmount < minimumCredits) {
+                        amountInput.value = String(minimumCredits);
+                    } else if (currentAmount > maximumCredits) {
+                        amountInput.value = String(maximumCredits);
+                    }
+                }
             }
             return {wallet, catalog};
         };
