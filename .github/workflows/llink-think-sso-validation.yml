@@ -1,0 +1,89 @@
+name: Llink Think SSO and subscriptions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      THINK_API_BASE_URL: https://think.example.test
+      THINK_SSO_SECRET: ci-think-sso-secret-0123456789abcdef-0123456789abcdef
+      THINK_SERVICE_TOKEN: ci-think-service-token-0123456789abcdef-0123456789
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Compile Python modules
+        run: python -m compileall -q main.py llink_api tests
+
+      - name: Test Think SSO and Llink subscription contracts
+        run: PYTHONPATH=. pytest -q tests/test_think_sso_subscriptions.py
+
+      - name: Validate inline JavaScript including subscription iframe
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess
+          import tempfile
+
+          class ScriptParser(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.scripts = []
+                  self.current = None
+                  self.srcdocs = []
+
+              def handle_starttag(self, tag, attrs):
+                  attributes = dict(attrs)
+                  if tag.lower() == "script":
+                      self.current = [] if "src" not in attributes else None
+                  elif tag.lower() == "iframe" and attributes.get("srcdoc"):
+                      self.srcdocs.append(attributes["srcdoc"])
+
+              def handle_data(self, data):
+                  if self.current is not None:
+                      self.current.append(data)
+
+              def handle_endtag(self, tag):
+                  if tag.lower() == "script" and self.current is not None:
+                      source = "".join(self.current).strip()
+                      if source:
+                          self.scripts.append(source)
+                      self.current = None
+
+          source = Path("app/index.html").read_text(encoding="utf-8")
+          parser = ScriptParser()
+          parser.feed(source)
+          scripts = list(parser.scripts)
+          for srcdoc in parser.srcdocs:
+              nested = ScriptParser()
+              nested.feed(srcdoc)
+              scripts.extend(nested.scripts)
+
+          if not scripts:
+              raise SystemExit("No inline JavaScript was found.")
+
+          with tempfile.TemporaryDirectory() as directory:
+              for index, script in enumerate(scripts, start=1):
+                  path = Path(directory) / f"script-{index}.js"
+                  path.write_text(script, encoding="utf-8")
+                  subprocess.run(["node", "--check", str(path)], check=True)
+
+          print(f"JavaScript syntax OK: {len(scripts)} inline and iframe scripts.")
+          PY

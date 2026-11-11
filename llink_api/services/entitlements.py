@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from llink_api.services.model_registry import PLAN_TO_LEVEL
+from llink_api.services.think_billing import get_think_subscription
 
 
 def _expiration_epoch(value: Any) -> float | None:
@@ -26,6 +27,17 @@ def resolve_entitled_level(user: dict, db: Any | None) -> str:
     uid = user.get("uid", "anonymous")
     if uid == "anonymous":
         return "velora"
+    if user.get("auth_source") == "think" and user.get("think_user_id"):
+        subscription = get_think_subscription(int(user["think_user_id"]))
+        if not subscription.get("is_active"):
+            return "velora"
+        level = str(subscription.get("level") or "velora").strip().lower()
+        if level not in {"velora", "satori", "noetra", "auren", "omnis"}:
+            raise HTTPException(
+                status_code=502,
+                detail="Le niveau d'abonnement retourné par Think est invalide.",
+            )
+        return level
     if db is None:
         raise HTTPException(
             status_code=503,

@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
         allow_origin_regex=r"https://class-net-p(?:-[a-z0-9-]+)?\.vercel\.app",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
         expose_headers=["Retry-After"],
     )
 
