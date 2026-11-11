@@ -837,11 +837,11 @@ async def _gemini_generate_content(
         })
     generation_config: dict[str, Any] = {
         "responseModalities": response_modalities,
-        "maxOutputTokens": 2048,
+        "maxOutputTokens": 4096,
         "temperature": 0.35,
     }
     if aspect_ratio:
-        generation_config["responseFormat"] = {
+        generation_config["imageConfig"] = {
             "image": {
                 "aspectRatio": aspect_ratio,
                 "imageSize": "2K" if quality == "hd" else "1K",
@@ -854,7 +854,7 @@ async def _gemini_generate_content(
     if tools:
         request_body["tools"] = tools
     timeout = httpx.Timeout(120.0, connect=12.0, write=35.0, pool=8.0)
-    endpoint = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent"
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
         response = await client.post(
             endpoint,
@@ -980,7 +980,7 @@ async def _generate_work_image(
     candidate = await _gemini_generate_content(
         prompt,
         model="gemini-3.1-flash-image",
-        response_modalities=["TEXT", "IMAGE"],
+        response_modalities=["IMAGE"],
         image_inputs=image_inputs,
         aspect_ratio=aspect_ratio,
         quality=quality,
