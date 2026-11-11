@@ -178,27 +178,16 @@ async def check_status(
     await enforce_endpoint_quota(request=request, user=user, db=db, scope="user_status")
     if user.get("uid") == "anonymous":
         return {"isValid": False, "expirationDate": None, "isNewUser": False}
-    if user.get("auth_source") == "think" and user.get("think_user_id"):
-        subscription = await asyncio.to_thread(get_think_subscription, int(user["think_user_id"]))
-        expires_at = subscription.get("expires_at")
-        expiration_ms = None
-        if expires_at:
-            try:
-                parsed = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
-                if parsed.tzinfo is None:
-                    parsed = parsed.replace(tzinfo=timezone.utc)
-                expiration_ms = parsed.timestamp() * 1000
-            except (TypeError, ValueError):
-                raise HTTPException(status_code=502, detail="Date d’abonnement Think invalide.") from None
-        active = bool(subscription.get("is_active")) and expiration_ms is not None and expiration_ms > datetime.now(timezone.utc).timestamp() * 1000
-        return {
-            "isValid": active,
-            "isTrial": False,
-            "expirationDate": expiration_ms if active else None,
-            "isNewUser": False,
-            "plan": subscription.get("plan") or None,
-            "subscriptionStatus": subscription.get("status") or "inactive",
-        }
+    # L'accès au compte n'expire plus avec un abonnement : la consommation
+    # est désormais autorisée et facturée via le portefeuille de crédits.
+    return {
+        "isValid": True,
+        "isTrial": False,
+        "expirationDate": None,
+        "isNewUser": False,
+        "plan": "credits",
+        "subscriptionStatus": "credits",
+    }
     if db is None:
         raise HTTPException(status_code=503, detail="Service de compte temporairement indisponible.")
 
