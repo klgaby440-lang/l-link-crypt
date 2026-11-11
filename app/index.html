@@ -1152,7 +1152,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                     try {
                         const checkoutId = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : "credit" + Date.now() + Math.random().toString(36).slice(2)).slice(0, 48);
                         const response = await fetch(SERVER_URL + "/api/credits/checkout", {
-                            method: "POST", headers: await llinkAuthHeaders(true),
+                            method: "POST", headers: {...await llinkAuthHeaders(true), "Idempotency-Key": checkoutId},
                             body: JSON.stringify({credits, wallet_type:"online", payment_method:method, mobile_money_account_id:account ? Number(account) : null}),
                             cache:"no-store",
                         });
