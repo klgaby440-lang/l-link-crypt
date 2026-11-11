@@ -333,7 +333,8 @@ def test_credit_refresh_grants_only_provider_confirmed_purchase(monkeypatch):
 
     assert response.status_code == 200, response.text
     assert response.json()["grant"]["granted"] is True
-    assert captured == {
-        "db": pytest.ANY, "uid": "think_thk-0123456789ab",
+    assert captured["db"] is not None
+    assert {key: value for key, value in captured.items() if key != "db"} == {
+        "uid": "think_thk-0123456789ab",
         "public_id": "PAY-CREDIT-TEST", "credits": 100, "wallet_type": "online",
     }
