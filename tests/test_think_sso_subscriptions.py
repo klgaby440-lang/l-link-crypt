@@ -246,3 +246,94 @@ def test_refresh_subscription_payment_rejects_malformed_public_id():
 
     assert response.status_code == 422, response.text
 
+
+
+
+def test_credit_checkout_requires_think_identity():
+    main.app.dependency_overrides[users.require_authenticated_user] = lambda: {
+        "uid": "legacy-google-user", "email": "legacy@example.test",
+    }
+    try:
+        response = client.post(
+            "/api/credits/checkout",
+            headers={"Idempotency-Key": "credit-checkout-" + uuid4().hex[:12]},
+            json={"credits": 100, "wallet_type": "online", "payment_method": "AIRTEL_CD"},
+        )
+    finally:
+        main.app.dependency_overrides.clear()
+    assert response.status_code == 403, response.text
+
+
+def test_credit_checkout_uses_think_server_and_idempotency(monkeypatch):
+    captured = {}
+
+    def fake_checkout(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True, "product": "llink", "credits": 100, "wallet_type": "online",
+            "public_id": "PAY-CREDIT-TEST", "payment_url": "https://checkout.cinetpay.net/pay/test",
+            "amount": 2800, "currency": "CDF",
+        }
+
+    async def no_quota(**_kwargs):
+        return None
+
+    monkeypatch.setattr(users, "create_think_credit_checkout", fake_checkout)
+    monkeypatch.setattr(users, "enforce_endpoint_quota", no_quota)
+    main.app.dependency_overrides[users.require_authenticated_user] = lambda: {
+        "uid": "think_thk-0123456789ab", "auth_source": "think", "think_user_id": 42,
+    }
+    checkout_id = "credit-checkout-" + uuid4().hex[:12]
+    try:
+        response = client.post(
+            "/api/credits/checkout",
+            headers={"Idempotency-Key": checkout_id},
+            json={"credits": 100, "wallet_type": "online", "payment_method": "AIRTEL_CD"},
+        )
+    finally:
+        main.app.dependency_overrides.clear()
+
+    assert response.status_code == 200, response.text
+    assert response.json()["payment_url"].startswith("https://checkout.cinetpay.net/")
+    assert captured == {
+        "think_user_id": 42, "credits": 100, "wallet_type": "online",
+        "payment_method": "AIRTEL_CD", "checkout_id": checkout_id,
+        "mobile_money_account_id": None,
+    }
+
+
+def test_credit_refresh_grants_only_provider_confirmed_purchase(monkeypatch):
+    captured = {}
+
+    async def no_quota(**_kwargs):
+        return None
+
+    async def fake_grant(**kwargs):
+        captured.update(kwargs)
+        return {"granted": True, "balance": 100}
+
+    async def fake_wallet(**_kwargs):
+        return {"online_balance": 100, "daily_free_balance": 5, "offline_balance": 0}
+
+    monkeypatch.setattr(users, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(users, "refresh_think_credit_purchase", lambda **_kwargs: {
+        "ok": True, "public_id": "PAY-CREDIT-TEST", "payment_status": "accepted",
+        "credits": {"purchased": 100, "wallet_type": "online", "status": "paid"},
+    })
+    monkeypatch.setattr(users, "grant_verified_purchase", fake_grant)
+    monkeypatch.setattr(users, "read_credit_wallet", fake_wallet)
+    monkeypatch.setattr(users, "get_db", lambda: object())
+    main.app.dependency_overrides[users.require_authenticated_user] = lambda: {
+        "uid": "think_thk-0123456789ab", "auth_source": "think", "think_user_id": 42,
+    }
+    try:
+        response = client.post("/api/credits/refresh", json={"public_id": "PAY-CREDIT-TEST"})
+    finally:
+        main.app.dependency_overrides.clear()
+
+    assert response.status_code == 200, response.text
+    assert response.json()["grant"]["granted"] is True
+    assert captured == {
+        "db": pytest.ANY, "uid": "think_thk-0123456789ab",
+        "public_id": "PAY-CREDIT-TEST", "credits": 100, "wallet_type": "online",
+    }
