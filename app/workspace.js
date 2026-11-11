@@ -1,7 +1,7 @@
 
 (() => {
 "use strict";
-const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,binaryEditor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},agentVersion:null,agentTools:[],agentStatusError:false,agentEffort:"extra",busy:false};
+const LIMIT=700000,MAX_BINARY_BYTES=50*1024*1024,S={root:null,owner:"anonymous",projects:[],files:[],project:"all",file:null,editor:null,binaryEditor:null,previewUrl:null,cmPromise:null,tab:"edit",chatId:null,messages:[],uploads:[],inputPurpose:"import",tools:{web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},agentVersion:null,agentTools:[],agentStatusError:false,agentEffort:"extra",busy:false,focusInterval:null,focusRemaining:1500,focusEnd:0};
 const SERVER=window.LLINK_SERVER_URL||window.SERVER_URL||"https://llink-usz9.onrender.com";
 const $=id=>S.root?.querySelector("#"+id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -49,7 +49,7 @@ if(imageButton){
 }
 async function loadTools(){S.agentEffort=window.llThink?.agentEffort?window.llThink.agentEffort():"extra";S.tools=Object.assign({web_search:false,image_search:false,image_generate:false,python:false,exports:true,document_create:true},S.tools);try{const d=await api("/api/work/tools");S.tools=Object.assign(S.tools,d.tools||{});}catch(e){S.tools.exports=true;S.tools.document_create=true;}try{const agent=await api("/api/work/agent/status");if(agent.protocol==="native_function_calling"){S.agentVersion=String(agent.version||"");S.agentTools=Array.isArray(agent.tools)?agent.tools:[];S.agentStatusError=false;}else{S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}}catch(e){S.agentVersion=null;S.agentTools=[];S.agentStatusError=true;}renderToolStatus();}
 async function ensureChat(){if(S.chatId==null)S.chatId=await db.chats.add({title:"Espace Work",time:Date.now(),mode:"work",syncId:crypto.randomUUID().replace(/-/g,""),ownerUid:S.owner});}
-async function loadMessages(){if(S.chatId==null)return;const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null,attachments:m.attachments||[],toolResults:m.toolResults||[],artifacts:m.artifacts||[],documentDraft:m.documentDraft||null}));renderMessages();}
+async function loadMessages(){if(S.chatId==null){S.messages=[];renderMessages();return;}const a=await db.msgs.where("chatId").equals(S.chatId).toArray();a.sort((x,y)=>(x.id||0)-(y.id||0));S.messages=a.filter(m=>["user","assistant","bot"].includes(m.role)).map(m=>({id:m.id,role:m.role==="user"?"user":"assistant",text:m.text||"",reasoning:m.reasoning||null,attachments:m.attachments||[],toolResults:m.toolResults||[],artifacts:m.artifacts||[],documentDraft:m.documentDraft||null}));renderMessages();}
 function renderProjects(){const s=$("work-project"),v=S.project,items=S.projects.filter(p=>!p.pendingDelete);s.innerHTML='<option value="all">Tous les fichiers</option>'+items.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");s.value=items.some(p=>String(p.id)===String(v))||v==="all"?v:"all";S.project=s.value;}
 function renderFiles(){const h=$("work-list"),q=($("work-search").value||"").toLowerCase(),a=S.files.filter(f=>(S.project==="all"||String(f.projectLocalId??f.projectId)===String(S.project))&&(!q||(f.name+" "+f.path).toLowerCase().includes(q)));if(!a.length){h.innerHTML='<div class="work-empty-files"><div class="work-empty-icon"><i data-lucide="folder-open"></i></div><b>Aucun fichier</b><p>Crée un fichier ou importe un document pour commencer.</p><button class="work-file-action mt-3" data-act="new-file">+ Créer un fichier</button></div>';}else{const g={};a.forEach(f=>{const k=f.folder||"Racine";(g[k] ||= []).push(f);});h.innerHTML=Object.entries(g).map(([k,items])=>'<div class="work-file-group">'+esc(k)+'</div>'+items.map(f=>'<button class="work-file-item '+(S.file?.id===f.id?"is-active":"")+'" data-act="open" data-id="'+f.id+'"><span class="work-file-icon"><i data-lucide="'+icon(f.name)+'"></i></span><span class="work-file-info"><span class="work-file-name">'+esc(f.name)+'</span><span class="work-file-meta">'+esc(f.isBinary?"Fichier local":(f.language||"texte"))+' · '+size(f.sizeBytes||0)+(f.pendingSync?" · En attente":"")+'</span></span></button>').join("")).join("");}if(window.lucide)lucide.createIcons();}
 function renderWorkReasoning(reasoning){
@@ -230,8 +230,50 @@ async function storeVerifiedDocumentArtifact(filename,blob,mime,verification){
 }
 async function handleWorkArtifact(rawId,downloadNow){const file=await db.workFiles.get(Number(rawId));if(!file)return toast("Ce fichier n’est plus disponible.");await openFile(file.id);if(downloadNow)await download();}
 
+function renderWorkHome(){
+ const h=$("work-messages");
+ const raw=window.auth?.currentUser?.displayName||window.currentUser?.displayName||window.userName||"";
+ const first=String(raw).trim().split(/\s+/)[0];
+ const greeting=first?"Bonjour "+esc(first)+" !":"Bonjour !";
+ h.innerHTML='<section class="work-home"><div class="work-home-hero"><span class="work-home-kicker">LLINK WORK</span><h2>'+greeting+'</h2><p>Que veux-tu accomplir aujourd’hui&nbsp;?</p><span class="work-home-sub">Choisis un espace pour commencer. Tu peux revenir ici à tout moment.</span></div><div class="work-home-grid"><button class="work-home-card" data-act="home-tasks"><span class="work-home-icon"><i data-lucide="list-checks"></i></span><b>Tâches</b><small>Organiser tes priorités et ton planning</small></button><button class="work-home-card" data-act="home-notes"><span class="work-home-icon"><i data-lucide="notebook-pen"></i></span><b>Notes</b><small>Créer une note et garder tes idées</small></button><button class="work-home-card" data-act="home-focus"><span class="work-home-icon"><i data-lucide="timer"></i></span><b>Concentration</b><small>Lancer une session de travail sans distraction</small></button><button class="work-home-card" data-act="home-explorer"><span class="work-home-icon"><i data-lucide="folder-search"></i></span><b>Explorer</b><small>Retrouver tes fichiers et tes projets</small></button></div><div class="work-home-bottom"><button class="work-home-start" data-act="home-chat"><i data-lucide="message-square-text"></i><span>Commencer une conversation Work</span><i data-lucide="arrow-right"></i></button><button class="work-home-help" data-act="home-help"><i data-lucide="circle-help"></i> Centre d’aide</button></div></section>';
+ h.scrollTop=0;if(window.lucide)lucide.createIcons();
+}
+function showFocusTimer(){
+ S.focusRemaining=1500;S.focusEnd=0;
+ const root=$("work-dialog-root");
+ root.innerHTML='<div class="work-dialog-backdrop" data-dialog-backdrop><section class="work-dialog work-focus-dialog"><span class="work-home-kicker">CONCENTRATION</span><h3>Une chose à la fois</h3><p>Prends 25 minutes pour avancer sur une seule tâche.</p><div id="work-focus-countdown" class="work-focus-countdown">25:00</div><p id="work-focus-state" class="work-focus-state">Prêt quand tu l’es.</p><div class="work-dialog-actions"><button data-act="focus-reset">Réinitialiser</button><button data-act="focus-pause">Pause</button><button class="primary" data-act="focus-start">Démarrer</button><button data-act="close-dialog">Fermer</button></div></section></div>';
+}
+function updateFocusTimer(){
+ if(S.focusEnd)S.focusRemaining=Math.max(0,Math.ceil((S.focusEnd-Date.now())/1000));
+ const el=$("work-focus-countdown");
+ if(el)el.textContent=String(Math.floor(S.focusRemaining/60)).padStart(2,"0")+":"+String(S.focusRemaining%60).padStart(2,"0");
+ if(S.focusRemaining<=0){
+  if(S.focusInterval)clearInterval(S.focusInterval);
+  S.focusInterval=null;S.focusEnd=0;
+  const state=$("work-focus-state");if(state)state.textContent="Session terminée. Prends une courte pause.";
+  toast("Bravo ! Ta session de concentration est terminée.");
+ }
+}
+function startFocusTimer(){
+ if(S.focusInterval)return;
+ if(S.focusRemaining<=0)S.focusRemaining=1500;
+ S.focusEnd=Date.now()+S.focusRemaining*1000;
+ const state=$("work-focus-state");if(state)state.textContent="Session en cours. Reste concentré sur ta tâche.";
+ S.focusInterval=setInterval(updateFocusTimer,250);updateFocusTimer();
+}
+function pauseFocusTimer(){
+ if(S.focusInterval)clearInterval(S.focusInterval);
+ S.focusInterval=null;updateFocusTimer();S.focusEnd=0;
+ const state=$("work-focus-state");if(state)state.textContent="Session en pause.";
+}
+function resetFocusTimer(){
+ pauseFocusTimer();S.focusRemaining=1500;updateFocusTimer();
+ const state=$("work-focus-state");if(state)state.textContent="Prêt quand tu l’es.";
+}
+
 function renderMessages(){
 const h=$("work-messages");
+if(!S.messages.length && S.chatId==null){renderWorkHome();return;}
 if(!S.messages.length){
 h.innerHTML='<div class="work-welcome"><div class="work-welcome-mark"><i data-lucide="sparkles"></i></div><h2>Sur quoi travaillons-nous&nbsp;?</h2><p>Rédige, analyse, organise un projet ou travaille sur du code. Les changements restent dans l’éditeur jusqu’à ta validation.</p><div class="work-starter-grid"><button class="work-starter" data-act="starter" data-prompt="Aide-moi à rédiger un document professionnel sur : "><i data-lucide="file-text"></i><span>Rédiger un document</span></button><button class="work-starter" data-act="starter" data-prompt="Analyse le fichier ouvert : "><i data-lucide="chart-no-axes-combined"></i><span>Analyser un fichier</span></button><button class="work-starter" data-act="starter" data-prompt="Conçois une structure de projet logiciel pour : "><i data-lucide="code"></i><span>Créer un projet de code</span></button><button class="work-starter" data-act="starter" data-prompt="Prépare un plan de recherche en distinguant les faits et les sources à vérifier sur : "><i data-lucide="search"></i><span>Préparer une recherche</span></button></div></div>';
 }else{
@@ -805,7 +847,7 @@ async function deleteConversation(rawId){
  if(typeof window.deleteChat==="function")await window.deleteChat(chat.id);
  else{await db.msgs.where("chatId").equals(chat.id).delete();await db.chats.delete(chat.id);}
  const remains=await db.chats.get(chat.id);
- if(!remains&&String(S.chatId)===String(chat.id)){S.chatId=null;S.messages=[];await ensureChat();await loadMessages();}
+ if(!remains&&String(S.chatId)===String(chat.id)){S.chatId=null;S.messages=[];renderMessages();}
  await showConversations();
 }
 async function showProjectManager(){
@@ -833,7 +875,16 @@ async function deleteProject(rawId){
  S.projects=await projectsLocal();S.files=await filesLocal();renderProjects();renderFiles();await showProjectManager();
 }
 
-function bind(){S.root.addEventListener("click",async e=>{if(e.target.matches("[data-dialog-backdrop]")){$("work-dialog-root").innerHTML="";return;}const b=e.target.closest("[data-act]");if(!b)return;try{switch(b.dataset.act){case"generate-image":{
+function bind(){S.root.addEventListener("click",async e=>{if(e.target.matches("[data-dialog-backdrop]")){$("work-dialog-root").innerHTML="";return;}const b=e.target.closest("[data-act]");if(!b)return;try{switch(b.dataset.act){case"home-tasks":{if(typeof window.openHub==="function")window.openHub("planner-hub");else toast("Le planificateur n’est pas disponible.");break;}
+case"home-notes":{const name="Notes-"+new Date().toISOString().slice(0,10)+".md";await createBlankFile("markdown",name);break;}
+case"home-focus":showFocusTimer();break;
+case"home-explorer":{S.root.querySelectorAll("[data-act='mobile']").forEach(x=>x.classList.toggle("active",x.dataset.panel==="files"));for(const panel of ["files","chat","editor"])$("work-"+panel+"-pane").classList.toggle("work-mobile-active",panel==="files");const search=$("work-search");if(search)search.focus();break;}
+case"home-chat":await newSession();$("work-prompt").focus();break;
+case"home-help":window.location.href="./help.html";break;
+case"focus-start":startFocusTimer();break;
+case"focus-pause":pauseFocusTimer();break;
+case"focus-reset":resetFocusTimer();break;
+case"generate-image":{
 if(!S.agentTools.includes("image_generate"))return toast("La génération d’images n’est pas disponible. Vérifie que GEMINI_API_KEY est configurée sur le serveur et actualise les outils.");
 const imagePrompt=await askInput("Générer une image","Décris précisément l’illustration à créer. Gemini créera un PNG que Work pourra vérifier et intégrer aux documents.","Description de l’image","","Ex. Schéma pédagogique de la photosynthèse…","Générer");
 if(!imagePrompt)return;
@@ -841,8 +892,8 @@ $("work-prompt").value="Crée une illustration originale à partir de cette desc
 await sendWork();
 break;
 }case"project":await newProject();break;case"project-from-manager":await newProject();await showProjectManager();break;case"manage-projects":await showProjectManager();break;case"rename-project":await renameProject();break;case"rename-project-item":await renameProject(b.dataset.id);await showProjectManager();break;case"delete-project":await deleteProject(b.dataset.id);break;case"select-project-manager":S.project=String(b.dataset.id);renderProjects();renderFiles();$("work-dialog-root").innerHTML="";break;case"conversations":await showConversations();break;case"switch-conversation":await switchConversation(b.dataset.id);break;case"rename-conversation":await renameConversation(b.dataset.id);break;case"delete-conversation":await deleteConversation(b.dataset.id);break;case"open-document-draft":await openFile(b.dataset.id);break;case"artifact-open":await handleWorkArtifact(b.dataset.id,false);break;case"artifact-download":await handleWorkArtifact(b.dataset.id,true);break;case"new-file":showNewFileDialog();break;case"cancel-new-file":$("work-dialog-root").innerHTML="";break;case"create-work-file":{const kind=$("work-new-type")?.value||"markdown",name=$("work-new-name")?.value||"";$("work-dialog-root").innerHTML="";await createBlankFile(kind,name);break;}case"import":S.inputPurpose="import";$("work-upload-input").click();break;case"open":await openFile(b.dataset.id);break;case"save":await saveFile();break;case"versions":await showVersions();break;case"download":await download();break;case"rename":await renameFile();break;case"delete-file":await deleteFile();break;case"tab":setTab(b.dataset.tab);break;case"close-file":if(S.file?.dirty&&!confirm("Fermer sans enregistrer ?"))return;S.file=null;if(S.editor)S.editor.destroy();S.editor=null;if(S.binaryEditor)S.binaryEditor.destroy();S.binaryEditor=null;if(S.previewUrl){URL.revokeObjectURL(S.previewUrl);S.previewUrl=null;}$("work-editor-host").innerHTML='<div class="work-empty-editor"><i data-lucide="file-pen-line"></i><b>Ton espace d’édition</b><span>Ouvre un fichier pour commencer.</span></div>';meta();renderFiles();break;case"send":await sendWork();break;case"attach":S.inputPurpose="attach";$("work-upload-input").click();break;case"remove-upload":S.uploads.splice(Number(b.dataset.i),1);renderUploads();break;case"starter":$("work-prompt").value=b.dataset.prompt;$("work-prompt").focus();break;case"apply":await applyCode(b.dataset.id,false);break;case"create-code":await applyCode(b.dataset.id,true);break;case"new-session":await newSession();break;case"close-dialog":$("work-dialog-root").innerHTML="";break;case"restore":await restore(b.dataset.version);break;case"mobile":for(const p of ["files","chat","editor"])$("work-"+p+"-pane").classList.toggle("work-mobile-active",p===b.dataset.panel);S.root.querySelectorAll("[data-act='mobile']").forEach(x=>x.classList.toggle("active",x.dataset.panel===b.dataset.panel));break;}}catch(err){toast(err.message||"Une erreur est survenue.");}});$("work-project").addEventListener("change",e=>{S.project=e.target.value;renderFiles();});$("work-search").addEventListener("input",renderFiles);$("work-upload-input").addEventListener("change",async e=>{const files=Array.from(e.target.files||[]);if(S.inputPurpose==="attach"){let total=S.uploads.reduce((n,f)=>n+f.size,0),added=0;for(const file of files){if(S.uploads.length>=5)break;if(file.size>10e6||total+file.size>25e6)continue;S.uploads.push(file);total+=file.size;added++;}if(added<files.length)toast("Limites des pièces jointes : 5 fichiers, 10 Mo chacun et 25 Mo au total.");renderUploads();}else await importFiles(files);e.target.value="";});$("work-prompt").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendWork();}});}
-async function init(){const root=document.getElementById("work-workspace");if(!root)return;S.root=root;S.owner=uid();await db.open();shell();bind();await ensureChat();await loadMessages();await loadCloud();await pending();await loadTools();if(window.lucide)lucide.createIcons();}
-window.initLlinkWorkWorkspace=init;window.teardownLlinkWorkWorkspace=()=>{if(S.editor)S.editor.destroy();S.editor=null;if(S.binaryEditor)S.binaryEditor.destroy();S.binaryEditor=null;S.root=null;};
+async function init(){const root=document.getElementById("work-workspace");if(!root)return;S.root=root;S.owner=uid();await db.open();shell();bind();await loadCloud();await pending();await loadTools();await loadMessages();if(window.lucide)lucide.createIcons();}
+window.initLlinkWorkWorkspace=init;window.teardownLlinkWorkWorkspace=()=>{if(S.focusInterval)clearInterval(S.focusInterval);S.focusInterval=null;if(S.editor)S.editor.destroy();S.editor=null;if(S.binaryEditor)S.binaryEditor.destroy();S.binaryEditor=null;S.root=null;};
 const originalNew=window.newConversation;window.newConversation=function(){if(typeof currentMode!=="undefined"&&currentMode==="work"&&S.root){newSession();return;}if(typeof originalNew==="function")return originalNew.apply(this,arguments);};
 const originalSwitch=window.switchChat;window.switchChat=async function(cid){const c=await db.chats.get(cid);if(c?.mode==="work"){if(S.file?.dirty&&!confirm("Des modifications ne sont pas enregistrées. Continuer ?"))return;if(S.editor)S.editor.destroy();S.editor=null;if(S.binaryEditor)S.binaryEditor.destroy();S.binaryEditor=null;S.root=null;S.chatId=cid;if(typeof window.selectAppMode==="function")await window.selectAppMode("work");else{if(typeof currentMode!=="undefined")currentMode="work";document.body.classList.add("work-mode-active");const chatWindow=document.getElementById("chat-window");chatWindow.innerHTML='<div id="work-workspace"></div>';await init();}await loadMessages();return;}if(typeof originalSwitch==="function")return originalSwitch.apply(this,arguments);};
 window.addEventListener("online",pending);window.addEventListener("focus",()=>{if(S.root)pending();});
