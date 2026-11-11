@@ -456,8 +456,13 @@ test("Work affiche les vraies sources retournées par la recherche native", asyn
 
 test("Work permet de renommer et rouvrir une conversation", async ({ page }) => {
   await openWork(page);
+  // L'accueil Work ne crée volontairement aucune conversation automatiquement.
+  // Démarrer explicitement une session avant d'ouvrir le gestionnaire.
+  await page.locator('[data-act="home-chat"]').click();
+  await expect(page.locator("#work-prompt")).toBeVisible();
   await page.locator('[data-act="conversations"]').click();
   await expect(page.locator(".work-manager-dialog")).toContainText("Conversations Work");
+  await expect(page.locator('.work-manager-row [data-act="rename-conversation"]')).toHaveCount(1);
   await page.locator('.work-manager-row [data-act="rename-conversation"]').first().click();
   await page.locator("#work-dialog-value").fill("Projet de test Work");
   await page.locator("#work-input-dialog button[type=submit]").click();
