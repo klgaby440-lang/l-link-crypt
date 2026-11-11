@@ -74,3 +74,22 @@ Le renouvellement d'un abonnement actif commence après son expiration courante.
 La CI valide les échanges SSO (ticket valide, expiré, mauvais scope et rejeu), l'autorisation des checkouts, les tarifs CDF, l'activation sur confirmation CinetPay, la non-création de crédit Think, les renouvellements, la syntaxe JavaScript/iframe et les smoke tests Sandbox existants.
 
 La CI ne réalise aucun appel de paiement réel. Après avoir ajouté les variables Render et fusionné les deux PR, il faudra effectuer une connexion réelle Think → Llink, puis un paiement CinetPay Sandbox avec un compte de test. Le déploiement de ces branches n'est pas considéré comme validé tant que cet essai coordonné n'a pas réussi.
+
+
+## Identité universelle CRYPT — INK ID
+
+L'identifiant stable du compte est désormais `crypt_id`, au format `INK_` suivi de 15 caractères alphanumériques majuscules. Think le génère et le conserve ; le `think_id` (`THK-...`) reste présent pour la compatibilité historique.
+
+Le formulaire de connexion Llink accepte l'INK ID **ou** l'adresse e-mail et transmet la valeur au champ API historique `email` de `POST /api/auth/login`. Le mot de passe est toujours vérifié par Think. Llink ne stocke pas le mot de passe Think.
+
+Le ticket SSO Think signé contient obligatoirement :
+- `sub` : identifiant interne du compte Think ;
+- `think_id` : identifiant Think historique ;
+- `crypt_id` : INK ID universel vérifié ;
+- `scope=llink`, `iss=think-api`, `aud=llink-api`, expiration courte et `jti` unique.
+
+Llink rejette tout INK ID mal formé, ticket expiré, mauvaise audience, mauvais scope ou ticket rejoué. Le claim Firebase `crypt_id` est disponible pour l'interface et les futures intégrations. L'UID Firebase basé sur le Think ID historique est conservé afin de ne pas perdre l'accès aux conversations et fichiers existants.
+
+Dans l'interface Llink, l'accès au Compte CRYPT se trouve dans le sélecteur des produits CRYPT (entrée « Compte CRYPT » à côté des produits). Le bouton de connexion isolé de l'écran principal a été retiré. La connexion Google historique reste uniquement pour assurer la compatibilité des anciens comptes Llink ; elle ne lie pas automatiquement un compte Google à un INK ID.
+
+L'INK ID est l'identité, pas une autorisation globale : chaque application doit encore associer explicitement ses propres profils locaux à cette identité et appliquer ses rôles/permissions propres. La présente intégration SSO couvre Think et Llink ; les autres produits du sélecteur ne sont pas considérés comme raccordés tant que leur backend n'a pas implémenté ce contrat.

@@ -799,9 +799,7 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         <header class="p-[1rem] flex justify-between items-center z-10">
             <div class="flex items-center gap-[0.75rem]">
                 <button id="llink-hamburger" type="button" class="p-[0.5rem] rounded-full hover:bg-surface-light dark:hover:bg-surface-dark transition" aria-label="Ouvrir le menu" aria-expanded="false"><i data-lucide="menu" class="w-[1.5rem] h-[1.5rem]"></i></button>
-                <button id="auth-btn" onclick="handleAuth()" class="w-[2.5rem] h-[2.5rem] rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md hover:scale-105 transition">
-                    <i data-lucide="log-in" class="w-[1.25rem] h-[1.25rem]"></i>
-                </button>
+                <!-- La connexion CRYPT est accessible depuis le sélecteur des produits, pas depuis l'écran principal. -->
             </div>
             <div class="flex items-center">
                 <button onclick="toggleOnline()" class="w-[2.5rem] h-[2.5rem] rounded-full bg-surface-light dark:bg-surface-dark flex items-center justify-center hover:scale-105 transition">
@@ -880,20 +878,21 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
     <div id="auth-choice-modal" class="fixed inset-0 bg-black/65 backdrop-blur-sm hidden items-center justify-center p-4 z-[5000]" role="dialog" aria-modal="true" aria-labelledby="auth-choice-title">
       <div class="w-full max-w-[25rem] rounded-3xl p-5 shadow-2xl bg-campagne-light dark:bg-campagne-dark border border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between mb-3">
-          <div><h2 id="auth-choice-title" class="text-xl font-extrabold">Connexion à Llink</h2><p class="text-xs text-gray-500 mt-1">Un compte CRYPT pour Think et Llink.</p></div>
+          <div><h2 id="auth-choice-title" class="text-xl font-extrabold">Compte CRYPT</h2><p class="text-xs text-gray-500 mt-1">Un seul identifiant pour tous les produits connectés.</p></div>
           <button type="button" onclick="closeAuthChoice()" class="p-2 rounded-full bg-surface-light dark:bg-surface-dark" aria-label="Fermer"><i data-lucide="x"></i></button>
         </div>
         <form id="think-login-form" onsubmit="event.preventDefault();loginWithThink()" class="grid gap-3">
-          <label class="text-xs font-bold">Adresse e-mail Think</label>
-          <input id="think-login-email" type="email" autocomplete="username" required maxlength="320" placeholder="nom@exemple.com" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent outline-none">
-          <label class="text-xs font-bold">Mot de passe Think</label>
+          <label class="text-xs font-bold">Identifiant CRYPT ou adresse e-mail</label>
+          <input id="think-login-email" type="text" inputmode="text" autocomplete="username" required maxlength="320" placeholder="INK_XXXXXXXXXXXXXXX ou nom@exemple.com" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent outline-none">
+          <label class="text-xs font-bold">Mot de passe du compte CRYPT</label>
           <input id="think-login-password" type="password" autocomplete="current-password" required maxlength="256" placeholder="Mot de passe" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent outline-none">
           <p id="think-login-error" class="hidden text-sm text-red-600" role="alert"></p>
-          <button id="think-login-submit" type="submit" class="w-full p-3 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900 font-extrabold">Se connecter avec Think</button>
+          <button id="think-login-submit" type="submit" class="w-full p-3 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900 font-extrabold">Se connecter avec CRYPT ID</button>
         </form>
         <div class="flex items-center gap-3 my-4"><span class="h-px bg-gray-300 dark:bg-gray-700 flex-1"></span><span class="text-xs text-gray-500">ou</span><span class="h-px bg-gray-300 dark:bg-gray-700 flex-1"></span></div>
-        <button type="button" onclick="handleGoogleAuth()" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 font-bold">Continuer avec Google</button>
-        <p class="text-xs text-gray-500 text-center mt-4">Pas encore de compte Think ? <a href="https://think-crypt-entre.vercel.app/app" target="_blank" rel="noopener noreferrer" class="underline font-bold">Créer un compte Think</a>.</p>
+        <button type="button" onclick="handleGoogleAuth()" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 font-bold">Continuer avec Google (anciens comptes Llink)</button>
+        <div id="crypt-account-session" class="hidden mt-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 text-sm" aria-live="polite"></div>
+        <p class="text-xs text-gray-500 text-center mt-4">Pas encore de compte CRYPT ? <a href="https://think-crypt-entre.vercel.app/app" target="_blank" rel="noopener noreferrer" class="underline font-bold">Créer un compte Think</a>.</p>
       </div>
     </div>
 
@@ -1011,14 +1010,26 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const modal = document.getElementById("auth-choice-modal");
             if (modal) { modal.classList.add("hidden"); modal.classList.remove("flex"); }
         };
+        window.refreshCryptAccountTile = async () => {
+            const label=document.getElementById("crypt-account-status");
+            if(!label) return;
+            const user=auth.currentUser;
+            if(!user){label.textContent="Se connecter";return;}
+            try{
+              const result=await user.getIdTokenResult(true);
+              label.textContent=result.claims?.crypt_id || result.claims?.think_id || "Connecté";
+            }catch(_){label.textContent="Connecté";}
+        };
+        window.addEventListener("llink-auth-state-changed",()=>window.refreshCryptAccountTile());
         window.handleAuth = async () => {
             if (window.isLoggedIn) {
+                window.closeAuthChoice();
                 try { await signOut(auth); } catch (e) { console.error("Erreur déconnexion:", e); }
                 return;
             }
-            const modal = document.getElementById("auth-choice-modal");
-            if (modal) { modal.classList.remove("hidden"); modal.classList.add("flex"); }
-            if (window.lucide) window.lucide.createIcons();
+            // Point d'entrée unique : l'utilisateur choisit d'abord Compte CRYPT
+            // dans le sélecteur des produits.
+            if (typeof window.openConnections === "function") window.openConnections();
         };
         window.handleGoogleAuth = async () => {
             if (window.LLINK_PLATFORM?.isTauri && !window.LLINK_PLATFORM?.isCapacitor) {
@@ -1050,10 +1061,10 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const button = document.getElementById("think-login-submit");
             if (errorBox) { errorBox.textContent = ""; errorBox.classList.add("hidden"); }
             if (!email || !password) {
-                if (errorBox) { errorBox.textContent = "Saisis ton adresse e-mail et ton mot de passe Think."; errorBox.classList.remove("hidden"); }
+                if (errorBox) { errorBox.textContent = "Saisis ton INK ID (ou ton adresse e-mail) et ton mot de passe CRYPT."; errorBox.classList.remove("hidden"); }
                 return;
             }
-            if (button) { button.disabled = true; button.textContent = "Connexion à Think…"; }
+            if (button) { button.disabled = true; button.textContent = "Connexion au compte CRYPT…"; }
             const showThinkError = message => {
                 if (errorBox) { errorBox.textContent = message; errorBox.classList.remove("hidden"); }
             };
@@ -1100,13 +1111,14 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
                     throw new Error("Le ticket Think a été accepté, mais Firebase n'a pas ouvert la session Llink. Vérifie la configuration Firebase du serveur.");
                 }
                 window.closeAuthChoice();
+                if (typeof window.refreshCryptAccountTile === "function") window.refreshCryptAccountTile();
                 const passwordInput = document.getElementById("think-login-password");
                 if (passwordInput) passwordInput.value = "";
             } catch (e) {
                 console.warn("Connexion Think-Llink impossible :", e?.message || e);
                 showThinkError(e?.message || "Connexion impossible. Réessaie.");
             } finally {
-                if (button) { button.disabled = false; button.textContent = "Se connecter avec Think"; }
+                if (button) { button.disabled = false; button.textContent = "Se connecter avec CRYPT ID"; }
             }
         };
 
@@ -2898,12 +2910,45 @@ body.translate-mode-active #llink-language-launcher{display:flex}
         <div class="cn-node cn-brand-cdv"><span>CD&amp;V</span></div>
         <span>Crypto Design and Vision</span>
       </div>
+      <button type="button" class="cn-connector-item cn-crypt-account-entry" aria-label="Compte CRYPT" onclick="openAuthChoice()">
+        <div class="cn-node cn-brand-ink"><i data-lucide="fingerprint"></i></div>
+        <span>Compte CRYPT</span>
+        <small id="crypt-account-status">Se connecter</small>
+      </button>
     </div>
   </div>
 </div>
 
 <script>
 function openConnections(){ try{closeRailOnMobile();}catch(e){} const m=document.getElementById('connections-modal'); m.style.display='flex'; requestAnimationFrame(()=>m.classList.add('is-open')); }
+window.openAuthChoice = async function(){
+  closeConnections();
+  const modal=document.getElementById("auth-choice-modal");
+  const form=document.getElementById("think-login-form");
+  const googleButton=modal?.querySelector('button[onclick="handleGoogleAuth()"]');
+  const session=document.getElementById("crypt-account-session");
+  const user=window.auth?.currentUser;
+  if(user){
+    let cryptId="Identité CRYPT vérifiée";
+    try{
+      const claims=await user.getIdTokenResult(true);
+      cryptId=claims.claims?.crypt_id || claims.claims?.think_id || cryptId;
+    }catch(_){}
+    if(form) form.classList.add("hidden");
+    if(googleButton) googleButton.classList.add("hidden");
+    if(session){
+      session.classList.remove("hidden");
+      const safeId=String(cryptId).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+      session.innerHTML='<strong>Session active</strong><p class="mt-1 text-gray-500 break-all">'+safeId+'</p><button type="button" onclick="handleAuth()" class="mt-3 w-full rounded-xl border border-gray-300 dark:border-gray-700 p-2 font-bold">Se déconnecter</button>';
+    }
+  }else{
+    if(form) form.classList.remove("hidden");
+    if(googleButton) googleButton.classList.remove("hidden");
+    if(session){session.classList.add("hidden");session.textContent="";}
+  }
+  if(modal){modal.classList.remove("hidden");modal.classList.add("flex");}
+  if(window.lucide) window.lucide.createIcons();
+};
 function closeConnections(){ const m=document.getElementById('connections-modal'); m.classList.remove('is-open'); setTimeout(()=>{ if(!m.classList.contains('is-open')) m.style.display=''; },220); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape' && document.getElementById('connections-modal').classList.contains('is-open')) closeConnections(); });
 </script>
@@ -3151,7 +3196,7 @@ window.startLlinkSubscriptionCheckout = async function(){ window.openCreditWalle
   padding:42px 18px 20px!important;
 }
 #connections-modal .cn-connectors-grid{
-  display:grid!important; grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  display:grid!important; grid-template-columns:repeat(5,minmax(0,1fr))!important;
   grid-auto-flow:column!important; gap:8px!important; align-items:start!important;
   width:100%!important;
 }
@@ -3172,6 +3217,11 @@ window.startLlinkSubscriptionCheckout = async function(){ window.openCreditWalle
   font-size:inherit!important; line-height:1.18!important; overflow-wrap:anywhere!important;
 }
 #connections-modal .cn-brand-cdv span{font-size:clamp(11px,2.8vw,16px)!important}
+#connections-modal .cn-crypt-account-entry{font:inherit;color:inherit;background:transparent;border:0;cursor:pointer}
+#connections-modal .cn-brand-ink{display:grid;place-items:center;font-weight:900;letter-spacing:-1px;color:#fff;background:#171923}
+#connections-modal .cn-brand-ink svg{width:27px;height:27px}
+#connections-modal .cn-crypt-account-entry small{display:block;font-size:10px;line-height:1.2;color:#777;overflow-wrap:anywhere}
+#connections-modal .cn-crypt-account-entry:focus-visible{outline:2px solid #4386f5;outline-offset:3px;border-radius:12px}
 /* Suppression du clignotement/animation du logo au démarrage : logo fixe */
 .logo-anim{animation:none!important;filter:none!important;opacity:1}
 @media(max-width:360px){
