@@ -3711,7 +3711,7 @@ body.work-mode-active.composer-open #composer-close-keyboard svg {width:11px!imp
       const sub=document.getElementById('llink-home-sub');
       if(!line||!sub)return;
       const scenes=[
-        ['Bonjour','Agapé, bienvenue.'],
+        ['Bonjour',(function(){var raw=window.auth?.currentUser?.displayName||window.currentUser?.displayName||window.userName||'';var first=String(raw).trim().split(/\\s+/)[0];return first?first+', bienvenue.':'Bienvenue dans Llink.';})()],
         ['Bienvenue chez Llink','Que voulez-vous faire aujourd’hui ?'],
         ['Une idée en tête ?','Commençons à lui donner vie.'],
         ['Prêt à commencer ?','Choisissez votre prochaine étape.']
