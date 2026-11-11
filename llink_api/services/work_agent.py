@@ -2076,6 +2076,7 @@ async def _run_agent(
             reservation = await reserve_usage_budget(
                 db=db, uid=str(user.get("uid") or "anonymous"), level=model.level,
                 model=model, prompt=prompt_for_budget, max_output_tokens=AGENT_OUTPUT_TOKENS,
+                allow_daily_free=True,
             )
             usage = None
             status = "completed"
