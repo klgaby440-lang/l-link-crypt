@@ -270,19 +270,12 @@ async def get_llink_subscription_status(
     return {"product": "llink", **result}
 
 
-@router.get("/api/subscriptions/catalog")
-async def get_llink_subscription_catalog(
-    request: Request,
-    user: dict = Depends(require_authenticated_user),
-):
-    await enforce_endpoint_quota(
-        request=request, user=user, db=get_db(), scope="subscription_status"
-    )
-    if user.get("auth_source") != "think" or not user.get("think_user_id"):
-        raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour consulter les offres.")
-    return await asyncio.to_thread(get_think_plan_catalog)
+@router.get("/api/subscriptions/catalog", include_in_schema=False)
+async def get_llink_subscription_catalog():
+    raise HTTPException(status_code=410, detail="Les abonnements Llink ont été remplacés par les crédits.")
 
-@router.get("/api/subscriptions/payment-options")
+@router.get("/api/credits/payment-options")
+@router.get("/api/subscriptions/payment-options", include_in_schema=False)
 async def get_llink_payment_options(
     request: Request,
     user: dict = Depends(require_authenticated_user),
@@ -313,30 +306,10 @@ async def refresh_llink_subscription_payment(
     )
     return {"product": "llink", **result}
 
-@router.post("/api/subscriptions/checkout")
-async def create_llink_subscription_checkout(
-    payload: LlinkSubscriptionCheckoutRequest,
-    request: Request,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    user: dict = Depends(require_authenticated_user),
-):
-    await enforce_endpoint_quota(
-        request=request, user=user, db=get_db(), scope="subscription_checkout"
-    )
-    if user.get("auth_source") != "think" or not user.get("think_user_id"):
-        raise HTTPException(status_code=403, detail="Connecte-toi avec ton compte Think pour souscrire à Llink.")
-    checkout_id = (idempotency_key or "").strip()
-    if not 8 <= len(checkout_id) <= 64 or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in checkout_id):
-        raise HTTPException(status_code=422, detail="Clé d’idempotence de souscription invalide.")
-    result = await asyncio.to_thread(
-        create_think_subscription_checkout,
-        think_user_id=int(user["think_user_id"]),
-        plan=payload.plan,
-        payment_method=payload.payment_method,
-        checkout_id=checkout_id,
-        mobile_money_account_id=payload.mobile_money_account_id,
-    )
-    return result
+@router.post("/api/subscriptions/checkout", include_in_schema=False)
+async def create_llink_subscription_checkout():
+    raise HTTPException(status_code=410, detail="Les abonnements Llink sont arrêtés. Utilise le portefeuille de crédits.")
+
 
 @router.post("/api/verify-payment", response_model=PaymentVerifyResponse)
 async def verify_payment(
