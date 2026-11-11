@@ -199,6 +199,36 @@ async def reserve_credit_usage(
     return CreditReservation(request_id, free, paid, today)
 
 
+async def cancel_credit_reservation(*, db: Any, uid: str, reservation: CreditReservation | None) -> None:
+    if reservation is None or db is None:
+        return
+    wallet_ref = _wallet_ref(db, uid)
+    reservation_ref = db.collection("llink_credit_reservations").document(reservation.request_id)
+
+    @google_firestore.transactional
+    def cancel(transaction):
+        row_snapshot = reservation_ref.get(transaction=transaction)
+        if not row_snapshot.exists:
+            return
+        row = row_snapshot.to_dict() or {}
+        if row.get("status") != "reserved":
+            return
+        wallet_snapshot = wallet_ref.get(transaction=transaction)
+        wallet = wallet_snapshot.to_dict() or {}
+        free = max(0, int(row.get("reserved_free", 0)))
+        online = max(0, int(row.get("reserved_online", 0)))
+        wallet["reserved_free"] = max(0, int(wallet.get("reserved_free", 0)) - free)
+        wallet["reserved_online"] = max(0, int(wallet.get("reserved_online", 0)) - online)
+        if row.get("reservation_date") == _date_key():
+            wallet["daily_free_balance"] = max(0, int(wallet.get("daily_free_balance", 0))) + free
+        wallet["online_balance"] = max(0, int(wallet.get("online_balance", 0))) + online
+        wallet["updated_at_epoch"] = int(time.time())
+        transaction.set(wallet_ref, wallet, merge=True)
+        transaction.set(reservation_ref, {"status": "cancelled", "cancelled_at_epoch": int(time.time())}, merge=True)
+
+    await asyncio.to_thread(lambda: cancel(db.transaction()))
+
+
 async def settle_credit_usage(
     *, db: Any, uid: str, reservation: CreditReservation | None,
     actual_cost_microusd: int, status: str, level: str, model: str,
