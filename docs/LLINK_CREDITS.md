@@ -21,6 +21,8 @@ One credit represents 10,000 micro-USD. Costs are rounded up to whole credits. D
 
 ## API
 
+Legacy subscription catalog and checkout endpoints now return HTTP 410; the old payment-options path is hidden from the public schema and retained only as a compatibility alias. New purchases use only the credit routes below.
+
 - `GET /api/credits/catalog`
 - `GET /api/credits/wallet`
 - `POST /api/credits/checkout`
