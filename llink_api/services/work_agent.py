@@ -30,6 +30,7 @@ from llink_api.services.entitlements import resolve_entitled_level
 from llink_api.services.model_registry import ModelDefinition, resolve_model, user_can_access_level
 from llink_api.services.security_limits import enforce_endpoint_quota
 from llink_api.services.usage_meter import finalize_usage, reserve_usage_budget
+from llink_api.services.credit_wallet import reserve_credit_usage, settle_credit_usage, cancel_credit_reservation
 from llink_api.services.training_data import record_exchange_if_consented
 
 logger = logging.getLogger(__name__)
@@ -1128,26 +1129,53 @@ async def _dispatch_tool(
         if uid == "anonymous":
             raise PermissionError("Connecte-toi pour générer une image.")
         await enforce_endpoint_quota(request=request, user=user, db=db, scope="work_tool_read")
-        return await _generate_work_image(
-            str(args.get("prompt") or ""),
-            str(args.get("filename") or "illustration.png"),
-            str(args.get("aspect_ratio") or "1:1"),
-            str(args.get("quality") or "hd"),
-            state,
+        quality = "hd" if args.get("quality") == "hd" else "standard"
+        image_cost = 101_000 if quality == "hd" else 67_000  # 2K / 1K published Gemini image output equivalent.
+        credit_reservation = await reserve_credit_usage(
+            db=db, uid=uid, estimated_cost_microusd=image_cost, allow_daily_free=True,
         )
+        try:
+            result = await _generate_work_image(
+                str(args.get("prompt") or ""),
+                str(args.get("filename") or "illustration.png"),
+                str(args.get("aspect_ratio") or "1:1"),
+                quality, state,
+            )
+        except Exception:
+            await cancel_credit_reservation(db=db, uid=uid, reservation=credit_reservation)
+            raise
+        await settle_credit_usage(
+            db=db, uid=uid, reservation=credit_reservation,
+            actual_cost_microusd=image_cost, status="completed",
+            level="omnis", model="gemini-3.1-flash-image",
+        )
+        return result
 
     if name == "image_edit":
         if uid == "anonymous":
             raise PermissionError("Connecte-toi pour retoucher une image.")
         await enforce_endpoint_quota(request=request, user=user, db=db, scope="work_tool_read")
-        return await _generate_work_image(
-            str(args.get("prompt") or ""),
-            str(args.get("filename") or "image-retouchee.png"),
-            str(args.get("aspect_ratio") or "1:1"),
-            str(args.get("quality") or "hd"),
-            state,
-            source_index=int(args.get("source_index") or 0),
+        quality = "hd" if args.get("quality") == "hd" else "standard"
+        image_cost = 101_000 if quality == "hd" else 67_000
+        credit_reservation = await reserve_credit_usage(
+            db=db, uid=uid, estimated_cost_microusd=image_cost, allow_daily_free=True,
         )
+        try:
+            result = await _generate_work_image(
+                str(args.get("prompt") or ""),
+                str(args.get("filename") or "image-retouchee.png"),
+                str(args.get("aspect_ratio") or "1:1"),
+                quality, state, source_index=int(args.get("source_index") or 0),
+            )
+        except Exception:
+            await cancel_credit_reservation(db=db, uid=uid, reservation=credit_reservation)
+            raise
+        await settle_credit_usage(
+            db=db, uid=uid, reservation=credit_reservation,
+            actual_cost_microusd=image_cost, status="completed",
+            level="omnis", model="gemini-3.1-flash-image",
+        )
+        return result
 
     if name == "web_open":
         if uid == "anonymous":
