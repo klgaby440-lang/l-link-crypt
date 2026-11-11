@@ -178,8 +178,8 @@ async def check_status(
     await enforce_endpoint_quota(request=request, user=user, db=db, scope="user_status")
     if user.get("uid") == "anonymous":
         return {"isValid": False, "expirationDate": None, "isNewUser": False}
-    # L'accès au compte n'expire plus avec un abonnement : la consommation
-    # est désormais autorisée et facturée via le portefeuille de crédits.
+    # Aucun abonnement ni période d'essai ne conditionne désormais l'accès au compte.
+    # Les appels IA sont autorisés par le portefeuille et facturés à l'usage.
     return {
         "isValid": True,
         "isTrial": False,
@@ -187,49 +187,6 @@ async def check_status(
         "isNewUser": False,
         "plan": "credits",
         "subscriptionStatus": "credits",
-    }
-    if db is None:
-        raise HTTPException(status_code=503, detail="Service de compte temporairement indisponible.")
-
-    uid = user["uid"]
-    user_ref = db.collection("users").document(uid)
-    document = user_ref.get()
-    now = datetime.utcnow()
-
-    if not document.exists:
-        expiration = now + timedelta(days=3)
-        user_data = {
-            "email": user.get("email", ""),
-            "trialStart": now,
-            "expirationDate": expiration,
-            "isPro": False,
-        }
-        user_ref.set(user_data)
-        return {
-            "isValid": True,
-            "isTrial": True,
-            "expirationDate": expiration.timestamp() * 1000,
-            "isNewUser": True,
-        }
-
-    data = document.to_dict() or {}
-    exp_date = data.get("expirationDate")
-    if exp_date:
-        if hasattr(exp_date, "timestamp"):
-            is_active = exp_date.timestamp() > now.timestamp()
-            exp_timestamp = exp_date.timestamp() * 1000
-        else:
-            exp_timestamp = float(exp_date) * 1000
-            is_active = exp_timestamp > now.timestamp() * 1000
-    else:
-        is_active = False
-        exp_timestamp = None
-
-    return {
-        "isValid": is_active,
-        "isTrial": not data.get("isPro", False) and is_active,
-        "expirationDate": exp_timestamp,
-        "isNewUser": False,
     }
 
 
