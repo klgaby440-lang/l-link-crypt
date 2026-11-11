@@ -1023,12 +1023,13 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
         window.addEventListener("llink-auth-state-changed",()=>window.refreshCryptAccountTile());
         window.handleAuth = async () => {
             if (window.isLoggedIn) {
+                window.closeAuthChoice();
                 try { await signOut(auth); } catch (e) { console.error("Erreur déconnexion:", e); }
                 return;
             }
-            const modal = document.getElementById("auth-choice-modal");
-            if (modal) { modal.classList.remove("hidden"); modal.classList.add("flex"); }
-            if (window.lucide) window.lucide.createIcons();
+            // Point d'entrée unique : l'utilisateur choisit d'abord Compte CRYPT
+            // dans le sélecteur des produits.
+            if (typeof window.openConnections === "function") window.openConnections();
         };
         window.handleGoogleAuth = async () => {
             if (window.LLINK_PLATFORM?.isTauri && !window.LLINK_PLATFORM?.isCapacitor) {
@@ -1060,10 +1061,10 @@ html:not(.dark) #settings-modal.settings-overlay{background:rgba(30,34,42,.16) !
             const button = document.getElementById("think-login-submit");
             if (errorBox) { errorBox.textContent = ""; errorBox.classList.add("hidden"); }
             if (!email || !password) {
-                if (errorBox) { errorBox.textContent = "Saisis ton adresse e-mail et ton mot de passe Think."; errorBox.classList.remove("hidden"); }
+                if (errorBox) { errorBox.textContent = "Saisis ton INK ID (ou ton adresse e-mail) et ton mot de passe CRYPT."; errorBox.classList.remove("hidden"); }
                 return;
             }
-            if (button) { button.disabled = true; button.textContent = "Connexion à Think…"; }
+            if (button) { button.disabled = true; button.textContent = "Connexion au compte CRYPT…"; }
             const showThinkError = message => {
                 if (errorBox) { errorBox.textContent = message; errorBox.classList.remove("hidden"); }
             };
