@@ -591,3 +591,89 @@ def test_primeink_fiche_text_batch_requires_roster_and_course(client, monkeypatc
     }
     response = client.post("/api/primeink/fiche-text-extract", json=with_roster)
     assert response.status_code == 422
+
+
+
+def test_primeink_fiche_text_extract_retries_false_other_classification(client, monkeypatch):
+    first_payload = {
+        "document_type": "fiche_notes_batch",
+        "fiches": [{
+            "index": 0,
+            "document_type": "other",
+            "school_name": None,
+            "class_name": "3e A",
+            "academic_year": None,
+            "students": [],
+            "warnings": ["En-têtes OCR difficiles à lire"],
+            "confidence": 0.25,
+        }],
+    }
+    retry_payload = {
+        "document_type": "fiche_notes_batch",
+        "fiches": [{
+            "index": 0,
+            "document_type": "fiche_notes",
+            "school_name": None,
+            "class_name": "3e A",
+            "academic_year": "2026-2027",
+            "students": [{
+                "matched_student_id": "student-1",
+                "student_name": "MUKENDI Jean",
+                "p1": 14,
+                "p2": None,
+                "ex1": None,
+                "p3": None,
+                "p4": None,
+                "ex2": None,
+                "confidence": 0.78,
+                "warning": None,
+            }],
+            "warnings": [],
+            "confidence": 0.78,
+        }],
+    }
+    requested_models = []
+
+    class FakeModel:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def generate_content(self, contents):
+            assert isinstance(contents, list)
+            return type("FakeResponse", (), {"text": json.dumps(self.payload)})()
+
+    def fake_get_model(**kwargs):
+        model_name = kwargs.get("model_name") or "primary"
+        requested_models.append(model_name)
+        return FakeModel(retry_payload if model_name == "gemini-3.8-flash" else first_payload)
+
+    async def no_quota(**kwargs):
+        return None
+
+    async def fake_reserve_slot():
+        return lambda: None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(media, "reserve_ai_slot", fake_reserve_slot)
+    monkeypatch.setattr(media, "get_gemini_model", fake_get_model)
+
+    response = client.post(
+        "/api/primeink/fiche-text-extract",
+        json={
+            "class_name": "3e A",
+            "students": [{"student_id": "student-1", "full_name": "MUKENDI Jean"}],
+            "fiches": [{
+                "source_name": "maths.jpg",
+                "course_name": "Mathématiques",
+                "max_period_points": 20,
+                "max_exam_points": 40,
+                "ocr_text": "MUKENDI Jean | P1 14 | P2 12 | EX1 30",
+            }],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert requested_models == ["primary", "gemini-3.8-flash"]
+    assert data["fiches"][0]["extraction"]["document_type"] == "fiche_notes"
+    assert data["fiches"][0]["extraction"]["students"][0]["p1"] == 14
