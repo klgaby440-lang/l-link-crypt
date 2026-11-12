@@ -93,6 +93,48 @@ class PrimeInkFicheExtraction(BaseModel):
     confidence: float = Field(default=0, ge=0, le=1)
 
 
+class PrimeInkFicheTextItem(BaseModel):
+    """Texte OCR d'une fiche et contexte du cours auquel elle appartient."""
+    model_config = ConfigDict(extra="forbid")
+
+    source_name: str = Field(default="", max_length=180)
+    course_name: str = Field(min_length=1, max_length=160)
+    ocr_text: str = Field(min_length=10, max_length=18_000)
+    max_period_points: float = Field(ge=0, le=1000)
+    max_exam_points: float = Field(ge=0, le=1000)
+
+
+class PrimeInkFicheTextRequest(BaseModel):
+    """Lot de fiches déjà OCRisées localement par PrimeInk."""
+    model_config = ConfigDict(extra="forbid")
+
+    class_name: str = Field(default="", max_length=160)
+    students: list[PrimeInkFicheStudentReference] = Field(default_factory=list, max_length=200)
+    fiches: list[PrimeInkFicheTextItem] = Field(min_length=1, max_length=6)
+
+
+class PrimeInkFicheTextModelResult(BaseModel):
+    """Résultat structuré d'une fiche OCR, avant rattachement au cours demandé."""
+    model_config = ConfigDict(extra="forbid")
+
+    index: int = Field(ge=0, le=5)
+    document_type: Literal["fiche_notes", "other"] = "other"
+    school_name: str | None = Field(default=None, max_length=180)
+    class_name: str | None = Field(default=None, max_length=160)
+    academic_year: str | None = Field(default=None, max_length=80)
+    students: list[PrimeInkExtractedStudent] = Field(default_factory=list, max_length=200)
+    warnings: list[str] = Field(default_factory=list, max_length=100)
+    confidence: float = Field(default=0, ge=0, le=1)
+
+
+class PrimeInkFicheTextBatchModelResult(BaseModel):
+    """Sortie JSON structurée pour un lot de fiches PrimeInk."""
+    model_config = ConfigDict(extra="forbid")
+
+    document_type: Literal["fiche_notes_batch", "other"] = "other"
+    fiches: list[PrimeInkFicheTextModelResult] = Field(default_factory=list, max_length=6)
+
+
 class PrimeInkPhotoListRequest(BaseModel):
     """Image et contexte facultatif pour extraire une liste depuis un document scolaire."""
     imageBase64: str = Field(min_length=16, max_length=8_100_000)
