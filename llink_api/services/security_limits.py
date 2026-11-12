@@ -33,6 +33,9 @@ DEFAULT_POLICIES: dict[tuple[str, bool], QuotaPolicy] = {
     # Deux essais par minute permettent à l'enseignant de réessayer après une panne fournisseur.
     ("fiche_extract", False): QuotaPolicy(2, 10),
     ("fiche_extract", True): QuotaPolicy(5, 50),
+    # Un appel traite plusieurs fiches déjà OCRisées localement ; aucune image n'est envoyée.
+    ("fiche_text_extract", False): QuotaPolicy(4, 40),
+    ("fiche_text_extract", True): QuotaPolicy(8, 120),
     ("student_list_extract", False): QuotaPolicy(1, 10),
     ("student_list_extract", True): QuotaPolicy(5, 50),
     ("course_list_extract", False): QuotaPolicy(1, 10),
