@@ -594,7 +594,7 @@ async def primeink_fiche_text_extract(
         allowed_ids = {student.student_id for student in payload.students}
         by_index = {}
         response_warnings = []
-        for result in original_by_index.values():
+        for result in parsed.fiches:
             if result.index >= len(payload.fiches):
                 response_warnings.append(f"Résultat ignoré : index de fiche inconnu ({result.index}).")
                 continue
@@ -602,6 +602,12 @@ async def primeink_fiche_text_extract(
                 response_warnings.append(f"Plusieurs résultats ont été renvoyés pour la fiche {result.index + 1}.")
                 continue
             by_index[result.index] = result
+
+        # N'applique que les reprises validées (fiche_notes + au moins une note chiffrée).
+        for retry_index in retry_indices:
+            retry_result = original_by_index.get(retry_index)
+            if retry_result and retry_result.document_type == "fiche_notes":
+                by_index[retry_index] = retry_result
 
         normalized_fiches = []
         for index, item in enumerate(payload.fiches):
