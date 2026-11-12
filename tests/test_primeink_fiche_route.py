@@ -443,3 +443,151 @@ def test_primeink_photo_extraction_falls_back_after_schema_and_provider_errors(
     assert requested[2]["model_name"] == "gemini-3.8-flash"
     assert "response_json_schema" not in requested[2]
     assert requested[2]["effort"] == "extra"
+
+
+def test_primeink_fiche_text_batch_structures_each_course_separately_and_sanitizes_scores(
+    client, monkeypatch
+):
+    model_payload = {
+        "document_type": "fiche_notes_batch",
+        "fiches": [
+            {
+                "index": 0,
+                "document_type": "fiche_notes",
+                "school_name": "École test",
+                "class_name": "3e A",
+                "academic_year": "2026-2027",
+                "students": [
+                    {
+                        "matched_student_id": "student-1",
+                        "student_name": "MUKENDI Jean",
+                        "p1": 22,
+                        "p2": 12,
+                        "ex1": 35,
+                        "p3": None,
+                        "p4": None,
+                        "ex2": None,
+                        "confidence": 0.91,
+                        "warning": None,
+                    }
+                ],
+                "warnings": [],
+                "confidence": 0.9,
+            },
+            {
+                "index": 1,
+                "document_type": "fiche_notes",
+                "school_name": "École test",
+                "class_name": "3e A",
+                "academic_year": "2026-2027",
+                "students": [
+                    {
+                        "matched_student_id": "unknown-student",
+                        "student_name": "Nom incertain",
+                        "p1": 8,
+                        "p2": None,
+                        "ex1": None,
+                        "p3": None,
+                        "p4": None,
+                        "ex2": None,
+                        "confidence": 0.4,
+                        "warning": "Nom incertain",
+                    }
+                ],
+                "warnings": [],
+                "confidence": 0.6,
+            },
+        ],
+    }
+
+    requested = {}
+
+    class FakeModel:
+        def generate_content(self, contents):
+            assert isinstance(contents, list) and isinstance(contents[0], str)
+            requested["prompt"] = contents[0]
+            return type("FakeResponse", (), {"text": json.dumps(model_payload)})()
+
+    async def no_quota(**kwargs):
+        assert kwargs["scope"] == "fiche_text_extract"
+        requested["quota"] = True
+
+    async def fake_reserve_slot():
+        return lambda: None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    monkeypatch.setattr(media, "reserve_ai_slot", fake_reserve_slot)
+    monkeypatch.setattr(media, "get_gemini_model", lambda **kwargs: FakeModel())
+
+    response = client.post(
+        "/api/primeink/fiche-text-extract",
+        json={
+            "class_name": "3e A",
+            "students": [
+                {"student_id": "student-1", "full_name": "MUKENDI Jean"},
+                {"student_id": "student-2", "full_name": "KABUYA Marie"},
+            ],
+            "fiches": [
+                {
+                    "source_name": "maths.jpg",
+                    "course_name": "Mathématiques",
+                    "max_period_points": 20,
+                    "max_exam_points": 40,
+                    "ocr_text": "MUKENDI Jean | P1 22 | P2 12 | EX1 35",
+                },
+                {
+                    "source_name": "francais.jpg",
+                    "course_name": "Français",
+                    "max_period_points": 10,
+                    "max_exam_points": 20,
+                    "ocr_text": "Nom incertain | P1 8",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert requested["quota"] is True
+    assert "Mathématiques" in requested["prompt"]
+    assert "Français" in requested["prompt"]
+    assert "MUKENDI Jean | P1 22" in requested["prompt"]
+    assert data["document_type"] == "fiche_notes_batch"
+    assert len(data["fiches"]) == 2
+    assert data["fiches"][0]["course_name"] == "Mathématiques"
+    assert data["fiches"][0]["extraction"]["course_name"] == "Mathématiques"
+    assert data["fiches"][0]["extraction"]["students"][0]["matched_student_id"] == "student-1"
+    assert data["fiches"][0]["extraction"]["students"][0]["p1"] is None
+    assert any("hors barème" in warning for warning in data["fiches"][0]["extraction"]["warnings"])
+    assert data["fiches"][1]["course_name"] == "Français"
+    assert data["fiches"][1]["extraction"]["students"][0]["matched_student_id"] is None
+    assert any("identifiant inconnu" in warning for warning in data["fiches"][1]["extraction"]["warnings"])
+
+
+def test_primeink_fiche_text_batch_requires_roster_and_course(client, monkeypatch):
+    async def no_quota(**kwargs):
+        return None
+
+    monkeypatch.setattr(media, "enforce_endpoint_quota", no_quota)
+    base = {
+        "class_name": "3e A",
+        "fiches": [
+            {
+                "source_name": "fiche.jpg",
+                "course_name": "Mathématiques",
+                "max_period_points": 20,
+                "max_exam_points": 40,
+                "ocr_text": "Une fiche de notes lisible",
+            }
+        ],
+    }
+    response = client.post("/api/primeink/fiche-text-extract", json=base)
+    assert response.status_code == 422
+
+    with_roster = {
+        **base,
+        "students": [{"student_id": "student-1", "full_name": "MUKENDI Jean"}],
+        "fiches": [{**base["fiches"][0], "course_name": "   "}],
+    }
+    response = client.post("/api/primeink/fiche-text-extract", json=with_roster)
+    assert response.status_code == 422
